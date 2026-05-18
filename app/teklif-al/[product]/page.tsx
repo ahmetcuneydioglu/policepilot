@@ -296,78 +296,48 @@ export default function ProductFormPage({
     try {
       const normalized = getNormalizedValues();
       const phone      = normalized.phone;
-      // Extra form fields (plaka, TC, araç yılı vb.) go into the note column
+      // Extra form fields (plaka, TC, araç yılı vb.) put into note as plain text
       const noteLines  = buildNoteLines(p.fields, normalized);
 
-      // ── Step 1: Find customer by phone — simple .eq().limit(1), no joins ─
-      const { data: foundCustomers, error: findError } = await (supabase.from("customers") as any)
+      // ── Step 1: Insert customer directly — no lookup, no upsert ─────────
+      const { data: customer, error: customerError } = await (supabase.from("customers") as any)
+        .insert({
+          name:           normalized.name ?? "",
+          phone,
+          insurance_type: p.label,
+          note:           noteLines || null,
+        })
         .select("id")
-        .eq("phone", phone)
-        .limit(1);
+        .single();
 
-      if (findError) {
-        setSubmitError(`Müşteri arama hatası: ${findError.message}`);
+      if (customerError) {
+        const e = customerError as { message?: string; code?: string; details?: string };
+        const parts = [
+          e.message  && `message: ${e.message}`,
+          e.code     && `code: ${e.code}`,
+          e.details  && `details: ${e.details}`,
+        ].filter(Boolean).join(" | ");
+        setSubmitError(`Müşteri kayıt hatası: ${parts}`);
         return;
       }
 
-      const existingCustomer = Array.isArray(foundCustomers) ? (foundCustomers[0] ?? null) : null;
+      // ── Step 2: Insert request — only known requests table columns ───────
+      const { error: requestError } = await (supabase.from("requests") as any)
+        .insert({
+          customer_id:  (customer as { id: string }).id,
+          request_type: p.label,
+          status:       "Yeni",
+          price_offer:  null,
+        });
 
-      // ── Step 2: Duplicate check — no join, just requests by customer_id ──
-      if (existingCustomer?.id) {
-        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-        const { data: recentReqs } = await (supabase.from("requests") as any)
-          .select("id")
-          .eq("customer_id", existingCustomer.id)
-          .eq("request_type", p.label)
-          .gte("created_at", tenMinAgo)
-          .limit(1);
-
-        if (Array.isArray(recentReqs) && recentReqs.length > 0) {
-          setSubmitError(
-            "Bu telefon numarasıyla kısa süre önce aynı ürün için talep oluşturulmuş. Lütfen birkaç dakika bekleyin."
-          );
-          return;
-        }
-      }
-
-      // ── Step 3a: Update existing customer ───────────────────────────────
-      let customerId: string;
-
-      if (existingCustomer?.id) {
-        const { error: updErr } = await (supabase.from("customers") as any)
-          .update({ name: normalized.name ?? "", insurance_type: p.label, note: noteLines || null })
-          .eq("id", existingCustomer.id);
-
-        if (updErr) {
-          setSubmitError(`Müşteri güncelleme hatası: ${updErr.message}`);
-          return;
-        }
-        customerId = existingCustomer.id as string;
-
-      } else {
-        // ── Step 3b: Insert new customer — only known columns ────────────
-        const { data: insData, error: insErr } = await (supabase.from("customers") as any)
-          .insert({ name: normalized.name ?? "", phone, insurance_type: p.label, note: noteLines || null })
-          .select("id")
-          .limit(1);
-
-        if (insErr) {
-          setSubmitError(`Müşteri kayıt hatası: ${insErr.message}`);
-          return;
-        }
-        if (!Array.isArray(insData) || !insData[0]?.id) {
-          setSubmitError("Müşteri kaydı oluşturulamadı. Lütfen tekrar deneyin.");
-          return;
-        }
-        customerId = insData[0].id as string;
-      }
-
-      // ── Step 4: Insert request — only requests table columns ────────────
-      const { error: reqErr } = await (supabase.from("requests") as any)
-        .insert({ customer_id: customerId, request_type: p.label, status: "Yeni" });
-
-      if (reqErr) {
-        setSubmitError(`Talep oluşturma hatası: ${reqErr.message}`);
+      if (requestError) {
+        const e = requestError as { message?: string; code?: string; details?: string };
+        const parts = [
+          e.message  && `message: ${e.message}`,
+          e.code     && `code: ${e.code}`,
+          e.details  && `details: ${e.details}`,
+        ].filter(Boolean).join(" | ");
+        setSubmitError(`Talep oluşturma hatası: ${parts}`);
         return;
       }
 
