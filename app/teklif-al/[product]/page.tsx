@@ -286,35 +286,43 @@ export default function ProductFormPage({
     const errors = validateFields(p.fields, values);
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      // Scroll to first error
       const firstId = p.fields.find((f) => errors[f.id])?.id;
       if (firstId) document.getElementById(firstId)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     setFieldErrors({});
-
     setSubmitting(true);
 
     try {
       const normalized = getNormalizedValues();
       const phone      = normalized.phone;
+      // Extra form fields (plaka, TC, araç yılı vb.) go into the note column
       const noteLines  = buildNoteLines(p.fields, normalized);
 
-      // ── Duplicate / spam check (same phone + product, last 10 min) ──────
-      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      // ── Step 1: Find customer by phone — simple .eq().limit(1), no joins ─
+      const { data: foundCustomers, error: findError } = await (supabase.from("customers") as any)
+        .select("id")
+        .eq("phone", phone)
+        .limit(1);
 
-      const { data: dupData, error: dupErr } = await (supabase.from("requests") as any)
-        .select("id, customers!inner(phone)")
-        .eq("request_type", p.label)
-        .gte("created_at", tenMinAgo);
+      if (findError) {
+        setSubmitError(`Müşteri arama hatası: ${findError.message}`);
+        return;
+      }
 
-      console.log("DUPLICATE_CHECK", { phone, product: p.label, data: dupData, error: dupErr });
+      const existingCustomer = Array.isArray(foundCustomers) ? (foundCustomers[0] ?? null) : null;
 
-      if (!dupErr && Array.isArray(dupData)) {
-        const isDuplicate = dupData.some(
-          (r: { customers: { phone: string } }) => r.customers?.phone === phone
-        );
-        if (isDuplicate) {
+      // ── Step 2: Duplicate check — no join, just requests by customer_id ──
+      if (existingCustomer?.id) {
+        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        const { data: recentReqs } = await (supabase.from("requests") as any)
+          .select("id")
+          .eq("customer_id", existingCustomer.id)
+          .eq("request_type", p.label)
+          .gte("created_at", tenMinAgo)
+          .limit(1);
+
+        if (Array.isArray(recentReqs) && recentReqs.length > 0) {
           setSubmitError(
             "Bu telefon numarasıyla kısa süre önce aynı ürün için talep oluşturulmuş. Lütfen birkaç dakika bekleyin."
           );
@@ -322,106 +330,53 @@ export default function ProductFormPage({
         }
       }
 
-      // ── Step 1: find customer by normalized phone ────────────────────────
-      const { data: existing, error: findErr } = await (supabase.from("customers") as any)
-        .select("id")
-        .eq("phone", phone)
-        .maybeSingle();
-
-      console.log("CUSTOMER_FIND", { phone, data: existing, error: findErr });
-
-      if (findErr) {
-        setSubmitError(`Müşteri arama hatası: ${describeSupabaseError(findErr)}`);
-        return;
-      }
-
+      // ── Step 3a: Update existing customer ───────────────────────────────
       let customerId: string;
 
-      if (existing?.id) {
-        // ── Step 2a: update ──────────────────────────────────────────────
-        const updatePayload = {
-          name: normalized.name ?? "",
-          insurance_type: p.label,
-          note: noteLines || null,
-        };
-        console.log("CUSTOMER_UPDATE_PAYLOAD", updatePayload);
+      if (existingCustomer?.id) {
+        const { error: updErr } = await (supabase.from("customers") as any)
+          .update({ name: normalized.name ?? "", insurance_type: p.label, note: noteLines || null })
+          .eq("id", existingCustomer.id);
 
-        const { data: updData, error: updErr } = await (supabase.from("customers") as any)
-          .update(updatePayload)
-          .eq("id", existing.id)
-          .select("id")
-          .single();
-
-        console.log("CUSTOMER_UPDATE", { data: updData, error: updErr });
         if (updErr) {
-          setSubmitError(`Müşteri güncelleme hatası: ${describeSupabaseError(updErr)}`);
+          setSubmitError(`Müşteri güncelleme hatası: ${updErr.message}`);
           return;
         }
-        customerId = existing.id as string;
+        customerId = existingCustomer.id as string;
 
       } else {
-        // ── Step 2b: insert new customer ────────────────────────────────
-        const insertPayload = {
-          name: normalized.name ?? "",
-          phone,
-          insurance_type: p.label,
-          note: noteLines || null,
-        };
-        console.log("CUSTOMER_INSERT_PAYLOAD", insertPayload);
-
+        // ── Step 3b: Insert new customer — only known columns ────────────
         const { data: insData, error: insErr } = await (supabase.from("customers") as any)
-          .insert(insertPayload)
+          .insert({ name: normalized.name ?? "", phone, insurance_type: p.label, note: noteLines || null })
           .select("id")
-          .single();
-
-        console.log("CUSTOMER_INSERT", { data: insData, error: insErr });
+          .limit(1);
 
         if (insErr) {
-          const desc = describeSupabaseError(insErr);
-          if ((insErr as { code?: string }).code === "42501") {
-            setSubmitError(
-              `RLS hatası: insert izni yok. Supabase'de "public insert customers" policy gerekli. (${desc})`
-            );
-          } else {
-            setSubmitError(`Müşteri kayıt hatası: ${desc}`);
-          }
+          setSubmitError(`Müşteri kayıt hatası: ${insErr.message}`);
           return;
         }
-        customerId = (insData as { id: string }).id;
+        if (!Array.isArray(insData) || !insData[0]?.id) {
+          setSubmitError("Müşteri kaydı oluşturulamadı. Lütfen tekrar deneyin.");
+          return;
+        }
+        customerId = insData[0].id as string;
       }
 
-      // ── Step 3: insert request ──────────────────────────────────────────
-      // NOTE: request_type kolonu adıdır (schema.sql). "product" adında kolon yok.
-      const requestPayload = {
-        customer_id: customerId,
-        request_type: p.label,
-        status: "Yeni",
-      };
-      console.log("REQUEST_INSERT_PAYLOAD", requestPayload);
-
-      const { data: reqData, error: reqErr } = await (supabase.from("requests") as any)
-        .insert(requestPayload)
-        .select("id")
-        .single();
-
-      console.log("REQUEST_INSERT", { data: reqData, error: reqErr });
+      // ── Step 4: Insert request — only requests table columns ────────────
+      const { error: reqErr } = await (supabase.from("requests") as any)
+        .insert({ customer_id: customerId, request_type: p.label, status: "Yeni" });
 
       if (reqErr) {
-        const desc = describeSupabaseError(reqErr);
-        if ((reqErr as { code?: string }).code === "42501") {
-          setSubmitError(`RLS hatası: request insert izni yok. (${desc})`);
-        } else {
-          setSubmitError(`Talep oluşturma hatası: ${desc}`);
-        }
+        setSubmitError(`Talep oluşturma hatası: ${reqErr.message}`);
         return;
       }
 
       setDone(true);
 
     } catch (err: unknown) {
-      const desc = describeSupabaseError(err);
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("TEKLIF_SUBMIT_UNEXPECTED", err);
-      setSubmitError(`Beklenmeyen hata: ${desc}`);
+      setSubmitError(`Beklenmeyen hata: ${msg}`);
     } finally {
       setSubmitting(false);
     }
