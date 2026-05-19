@@ -65,7 +65,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [bellShaking, setBellShaking] = useState(false);
   const [newNotifAt, setNewNotifAt] = useState(0);
 
-  const timerRef        = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const bellTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const soundEnabledRef = useRef(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,11 +146,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     (customerName: string, requestType: string, phone: string) => {
       const id = `t-${Date.now()}-${Math.random()}`;
       setToasts((prev) =>
-        [{ id, customerName, requestType, phone, removing: false }, ...prev].slice(0, 3)
+        [{ id, customerName, requestType, phone, removing: false }, ...prev].slice(0, 5)
       );
-      timerRef.current[id] = setTimeout(() => dismissToast(id), 8000);
     },
-    [dismissToast]
+    []
   );
 
   // ── Browser notification ───────────────────────────────────────────────────
