@@ -6,6 +6,7 @@ import type { ComponentType } from "react";
 import AnimatedCounter from "@/components/AnimatedCounter";
 import WeeklyChart from "@/components/WeeklyChart";
 import { supabase } from "@/lib/supabase";
+import { useNotifications } from "@/lib/NotificationContext";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity, Car, Home,
@@ -98,6 +99,7 @@ function timeAgo(iso: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const { notifications } = useNotifications();
   const [isDemo, setIsDemo]         = useState(false);
   const [stats, setStats]           = useState({ customers: 0, requests: 0, renewals: 0, today: 0 });
   const [feedItems, setFeedItems]   = useState<FeedItem[]>([]);
@@ -342,6 +344,57 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* ══ YENİ GELEN TALEPLER ══════════════════════════════════════════════ */}
+      {notifications.length > 0 && (
+        <div className="bg-white rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-blue-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+              </span>
+              <h2 className="font-semibold text-slate-800 text-sm">Yeni Gelen Talepler</h2>
+              <span className="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {notifications.length}
+              </span>
+            </div>
+            <Link href="/requests" className="text-xs text-blue-600 font-semibold hover:text-blue-800 transition-colors flex items-center gap-0.5">
+              Tümünü İşleme Al <ArrowUpRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {notifications.slice(0, 5).map((n) => (
+              <div key={n.id} className="px-5 py-3 flex items-center justify-between hover:bg-blue-50/30 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[11px] font-bold flex-shrink-0">
+                    {n.customer_name.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{n.customer_name}</p>
+                    <p className="text-[11px] text-gray-400">{n.request_type}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {n.customer_phone && (
+                    <a
+                      href={`https://wa.me/${n.customer_phone}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-colors"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                    Yeni
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ══ CHART + LIVE FEED ═══════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
