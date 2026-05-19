@@ -7,6 +7,7 @@ import AnimatedCounter from "@/components/AnimatedCounter";
 import WeeklyChart from "@/components/WeeklyChart";
 import { supabase } from "@/lib/supabase";
 import { useNotifications } from "@/lib/NotificationContext";
+import NotifPermissionButton from "@/components/NotifPermissionButton";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity, Car, Home,
@@ -99,7 +100,8 @@ function timeAgo(iso: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { notifications } = useNotifications();
+  const { notifications, newNotifAt } = useNotifications();
+  const [cardHighlighted, setCardHighlighted] = useState(false);
   const [isDemo, setIsDemo]         = useState(false);
   const [stats, setStats]           = useState({ customers: 0, requests: 0, renewals: 0, today: 0 });
   const [feedItems, setFeedItems]   = useState<FeedItem[]>([]);
@@ -218,6 +220,14 @@ export default function DashboardPage() {
     load();
   }, []);
 
+  // ── Highlight "Yeni Gelen Talepler" card for 3 s on new realtime notif ───
+  useEffect(() => {
+    if (newNotifAt === 0) return;
+    setCardHighlighted(true);
+    const t = setTimeout(() => setCardHighlighted(false), 3000);
+    return () => clearTimeout(t);
+  }, [newNotifAt]);
+
   // ── Live feed ticker — adds a new item every ~11 s ───────────────────────
   useEffect(() => {
     if (loading) return;
@@ -248,6 +258,9 @@ export default function DashboardPage() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
+
+      {/* ══ NOTIFICATION PERMISSION BANNER ══════════════════════════════════ */}
+      <NotifPermissionButton />
 
       {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
       <div className="flex items-start justify-between flex-wrap gap-3">
@@ -347,7 +360,13 @@ export default function DashboardPage() {
 
       {/* ══ YENİ GELEN TALEPLER ══════════════════════════════════════════════ */}
       {notifications.length > 0 && (
-        <div className="bg-white rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
+        <div
+          className={`rounded-2xl shadow-sm overflow-hidden transition-all duration-500 ${
+            cardHighlighted
+              ? "bg-blue-50 border-2 border-blue-400 shadow-blue-100 shadow-lg"
+              : "bg-white border border-blue-100"
+          }`}
+        >
           <div className="px-5 py-3.5 border-b border-blue-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
@@ -386,7 +405,7 @@ export default function DashboardPage() {
                       <MessageSquare className="w-3.5 h-3.5" />
                     </a>
                   )}
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                  <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 ${cardHighlighted ? "animate-pulse" : ""}`}>
                     Yeni
                   </span>
                 </div>

@@ -23,8 +23,9 @@ export type NotifItem = {
 
 export type ToastItem = {
   id: string;
-  message: string;
-  sub: string;
+  customerName: string;
+  requestType: string;
+  phone: string;
   removing: boolean;
 };
 
@@ -34,6 +35,10 @@ type CtxType = {
   markAllRead: () => void;
   toasts: ToastItem[];
   dismissToast: (id: string) => void;
+  soundEnabled: boolean;
+  setSoundEnabled: (v: boolean) => void;
+  bellShaking: boolean;
+  newNotifAt: number;
 };
 
 const NotificationContext = createContext<CtxType>({
@@ -42,6 +47,10 @@ const NotificationContext = createContext<CtxType>({
   markAllRead: () => {},
   toasts: [],
   dismissToast: () => {},
+  soundEnabled: false,
+  setSoundEnabled: () => {},
+  bellShaking: false,
+  newNotifAt: 0,
 });
 
 export function useNotifications() {
@@ -52,9 +61,81 @@ export function useNotifications() {
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<NotifItem[]>([]);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const timerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [soundEnabled, setSoundEnabledState] = useState(false);
+  const [bellShaking, setBellShaking] = useState(false);
+  const [newNotifAt, setNewNotifAt] = useState(0);
+
+  const timerRef        = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const bellTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const soundEnabledRef = useRef(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const audioCtxRef     = useRef<any>(null);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  // ── Load persisted sound preference ───────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("notif_sound_enabled");
+    if (saved === "true") {
+      setSoundEnabledState(true);
+      soundEnabledRef.current = true;
+    }
+  }, []);
+
+  // ── Document title: update when tab is hidden + unread count changes ───────
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (unreadCount > 0 && document.visibilityState !== "visible") {
+      document.title = `(${unreadCount}) Yeni teklif - PoliçePilot`;
+    }
+  }, [unreadCount]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    function handleVis() {
+      if (document.visibilityState === "visible") {
+        document.title = "PoliçePilot";
+      }
+    }
+    document.addEventListener("visibilitychange", handleVis);
+    return () => document.removeEventListener("visibilitychange", handleVis);
+  }, []);
+
+  // ── setSoundEnabled: must be called from a user-gesture handler ───────────
+  const setSoundEnabled = useCallback((v: boolean) => {
+    setSoundEnabledState(v);
+    soundEnabledRef.current = v;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("notif_sound_enabled", String(v));
+      if (v && !audioCtxRef.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+        if (AC) audioCtxRef.current = new AC();
+      }
+    }
+  }, []);
+
+  // ── Web Audio beep ─────────────────────────────────────────────────────────
+  const playBeep = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    try {
+      if (ctx.state === "suspended") ctx.resume();
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = "sine";
+      const t = ctx.currentTime;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.35, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+      osc.start(t);
+      osc.stop(t + 0.45);
+    } catch {/* audio unavailable */}
+  }, []);
 
   // ── Toast helpers ──────────────────────────────────────────────────────────
   const dismissToast = useCallback((id: string) => {
@@ -63,10 +144,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addToast = useCallback(
-    (message: string, sub: string) => {
+    (customerName: string, requestType: string, phone: string) => {
       const id = `t-${Date.now()}-${Math.random()}`;
-      setToasts((prev) => [{ id, message, sub, removing: false }, ...prev].slice(0, 4));
-      timerRef.current[id] = setTimeout(() => dismissToast(id), 5500);
+      setToasts((prev) =>
+        [{ id, customerName, requestType, phone, removing: false }, ...prev].slice(0, 3)
+      );
+      timerRef.current[id] = setTimeout(() => dismissToast(id), 8000);
     },
     [dismissToast]
   );
@@ -74,29 +157,43 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   // ── Browser notification ───────────────────────────────────────────────────
   const sendBrowserNotif = useCallback((name: string, type: string) => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
-    if (Notification.permission === "granted") {
-      new Notification("Yeni Teklif Talebi", { body: `${name} — ${type}`, icon: "/favicon.ico" });
-    }
+    if (Notification.permission !== "granted") return;
+    const n = new Notification("Yeni teklif talebi", {
+      body: `${name} - ${type}`,
+      icon: "/favicon.ico",
+    });
+    n.onclick = () => {
+      window.focus();
+      window.location.href = "/requests";
+    };
   }, []);
 
-  // ── Add one notification + side-effects ───────────────────────────────────
+  // ── Bell shake for 5 s ────────────────────────────────────────────────────
+  const triggerBellShake = useCallback(() => {
+    setBellShaking(true);
+    if (bellTimerRef.current) clearTimeout(bellTimerRef.current);
+    bellTimerRef.current = setTimeout(() => setBellShaking(false), 5000);
+  }, []);
+
+  // ── Add notification (realtime INSERT only — no sound on bootstrap) ────────
   const addNotification = useCallback(
     (item: NotifItem) => {
       setNotifications((prev) => [item, ...prev].slice(0, 20));
-      addToast(`Yeni teklif talebi: ${item.customer_name}`, item.request_type);
+      addToast(item.customer_name, item.request_type, item.customer_phone);
       sendBrowserNotif(item.customer_name, item.request_type);
+      triggerBellShake();
+      setNewNotifAt(Date.now());
+      if (soundEnabledRef.current) playBeep();
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        document.title = `Yeni teklif - PoliçePilot`;
+      }
     },
-    [addToast, sendBrowserNotif]
+    [addToast, sendBrowserNotif, triggerBellShake, playBeep]
   );
 
-  // ── Initial load — fetch existing "Yeni" requests (no join syntax) ─────────
+  // ── Bootstrap: load existing "Yeni" requests silently ─────────────────────
   useEffect(() => {
     async function bootstrap() {
-      // Ask for browser notification permission
-      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission();
-      }
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: reqs, error } = await (supabase.from("requests") as any)
         .select("id, request_type, status, created_at, customer_id")
@@ -106,7 +203,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       if (error || !Array.isArray(reqs) || reqs.length === 0) return;
 
-      // Fetch customers separately (avoids join path syntax)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ids: string[] = [...new Set(reqs.map((r: any) => r.customer_id).filter(Boolean))];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -131,14 +227,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       setNotifications(items);
     }
-
     bootstrap();
   }, []);
 
-  // ── Supabase Realtime — INSERT + UPDATE on requests ───────────────────────
-  // Requires Realtime enabled for the requests table in Supabase dashboard:
-  //   Database → Replication → requests → toggle on
-  // Or run: ALTER TABLE public.requests REPLICA IDENTITY FULL;
+  // ── Supabase Realtime ──────────────────────────────────────────────────────
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const channel = (supabase.channel("notif-requests") as any)
@@ -149,14 +241,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         async (payload: any) => {
           const req = payload.new;
           if (!req?.id) return;
-
-          // Fetch customer name/phone separately
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { data } = await (supabase.from("customers") as any)
             .select("name, phone")
             .eq("id", req.customer_id)
             .limit(1);
-
           const cust = data?.[0];
           addNotification({
             id:             req.id,
@@ -174,7 +263,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (payload: any) => {
           const req = payload.new;
-          // Remove from unread list when status moves away from "Yeni"
           if (req?.status && req.status !== "Yeni") {
             setNotifications((prev) => prev.filter((n) => n.id !== req.id));
           }
@@ -182,17 +270,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [addNotification]);
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    if (typeof document !== "undefined") document.title = "PoliçePilot";
   }, []);
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, markAllRead, toasts, dismissToast }}>
+    <NotificationContext.Provider
+      value={{
+        notifications, unreadCount, markAllRead,
+        toasts, dismissToast,
+        soundEnabled, setSoundEnabled,
+        bellShaking, newNotifAt,
+      }}
+    >
       {children}
     </NotificationContext.Provider>
   );

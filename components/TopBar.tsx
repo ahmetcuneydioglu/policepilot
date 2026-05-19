@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import NotificationBell from "@/components/NotificationBell";
+import NotifPermissionButton from "@/components/NotifPermissionButton";
 
 export default function TopBar() {
   return (
@@ -46,6 +47,7 @@ export default function TopBar() {
           WhatsApp Gönder
         </Link>
 
+        <NotifPermissionButton compact />
         <NotificationBell />
       </div>
     </div>
