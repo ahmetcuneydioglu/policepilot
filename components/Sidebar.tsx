@@ -97,7 +97,7 @@ function NavLink({
 export default function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, profile, role, signOut } = useAuth();
+  const { user, profile, role, roleSource, profileError, signOut } = useAuth();
 
   // Avatar initials
   const displayName = profile?.full_name || user?.email || "Kullanıcı";
@@ -193,6 +193,38 @@ export default function Sidebar() {
             onClick={() => setMobileOpen(false)}
           />
         ))}
+
+        {/* ── Role debug badge ── */}
+        <div className="px-3 py-1.5 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[9px] text-slate-600 uppercase tracking-widest">Role</span>
+            {role ? (
+              <span
+                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                  role === "super_admin"
+                    ? "bg-violet-500/20 text-violet-300 border border-violet-500/30"
+                    : "bg-slate-500/20 text-slate-400 border border-slate-600/30"
+                }`}
+              >
+                {role}
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">
+                yok
+              </span>
+            )}
+            {roleSource && (
+              <span className="text-[8px] text-slate-700 italic">
+                ({roleSource === "profile" ? "profiles tablosu" : "JWT"})
+              </span>
+            )}
+          </div>
+          {profileError && (
+            <p className="text-[9px] text-red-400 leading-tight break-all">
+              ⚠ {profileError}
+            </p>
+          )}
+        </div>
 
         {/* User row + sign-out */}
         <div
