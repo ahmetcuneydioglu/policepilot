@@ -123,6 +123,45 @@ export default function Sidebar() {
             onClick={() => setMobileOpen(false)}
           />
         ))}
+
+        {/* Internal Sales section */}
+        <div className="mt-4 mb-1">
+          <div className="h-px bg-white/5 mb-3" />
+          <p className="px-3 text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Satış Operasyonu</p>
+        </div>
+        <Link
+          href="/leads"
+          onClick={() => setMobileOpen(false)}
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+            pathname === "/leads"
+              ? "bg-white/10 text-white"
+              : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+          }`}
+        >
+          <span className={pathname === "/leads" ? "text-white" : "text-slate-500"}>
+            <svg style={{width:"18px",height:"18px"}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" strokeWidth={1.75}/>
+              <circle cx="12" cy="12" r="6" strokeWidth={1.75}/>
+              <circle cx="12" cy="12" r="2" strokeWidth={1.75}/>
+              <line x1="12" y1="2" x2="12" y2="6" strokeWidth={1.75} strokeLinecap="round"/>
+              <line x1="12" y1="18" x2="12" y2="22" strokeWidth={1.75} strokeLinecap="round"/>
+              <line x1="2" y1="12" x2="6" y2="12" strokeWidth={1.75} strokeLinecap="round"/>
+              <line x1="18" y1="12" x2="22" y2="12" strokeWidth={1.75} strokeLinecap="round"/>
+            </svg>
+          </span>
+          Satış Leadleri
+          {pathname === "/leads" ? (
+            <>
+              <span className="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 flex-shrink-0">
+                İÇ
+              </span>
+            </>
+          ) : (
+            <span className="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-900/30 text-violet-500 border border-violet-800/30 flex-shrink-0">
+              İÇ
+            </span>
+          )}
+        </Link>
       </nav>
 
       {/* Bottom section */}
