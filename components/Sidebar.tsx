@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useAuth } from "@/lib/AuthContext";
 
 const navItems = [
   {
@@ -58,7 +59,8 @@ const bottomItems = [
     label: "Ayarlar",
     icon: (
       <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
   },
@@ -95,6 +97,18 @@ function NavLink({
 export default function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, profile, role, signOut } = useAuth();
+
+  // Avatar initials
+  const displayName = profile?.full_name || user?.email || "Kullanıcı";
+  const initials = displayName
+    .split(" ")
+    .map((w: string) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  const roleLabel =
+    role === "super_admin" ? "Süper Admin" : role === "agency_user" ? "Acente" : "—";
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -114,7 +128,7 @@ export default function Sidebar() {
       </div>
 
       {/* Main nav */}
-      <nav className="flex-1 px-3 space-y-0.5">
+      <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => (
           <NavLink
             key={item.href}
@@ -124,44 +138,48 @@ export default function Sidebar() {
           />
         ))}
 
-        {/* Internal Sales section */}
-        <div className="mt-4 mb-1">
-          <div className="h-px bg-white/5 mb-3" />
-          <p className="px-3 text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Satış Operasyonu</p>
-        </div>
-        <Link
-          href="/leads"
-          onClick={() => setMobileOpen(false)}
-          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-            pathname === "/leads"
-              ? "bg-white/10 text-white"
-              : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
-          }`}
-        >
-          <span className={pathname === "/leads" ? "text-white" : "text-slate-500"}>
-            <svg style={{width:"18px",height:"18px"}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" strokeWidth={1.75}/>
-              <circle cx="12" cy="12" r="6" strokeWidth={1.75}/>
-              <circle cx="12" cy="12" r="2" strokeWidth={1.75}/>
-              <line x1="12" y1="2" x2="12" y2="6" strokeWidth={1.75} strokeLinecap="round"/>
-              <line x1="12" y1="18" x2="12" y2="22" strokeWidth={1.75} strokeLinecap="round"/>
-              <line x1="2" y1="12" x2="6" y2="12" strokeWidth={1.75} strokeLinecap="round"/>
-              <line x1="18" y1="12" x2="22" y2="12" strokeWidth={1.75} strokeLinecap="round"/>
-            </svg>
-          </span>
-          Satış Leadleri
-          {pathname === "/leads" ? (
-            <>
-              <span className="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 flex-shrink-0">
+        {/* ── Super-admin only: Internal Sales ── */}
+        {role === "super_admin" && (
+          <>
+            <div className="mt-4 mb-1">
+              <div className="h-px bg-white/5 mb-3" />
+              <p className="px-3 text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">
+                Satış Operasyonu
+              </p>
+            </div>
+            <Link
+              href="/leads"
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                pathname === "/leads"
+                  ? "bg-white/10 text-white"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+              }`}
+            >
+              <span className={pathname === "/leads" ? "text-white" : "text-slate-500"}>
+                <svg style={{ width: "18px", height: "18px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" strokeWidth={1.75} />
+                  <circle cx="12" cy="12" r="6"  strokeWidth={1.75} />
+                  <circle cx="12" cy="12" r="2"  strokeWidth={1.75} />
+                  <line x1="12" y1="2"  x2="12" y2="6"  strokeWidth={1.75} strokeLinecap="round" />
+                  <line x1="12" y1="18" x2="12" y2="22" strokeWidth={1.75} strokeLinecap="round" />
+                  <line x1="2"  y1="12" x2="6"  y2="12" strokeWidth={1.75} strokeLinecap="round" />
+                  <line x1="18" y1="12" x2="22" y2="12" strokeWidth={1.75} strokeLinecap="round" />
+                </svg>
+              </span>
+              Satış Leadleri
+              <span
+                className={`ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0 ${
+                  pathname === "/leads"
+                    ? "bg-violet-500/20 text-violet-300 border border-violet-500/30"
+                    : "bg-violet-900/30 text-violet-500 border border-violet-800/30"
+                }`}
+              >
                 İÇ
               </span>
-            </>
-          ) : (
-            <span className="ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-900/30 text-violet-500 border border-violet-800/30 flex-shrink-0">
-              İÇ
-            </span>
-          )}
-        </Link>
+            </Link>
+          </>
+        )}
       </nav>
 
       {/* Bottom section */}
@@ -176,17 +194,32 @@ export default function Sidebar() {
           />
         ))}
 
-        {/* User row */}
-        <div className="flex items-center gap-3 px-3 py-2 mt-1 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
+        {/* User row + sign-out */}
+        <div
+          onClick={signOut}
+          className="flex items-center gap-3 px-3 py-2 mt-1 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group"
+          title="Çıkış Yap"
+        >
           <div className="w-7 h-7 rounded-full bg-slate-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-            AC
+            {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-white text-xs font-medium truncate">Acente Admin</p>
-            <p className="text-slate-500 text-[10px] truncate">Yönetici</p>
+            <p className="text-white text-xs font-medium truncate">{displayName}</p>
+            <p className="text-slate-500 text-[10px] truncate">{roleLabel}</p>
           </div>
-          <svg className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+          {/* Sign-out icon */}
+          <svg
+            className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 flex-shrink-0 transition-colors"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+            />
           </svg>
         </div>
       </div>
