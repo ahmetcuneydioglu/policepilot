@@ -37,6 +37,20 @@ export default function TeklifAlPage() {
   return (
     <div className="min-h-screen bg-white font-sans text-slate-800">
 
+      {/* ── Demo banner ─────────────────────────────────────────────────── */}
+      <div className="bg-amber-50 border-b border-amber-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex items-start sm:items-center gap-2 text-xs sm:text-sm text-amber-800">
+          <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>
+            <span className="font-semibold">Demo formu:</span> Bu sayfa genel tanıtım amaçlıdır. Gerçek acente teklif akışı{" "}
+            <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-900">/a/[acente-linki]/teklif-al</code>
+            {" "}üzerinden çalışır.
+          </span>
+        </div>
+      </div>
+
       {/* ── Navbar ──────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">

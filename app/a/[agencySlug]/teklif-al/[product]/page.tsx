@@ -214,9 +214,14 @@ export default function AgencyProductFormPage({
       <div className="bg-white rounded-3xl border border-gray-100 shadow-lg p-10 max-w-md w-full text-center">
         <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-3xl mx-auto mb-5">✅</div>
         <h1 className="text-2xl font-extrabold text-slate-900 mb-2">Talebiniz Alındı!</h1>
-        <p className="text-gray-500 text-sm leading-relaxed mb-8">
-          <span className="font-semibold text-slate-700">{agency!.name}</span> yetkilileri kısa süre içinde{" "}
-          <span className="font-semibold text-emerald-700">WhatsApp</span> üzerinden size dönüş yapacak.
+        <p className="text-gray-500 text-sm leading-relaxed mb-3">
+          Talebiniz{" "}
+          <span className="font-semibold text-slate-800">{agency!.name}</span>
+          {" "}acentesine iletildi.
+        </p>
+        <p className="text-gray-400 text-xs mb-8">
+          Yetkili sigorta danışmanımız kısa süre içinde{" "}
+          <span className="font-semibold text-emerald-600">WhatsApp</span> üzerinden size dönüş yapacaktır.
         </p>
         <div className="flex flex-col gap-2">
           <Link href={`/a/${agencySlug}/teklif-al`} className="px-6 py-2.5 text-white font-semibold rounded-xl text-sm transition-colors" style={{ backgroundColor: color }}>

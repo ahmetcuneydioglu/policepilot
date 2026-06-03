@@ -137,7 +137,9 @@ export default function DashboardPage() {
   const [recentReqs, setRecentReqs] = useState<RecentRequest[]>([]);
   const [loading, setLoading]       = useState(true);
   const [distReady, setDistReady]   = useState(false);
-  const [agencyName, setAgencyName] = useState<string | null>(null);
+  const [agencyName, setAgencyName]   = useState<string | null>(null);
+  const [agencySlug, setAgencySlug]   = useState<string | null>(null);
+  const [linkCopied, setLinkCopied]   = useState(false);
   const feedIdxRef                  = useRef(0);
 
   // ── Push a new item to the live feed with fade-in animation ───────────────
@@ -255,10 +257,11 @@ export default function DashboardPage() {
       if (role === "agency_user" && agencyId) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: agencyData } = await (supabase.from("agencies") as any)
-          .select("name")
+          .select("name, slug")
           .eq("id", agencyId)
           .maybeSingle();
         if (agencyData?.name) setAgencyName(agencyData.name);
+        if (agencyData?.slug) setAgencySlug(agencyData.slug);
       }
 
       setLoading(false);
@@ -379,6 +382,54 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* ══ ACENTE TEKLİF LİNKİ (agency_user only) ════════════════════════ */}
+      {role === "agency_user" && agencySlug && (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4.5 h-4.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-0.5">Teklif Formu Linkiniz</p>
+              <p className="text-sm font-mono text-blue-900 truncate">
+                {typeof window !== "undefined" ? window.location.origin : ""}/a/{agencySlug}/teklif-al
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/a/${agencySlug}/teklif-al`;
+                navigator.clipboard.writeText(url).then(() => {
+                  setLinkCopied(true);
+                  setTimeout(() => setLinkCopied(false), 2000);
+                });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors"
+            >
+              {linkCopied ? (
+                <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>Kopyalandı!</>
+              ) : (
+                <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>Kopyala</>
+              )}
+            </button>
+            <a
+              href={`/a/${agencySlug}/teklif-al`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-white text-blue-700 text-xs font-semibold hover:bg-blue-50 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Önizle
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* ══ AI OPERASYON ÖZETİ ══════════════════════════════════════════════ */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-900 p-5">
