@@ -155,7 +155,7 @@ export default function RequestsPage() {
         </div>
       )}
 
-      {showAdd && <AddRequestModal customers={customers} onClose={handleClose} />}
+      {showAdd && <AddRequestModal customers={customers} onClose={handleClose} agencyId={agencyId} />}
     </div>
   );
 }

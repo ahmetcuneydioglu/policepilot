@@ -13,6 +13,7 @@ type Agency = {
   logo_url: string | null;
   phone: string | null;
   primary_color: string;
+  is_active: boolean | null;
 };
 
 // ─── Helpers (same as /teklif-al/[product]) ──────────────────────────────────
@@ -113,7 +114,7 @@ export default function AgencyProductFormPage({
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase.from("agencies") as any)
-      .select("id, name, slug, logo_url, phone, primary_color")
+      .select("id, name, slug, logo_url, phone, primary_color, is_active")
       .eq("slug", agencySlug)
       .maybeSingle()
       .then(({ data }: { data: Agency | null }) => {
@@ -155,39 +156,35 @@ export default function AgencyProductFormPage({
     try {
       const normalized = getNormalized();
       const noteLines  = buildNoteLines(p.fields, normalized);
-      const agencyId   = agency?.id ?? null;
 
-      // Step 1: customer
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: customer, error: customerError } = await (supabase.from("customers") as any)
-        .insert({
+      // Build extra_data from normalized form values
+      const extraData: Record<string, string> = {};
+      p.fields.forEach((f) => {
+        if (!["name","phone","kvkk"].includes(f.id) && normalized[f.id]) {
+          extraData[f.id] = normalized[f.id];
+        }
+      });
+
+      // ── Route through server-side API (enforces limits + is_active) ──────
+      const res = await fetch("/api/public/submit", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agencySlug,
           name:           normalized.name ?? "",
           phone:          normalized.phone,
           insurance_type: p.label,
           note:           noteLines || null,
-          agency_id:      agencyId,
-        })
-        .select("id")
-        .single();
+          vehicle_plate:  normalized.plaka || null,
+          extra_data:     extraData,
+        }),
+      });
 
-      if (customerError) {
-        setSubmitError(`Müşteri kayıt hatası: ${customerError.message}`);
-        return;
-      }
+      const json = await res.json();
 
-      // Step 2: request
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: requestError } = await (supabase.from("requests") as any)
-        .insert({
-          customer_id:  (customer as { id: string }).id,
-          request_type: p.label,
-          status:       "Yeni",
-          price_offer:  null,
-          agency_id:    agencyId,
-        });
-
-      if (requestError) {
-        setSubmitError(`Talep oluşturma hatası: ${requestError.message}`);
+      if (!res.ok) {
+        // is_active=false, limit exceeded, or not found
+        setSubmitError(json.error ?? "Bir hata oluştu. Lütfen daha sonra tekrar deneyin.");
         return;
       }
 
@@ -207,6 +204,27 @@ export default function AgencyProductFormPage({
   );
 
   if (!agency) notFound();
+
+  // Inactive agency: show closed message
+  if (agency.is_active === false) return (
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-lg p-10 max-w-md w-full text-center">
+        <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center text-3xl mx-auto mb-5">🔒</div>
+        <h1 className="text-xl font-extrabold text-slate-900 mb-2">Teklif Kabul Edilmiyor</h1>
+        <p className="text-gray-500 text-sm leading-relaxed">
+          <span className="font-semibold text-slate-700">{agency.name}</span> şu anda teklif kabul etmiyor.
+          Lütfen acenteyi doğrudan arayın.
+        </p>
+        {agency.phone && (
+          <a href={`tel:${agency.phone}`}
+            className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 rounded-xl text-white font-semibold text-sm"
+            style={{ backgroundColor: color }}>
+            📞 {agency.phone}
+          </a>
+        )}
+      </div>
+    </div>
+  );
 
   // Thank-you screen
   if (done) return (

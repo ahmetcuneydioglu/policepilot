@@ -15,10 +15,13 @@ type Agency = {
   primary_color: string;
   created_at: string;
   // plan fields (may be null if column not yet added)
-  max_users:   number | null;
-  is_active:   boolean | null;
-  plan:        string | null;
-  expires_at:  string | null;
+  max_users:      number | null;
+  max_customers:  number | null;
+  max_requests:   number | null;
+  max_policies:   number | null;
+  is_active:      boolean | null;
+  plan:           string | null;
+  expires_at:     string | null;
 };
 
 type Profile = {
@@ -37,7 +40,8 @@ const PLAN_LABELS: Record<string, { label: string; cls: string }> = {
 const EMPTY_FORM = {
   name: "", slug: "", phone: "", email: "", website: "",
   primary_color: "#2563eb", logo_url: "",
-  max_users: "10", plan: "starter",
+  max_users: "10", max_customers: "100", max_requests: "100", max_policies: "100",
+  plan: "starter",
 };
 
 function slugify(str: string) {
@@ -97,7 +101,10 @@ export default function AgenciesPage() {
       website:       ag.website ?? "",
       primary_color: ag.primary_color,
       logo_url:      ag.logo_url ?? "",
-      max_users:     String(ag.max_users ?? 10),
+      max_users:     String(ag.max_users     ?? 10),
+      max_customers: String(ag.max_customers ?? 100),
+      max_requests:  String(ag.max_requests  ?? 100),
+      max_policies:  String(ag.max_policies  ?? 100),
       plan:          ag.plan ?? "starter",
     });
     setFormError("");
@@ -120,7 +127,10 @@ export default function AgenciesPage() {
       website:       form.website.trim() || null,
       primary_color: form.primary_color || "#2563eb",
       logo_url:      form.logo_url.trim() || null,
-      max_users:     parseInt(form.max_users, 10) || 10,
+      max_users:     parseInt(form.max_users,     10) || 10,
+      max_customers: parseInt(form.max_customers, 10) || 100,
+      max_requests:  parseInt(form.max_requests,  10) || 100,
+      max_policies:  parseInt(form.max_policies,  10) || 100,
       plan:          form.plan || "starter",
     };
 
@@ -253,6 +263,30 @@ export default function AgenciesPage() {
                 <label className="block text-xs font-medium text-slate-600 mb-1">Maks. Kullanıcı</label>
                 <input type="number" min="1" max="200" value={form.max_users}
                   onChange={(e) => setForm((p) => ({ ...p, max_users: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              </div>
+
+              {/* Max customers */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Maks. Müşteri</label>
+                <input type="number" min="1" max="100000" value={form.max_customers}
+                  onChange={(e) => setForm((p) => ({ ...p, max_customers: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              </div>
+
+              {/* Max requests */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Maks. Teklif Talebi</label>
+                <input type="number" min="1" max="100000" value={form.max_requests}
+                  onChange={(e) => setForm((p) => ({ ...p, max_requests: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              </div>
+
+              {/* Max policies */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Maks. Poliçe</label>
+                <input type="number" min="1" max="100000" value={form.max_policies}
+                  onChange={(e) => setForm((p) => ({ ...p, max_policies: e.target.value }))}
                   className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
               </div>
 
