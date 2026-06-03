@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
+import { useNotifications } from "@/lib/NotificationContext";
 
 // ─── Nav item type ────────────────────────────────────────────────────────────
 type NavItem = {
@@ -26,13 +27,13 @@ const Icon = {
   signout:   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
 };
 
-// ─── Shared nav items (both roles) ───────────────────────────────────────────
-const COMMON_ITEMS: NavItem[] = [
-  { href: "/dashboard",    label: "Dashboard",        icon: Icon.dashboard },
-  { href: "/customers",    label: "Müşteriler",        icon: Icon.customers },
-  { href: "/requests",     label: "Teklif Talepleri",  icon: Icon.requests  },
-  { href: "/policies",     label: "Poliçeler",         icon: Icon.policies  },
-  { href: "/ai-assistant", label: "AI Asistan",        icon: Icon.ai        },
+// ─── Shared nav items (badge added dynamically in component) ─────────────────
+const BASE_NAV = [
+  { href: "/dashboard",    label: "Dashboard",        icon: Icon.dashboard, badgeKey: "" },
+  { href: "/customers",    label: "Müşteriler",        icon: Icon.customers, badgeKey: "" },
+  { href: "/requests",     label: "Teklif Talepleri",  icon: Icon.requests,  badgeKey: "requests" },
+  { href: "/policies",     label: "Poliçeler",         icon: Icon.policies,  badgeKey: "" },
+  { href: "/ai-assistant", label: "AI Asistan",        icon: Icon.ai,        badgeKey: "" },
 ];
 
 const BOTTOM_ITEM: NavItem = { href: "/settings", label: "Ayarlar", icon: Icon.settings };
@@ -72,6 +73,21 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, profile, role, roleSource, profileError, agencyId, signOut } = useAuth();
+  const { unreadCount } = useNotifications();
+
+  // Build nav items with live badge counts (agency-scoped via NotificationContext)
+  const COMMON_ITEMS: NavItem[] = BASE_NAV.map((item) => ({
+    href:  item.href,
+    label: item.label,
+    icon:  item.icon,
+    badge: item.badgeKey === "requests" && unreadCount > 0
+      ? (
+          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex-shrink-0">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )
+      : undefined,
+  }));
 
   // Avatar initials
   const displayName = profile?.full_name || user?.email || "Kullanıcı";

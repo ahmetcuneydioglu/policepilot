@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/AuthContext";
+import { withAgencyFilter, realtimeAgencyFilter } from "@/lib/tenant";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type NotifItem = {
@@ -59,6 +61,8 @@ export function useNotifications() {
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 export function NotificationProvider({ children }: { children: ReactNode }) {
+  const { role, agencyId, loading: authLoading } = useAuth();
+
   const [notifications, setNotifications] = useState<NotifItem[]>([]);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [soundEnabled, setSoundEnabledState] = useState(false);
@@ -189,25 +193,39 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     [addToast, sendBrowserNotif, triggerBellShake, playBeep]
   );
 
-  // ── Bootstrap: load existing "Yeni" requests silently ─────────────────────
+  // ── Bootstrap: load existing "Yeni" requests — agency-scoped ──────────────
+  // Waits for auth to finish so agencyId is available before querying.
   useEffect(() => {
+    if (authLoading) return; // Don't bootstrap until auth is resolved
+
+    // agency_user without an agency yet → nothing to load
+    if (role === "agency_user" && !agencyId) {
+      setNotifications([]);
+      return;
+    }
+
     async function bootstrap() {
+      // Build base query
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: reqs, error } = await (supabase.from("requests") as any)
+      const baseQ = (supabase.from("requests") as any)
         .select("id, request_type, status, created_at, customer_id")
         .eq("status", "Yeni")
         .order("created_at", { ascending: false })
         .limit(15);
 
+      // Apply agency filter
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const q = withAgencyFilter(baseQ, role, agencyId);
+      const { data: reqs, error } = await q;
+
       if (error || !Array.isArray(reqs) || reqs.length === 0) return;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ids: string[] = [...new Set(reqs.map((r: any) => r.customer_id).filter(Boolean))];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: customers } = ids.length
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ? await (supabase.from("customers") as any).select("id, name, phone").in("id", ids)
-        : { data: [] as any[] };
+        : { data: [] as { id: string; name: string; phone: string }[] };
 
       const cmap: Record<string, { name: string; phone: string }> = {};
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -225,16 +243,49 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       setNotifications(items);
     }
-    bootstrap();
-  }, []);
 
-  // ── Supabase Realtime ──────────────────────────────────────────────────────
+    bootstrap();
+    // Re-run when auth resolves or agencyId changes
+  }, [authLoading, role, agencyId]);
+
+  // ── Supabase Realtime — agency-scoped subscription ─────────────────────────
   useEffect(() => {
+    if (authLoading) return; // Wait for auth to resolve
+
+    const rtFilter = realtimeAgencyFilter(role, agencyId);
+
+    // agency_user with no agencyId yet → skip subscription entirely
+    if (rtFilter === null) return;
+
+    // Build channel config: add filter only for agency_user
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const channel = (supabase.channel("notif-requests") as any)
+    const insertConfig: Record<string, any> = {
+      event: "INSERT",
+      schema: "public",
+      table: "requests",
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateConfig: Record<string, any> = {
+      event: "UPDATE",
+      schema: "public",
+      table: "requests",
+    };
+
+    if (rtFilter !== undefined) {
+      // agency_user: scope to their agency
+      insertConfig.filter = rtFilter;
+      updateConfig.filter = rtFilter;
+    }
+    // super_admin: no filter — receives all events globally
+
+    // Use agency-specific channel name to avoid conflicts between sessions
+    const channelName = agencyId ? `notif-requests-${agencyId}` : "notif-requests-global";
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const channel = (supabase.channel(channelName) as any)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "requests" },
+        insertConfig,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         async (payload: any) => {
           const req = payload.new;
@@ -257,7 +308,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "requests" },
+        updateConfig,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (payload: any) => {
           const req = payload.new;
@@ -269,7 +320,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [addNotification]);
+  }, [authLoading, role, agencyId, addNotification]);
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));

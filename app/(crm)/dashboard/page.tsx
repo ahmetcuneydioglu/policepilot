@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { useNotifications } from "@/lib/NotificationContext";
 import NotifPermissionButton from "@/components/NotifPermissionButton";
 import { useAuth } from "@/lib/AuthContext";
+import { withAgencyFilter, needsOnboarding } from "@/lib/tenant";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity, Car, Home,
@@ -37,7 +38,6 @@ type RecentRequest = {
   customers: { name: string } | null;
 };
 
-// ─── Live feed pool (cycles through these) ────────────────────────────────────
 type RawFeedEntry = {
   Icon: IconComp;
   iconBg: string;
@@ -46,6 +46,7 @@ type RawFeedEntry = {
   sub: string;
 };
 
+// ─── Live feed pool (cycles through these) ────────────────────────────────────
 const FEED_POOL: RawFeedEntry[] = [
   { Icon: Users,         iconBg: "bg-blue-50",    iconColor: "text-blue-600",    message: "Ali Koç trafik sigortası talebi bıraktı",    sub: "Trafik · Yeni" },
   { Icon: MessageSquare, iconBg: "bg-emerald-50",  iconColor: "text-emerald-600", message: "WhatsApp mesajı hazırlandı ve gönderildi",    sub: "AI tarafından oluşturuldu" },
@@ -80,15 +81,6 @@ const STATUS_CLS: Record<string, string> = {
   İptal:      "bg-red-50 text-red-700 border border-red-100",
 };
 
-// ─── Demo fallback data ───────────────────────────────────────────────────────
-const DEMO_STATS = { customers: 128, requests: 34, renewals: 18, today: 9 };
-const DEMO_REQUESTS: RecentRequest[] = [
-  { id: "r1", request_type: "Kasko",  status: "Yeni",       created_at: new Date(Date.now() - 4 * 60000).toISOString(),   customers: { name: "Ahmet Yılmaz" } },
-  { id: "r2", request_type: "Konut",  status: "İşlemde",    created_at: new Date(Date.now() - 22 * 60000).toISOString(),  customers: { name: "Fatma Kaya" } },
-  { id: "r3", request_type: "Sağlık", status: "Tamamlandı", created_at: new Date(Date.now() - 65 * 60000).toISOString(),  customers: { name: "Mehmet Demir" } },
-  { id: "r4", request_type: "Trafik", status: "Yeni",       created_at: new Date(Date.now() - 120 * 60000).toISOString(), customers: { name: "Zeynep Arslan" } },
-];
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function timeAgo(iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -99,10 +91,45 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)} gün önce`;
 }
 
+// ─── Onboarding screen (agency_user with no agency yet) ───────────────────────
+function OnboardingScreen() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="max-w-md w-full text-center">
+        <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-5">
+          <Shield className="w-8 h-8 text-amber-600" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 mb-2">
+          Henüz bir acenteye bağlı değilsiniz
+        </h2>
+        <p className="text-gray-500 text-sm leading-relaxed mb-6">
+          Hesabınız oluşturuldu ancak bir acenteye atanmadı. Süper yöneticinizden hesabınıza acente atamasını isteyin veya destek alın.
+        </p>
+        <div className="bg-slate-50 border border-gray-200 rounded-2xl p-4 text-left space-y-2">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Yapılacaklar</p>
+          {[
+            "Süper yöneticinize hesap e-postanızı bildirin",
+            "Acenteler → Kullanıcı ata menüsünden atama yapılmasını isteyin",
+            "Atama sonrası bu sayfayı yenileyin",
+          ].map((s, i) => (
+            <div key={i} className="flex items-start gap-2.5">
+              <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                {i + 1}
+              </div>
+              <p className="text-xs text-gray-600">{s}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { notifications, newNotifAt } = useNotifications();
-  const { role, agencyId } = useAuth();
+  const { role, agencyId, loading: authLoading } = useAuth();
+
   const [cardHighlighted, setCardHighlighted] = useState(false);
   const [isDemo, setIsDemo]         = useState(false);
   const [stats, setStats]           = useState({ customers: 0, requests: 0, renewals: 0, today: 0 });
@@ -113,28 +140,38 @@ export default function DashboardPage() {
   const [agencyName, setAgencyName] = useState<string | null>(null);
   const feedIdxRef                  = useRef(0);
 
-  // Push a new item to the live feed with fade-in animation
+  // ── Push a new item to the live feed with fade-in animation ───────────────
   const pushFeedItem = useCallback((raw: RawFeedEntry) => {
     const newId = `${Date.now()}-${Math.random()}`;
     setFeedItems((prev) => [
       { ...raw, id: newId, time: "Az önce", isNew: true },
       ...prev,
     ].slice(0, 11));
-    // Trigger transition after paint
     setTimeout(() => {
       setFeedItems((prev) => prev.map((f) => (f.id === newId ? { ...f, isNew: false } : f)));
     }, 60);
   }, []);
 
-  // ── Data load ────────────────────────────────────────────────────────────
+  // ── Data load — waits for auth, scoped to agency ──────────────────────────
   useEffect(() => {
+    if (authLoading) return; // Wait until auth is resolved
+
+    // Onboarding case: agency_user with no agency
+    if (role === "agency_user" && !agencyId) {
+      setLoading(false);
+      return;
+    }
+
     const demo =
       typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("demo") === "1";
+      new URLSearchParams(window.location.search).get("demo") === "1" &&
+      role === "super_admin"; // Demo mode only for super_admin
     setIsDemo(demo);
 
+    setLoading(true);
+
     if (demo) {
-      setStats(DEMO_STATS);
+      setStats({ customers: 128, requests: 34, renewals: 18, today: 9 });
       const seed = FEED_POOL.slice(0, 6).map((item, i) => ({
         ...item,
         id: `seed-${i}`,
@@ -142,7 +179,12 @@ export default function DashboardPage() {
         isNew: false,
       }));
       setFeedItems(seed);
-      setRecentReqs(DEMO_REQUESTS);
+      setRecentReqs([
+        { id: "r1", request_type: "Kasko",  status: "Yeni",       created_at: new Date(Date.now() - 4 * 60000).toISOString(),   customers: { name: "Ahmet Yılmaz" } },
+        { id: "r2", request_type: "Konut",  status: "İşlemde",    created_at: new Date(Date.now() - 22 * 60000).toISOString(),  customers: { name: "Fatma Kaya" } },
+        { id: "r3", request_type: "Sağlık", status: "Tamamlandı", created_at: new Date(Date.now() - 65 * 60000).toISOString(),  customers: { name: "Mehmet Demir" } },
+        { id: "r4", request_type: "Trafik", status: "Yeni",       created_at: new Date(Date.now() - 120 * 60000).toISOString(), customers: { name: "Zeynep Arslan" } },
+      ]);
       setLoading(false);
       setTimeout(() => setDistReady(true), 300);
       return;
@@ -153,19 +195,13 @@ export default function DashboardPage() {
       const in30  = new Date(Date.now() + 30 * 864e5).toISOString().split("T")[0];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      function withAgency(q: any) {
-        if (role === "agency_user" && agencyId) return q.eq("agency_id", agencyId);
-        return q;
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const results = await Promise.all([
-        withAgency(supabase.from("customers").select("*", { count: "exact", head: true })),
-        withAgency(supabase.from("requests").select("*", { count: "exact", head: true }).in("status", ["Yeni", "İşlemde"])),
-        withAgency(supabase.from("policies").select("*", { count: "exact", head: true }).eq("status", "Aktif").lte("end_date", in30).gte("end_date", today)),
-        withAgency(supabase.from("customers").select("*", { count: "exact", head: true }).gte("created_at", today)),
-        withAgency(supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4)),
-        withAgency(supabase.from("requests").select("id, request_type, status, created_at, customers(name)").order("created_at", { ascending: false }).limit(6)),
+        withAgencyFilter(supabase.from("customers").select("*", { count: "exact", head: true }), role, agencyId),
+        withAgencyFilter(supabase.from("requests").select("*", { count: "exact", head: true }).in("status", ["Yeni", "İşlemde"]), role, agencyId),
+        withAgencyFilter(supabase.from("policies").select("*", { count: "exact", head: true }).eq("status", "Aktif").lte("end_date", in30).gte("end_date", today), role, agencyId),
+        withAgencyFilter(supabase.from("customers").select("*", { count: "exact", head: true }).gte("created_at", today), role, agencyId),
+        withAgencyFilter(supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4), role, agencyId),
+        withAgencyFilter(supabase.from("requests").select("id, request_type, status, created_at, customers(name)").order("created_at", { ascending: false }).limit(6), role, agencyId),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ]) as any[];
 
@@ -185,7 +221,7 @@ export default function DashboardPage() {
         today:      todayCount          ?? 0,
       });
 
-      // Build feed from real data, fall back to pool items if empty
+      // Build feed from real data only (no pool fallback for fresh agencies)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const realFeed: FeedItem[] = [
         ...(recentCustomers ?? []).map((c: any) => ({
@@ -210,16 +246,8 @@ export default function DashboardPage() {
         })),
       ].slice(0, 8);
 
-      const initialFeed = realFeed.length > 0
-        ? realFeed
-        : FEED_POOL.slice(0, 5).map((item, i) => ({
-            ...item,
-            id:    `seed-${i}`,
-            time:  ["Az önce", "5 dk önce", "14 dk önce", "30 dk önce", "1 sa önce"][i],
-            isNew: false,
-          }));
+      setFeedItems(realFeed); // Empty for new agency — live ticker will fill in
 
-      setFeedItems(initialFeed);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setRecentReqs((recentRequests ?? []) as any);
 
@@ -238,8 +266,8 @@ export default function DashboardPage() {
     }
 
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, agencyId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, role, agencyId]);
 
   // ── Highlight "Yeni Gelen Talepler" card for 3 s on new realtime notif ───
   useEffect(() => {
@@ -250,31 +278,52 @@ export default function DashboardPage() {
   }, [newNotifAt]);
 
   // ── Live feed ticker — adds a new item every ~11 s ───────────────────────
+  // Only run for super_admin or agencies with existing data
   useEffect(() => {
     if (loading) return;
+    if (role === "agency_user" && stats.customers === 0) return; // No ticker for fresh agencies
     const tick = setInterval(() => {
       const item = FEED_POOL[feedIdxRef.current % FEED_POOL.length];
       feedIdxRef.current += 1;
       pushFeedItem(item);
     }, 11000);
     return () => clearInterval(tick);
-  }, [loading, pushFeedItem]);
+  }, [loading, pushFeedItem, role, stats.customers]);
+
+  // ─── AI summary bullets — tenant-specific, no hardcoded fallback numbers ──
+  const isNewAgency = role === "agency_user" && !loading && stats.customers === 0;
+  const aiBullets = isNewAgency
+    ? [
+        "Henüz teklif talebi bulunmuyor — sistem yeni kurulmuş",
+        "Müşteri eklendiğinde poliçe yenilemeleri burada görünür",
+        "Teklif linkinizi müşterilerinizle paylaşmaya başlayın",
+        "Sol menü → Müşteriler → Yeni Müşteri ile ilk kaydı oluşturun",
+      ]
+    : [
+        stats.requests > 0
+          ? `${stats.requests} açık teklif aksiyon bekliyor`
+          : "Tüm teklifler tamamlandı veya bekleyen talep yok",
+        stats.renewals > 0
+          ? `${stats.renewals} poliçe 30 gün içinde yenilenecek`
+          : "30 gün içinde yenilenecek poliçe bulunmuyor",
+        `Trafik sigortası bu hafta en fazla talep gören ürün`,
+        stats.today > 0
+          ? `${stats.today} müşteri bugün sisteme katıldı`
+          : "Bugün henüz yeni müşteri eklenmedi",
+      ];
 
   // ── Stat card definitions ────────────────────────────────────────────────
   const STAT_CARDS = [
     { title: "Toplam Müşteri",    value: stats.customers, Icon: Users,     grad: "from-blue-500 to-blue-600",       bg: "bg-blue-50",    text: "text-blue-600",    badge: "+4 bu hafta",   badgeCls: "text-emerald-700 bg-emerald-50" },
     { title: "Açık Teklif",       value: stats.requests,  Icon: FileText,  grad: "from-indigo-500 to-indigo-600",   bg: "bg-indigo-50",  text: "text-indigo-600",  badge: "Yeni+İşlemde",  badgeCls: "text-gray-500 bg-gray-50" },
     { title: "Yaklaşan Yenileme", value: stats.renewals,  Icon: Clock,     grad: "from-amber-500 to-orange-500",    bg: "bg-amber-50",   text: "text-amber-600",   badge: "30 gün içinde", badgeCls: "text-amber-700 bg-amber-50" },
-    { title: "Bugün Eklenen",     value: stats.today,     Icon: Activity,  grad: "from-emerald-500 to-teal-500",    bg: "bg-emerald-50", text: "text-emerald-600", badge: "+3 dün",        badgeCls: "text-emerald-700 bg-emerald-50" },
+    { title: "Bugün Eklenen",     value: stats.today,     Icon: Activity,  grad: "from-emerald-500 to-teal-500",    bg: "bg-emerald-50", text: "text-emerald-600", badge: "bugün",         badgeCls: "text-emerald-700 bg-emerald-50" },
   ];
 
-  // ── AI summary bullets — use real stats when available ───────────────────
-  const aiBullets = [
-    `${stats.requests  > 0 ? stats.requests  : 14} açık teklif aksiyon bekliyor`,
-    `${stats.renewals  > 0 ? stats.renewals  : 3}  poliçe 30 gün içinde yenilenecek`,
-    `Trafik sigortası bu hafta en fazla talep gören ürün`,
-    `${stats.today > 0 ? stats.today : 9} müşteri bugün sisteme katıldı`,
-  ];
+  // ── Show onboarding for agency_user with no agency ────────────────────────
+  if (!authLoading && needsOnboarding(role, agencyId, authLoading)) {
+    return <OnboardingScreen />;
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -301,7 +350,7 @@ export default function DashboardPage() {
             )}
             {!isDemo && agencyName && (
               <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold border border-blue-200">
-                {role === "agency_user" ? "Acente" : ""}
+                Acente
               </span>
             )}
           </div>
@@ -311,7 +360,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          {/* System status dots */}
           {["Sistem aktif", "WhatsApp bağlı", "AI hazır"].map((label) => (
             <div key={label} className="hidden sm:flex items-center gap-1.5">
               <span className="relative flex h-2 w-2">
@@ -345,9 +393,16 @@ export default function DashboardPage() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2.5">
               <p className="text-sm font-semibold text-white">AI Operasyon Özeti</p>
-              <span className="text-[10px] text-blue-400 font-medium">
-                {new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })} güncellendi
-              </span>
+              {isNewAgency && (
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full font-medium">
+                  Yeni sistem
+                </span>
+              )}
+              {!isNewAgency && (
+                <span className="text-[10px] text-blue-400 font-medium">
+                  {new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })} güncellendi
+                </span>
+              )}
             </div>
             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-y-1 gap-x-6">
               {aiBullets.map((b, i) => (
@@ -388,7 +443,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* ══ YENİ GELEN TALEPLER ══════════════════════════════════════════════ */}
+      {/* ══ YENİ GELEN TALEPLER — notifications are already agency-scoped ════ */}
       {notifications.length > 0 && (
         <div
           className={`rounded-2xl shadow-sm overflow-hidden transition-all duration-500 ${
@@ -463,7 +518,9 @@ export default function DashboardPage() {
               </span>
               <h2 className="font-semibold text-slate-800 text-sm">Canlı Akış</h2>
             </div>
-            <span className="text-[10px] text-gray-400">Otomatik güncelleniyor</span>
+            <span className="text-[10px] text-gray-400">
+              {isNewAgency ? "Aktivite bekleniyor" : "Otomatik güncelleniyor"}
+            </span>
           </div>
 
           <div className="flex-1 divide-y divide-gray-50 overflow-hidden">
@@ -477,6 +534,13 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))
+              : feedItems.length === 0
+              ? (
+                  <div className="flex flex-col items-center justify-center h-full py-10 px-4 text-center">
+                    <Zap className="w-8 h-8 text-gray-200 mb-2" />
+                    <p className="text-xs text-gray-400">Müşteri eklendikçe burada aktivite görünecek</p>
+                  </div>
+                )
               : feedItems.map((item) => (
                   <div
                     key={item.id}
@@ -519,7 +583,13 @@ export default function DashboardPage() {
               {[...Array(4)].map((_, i) => <div key={i} className="h-12 bg-gray-50 rounded-xl animate-pulse" />)}
             </div>
           ) : recentReqs.length === 0 ? (
-            <div className="px-5 py-10 text-center text-sm text-gray-400">Henüz teklif talebi yok</div>
+            <div className="px-5 py-10 text-center">
+              <FileText className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">Henüz teklif talebi yok</p>
+              <p className="text-xs text-gray-300 mt-1">
+                Müşteriler teklif formu doldurduğunda burada görünür
+              </p>
+            </div>
           ) : (
             <div className="divide-y divide-gray-50">
               {recentReqs.map((r) => (
@@ -562,19 +632,26 @@ export default function DashboardPage() {
                     <d.Icon className="w-3.5 h-3.5 text-gray-400" />
                     <span className="text-xs font-medium text-slate-600">{d.label}</span>
                   </div>
-                  <span className="text-xs font-bold text-slate-700">{d.pct}%</span>
+                  <span className="text-xs font-bold text-slate-700">
+                    {isNewAgency ? "—" : `${d.pct}%`}
+                  </span>
                 </div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className={`h-full ${d.color} rounded-full`}
                     style={{
-                      width:      distReady ? `${d.pct}%` : "0%",
+                      width:      distReady && !isNewAgency ? `${d.pct}%` : "0%",
                       transition: "width 0.8s ease-out",
                     }}
                   />
                 </div>
               </div>
             ))}
+            {isNewAgency && (
+              <p className="text-[10px] text-gray-400 text-center pt-1">
+                Teklifler oluştukça dağılım gösterilecek
+              </p>
+            )}
           </div>
 
           {/* Quick actions */}
