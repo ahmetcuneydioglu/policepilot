@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, ChevronDown, ChevronRight, CheckCircle2,
+  ArrowRight, ChevronDown, ChevronRight,
   Users, FileText, Clock, MessageSquare, Zap, BarChart3,
-  Shield, ShieldCheck, Sparkles, Star, TrendingUp, Bell,
-  Building2, Bot, Search, Phone,
+  Shield, ShieldCheck, Sparkles, Star, TrendingUp,
+  Building2, Bot, Search,
 } from "lucide-react";
 
 // ─── Features ─────────────────────────────────────────────────────────────────
@@ -71,36 +71,6 @@ const WORKFLOW = [
 ];
 
 // ─── Pricing ──────────────────────────────────────────────────────────────────
-const PLANS = [
-  {
-    name: "Başlangıç",
-    price: "₺499",
-    period: "/ay",
-    desc: "Küçük acenteler için",
-    highlight: false,
-    features: ["1 kullanıcı", "100 müşteri", "Sınırsız teklif talebi", "WhatsApp entegrasyonu", "Poliçe takibi", "E-posta destek"],
-    cta: "14 Gün Ücretsiz Dene",
-  },
-  {
-    name: "Pro",
-    price: "₺999",
-    period: "/ay",
-    desc: "Büyüyen acenteler için",
-    highlight: true,
-    features: ["5 kullanıcı", "Sınırsız müşteri", "AI Asistan", "Satış Lead Yönetimi", "Realtime bildirimler", "Öncelikli destek", "Özel acente URL"],
-    cta: "14 Gün Ücretsiz Dene",
-  },
-  {
-    name: "Kurumsal",
-    price: "Özel",
-    period: "",
-    desc: "Büyük acente grupları için",
-    highlight: false,
-    features: ["Sınırsız kullanıcı", "Multi-acente yönetimi", "Özel API entegrasyonu", "SLA garanti", "Özel onboarding", "Dedicated destek"],
-    cta: "Bize Ulaşın",
-  },
-];
-
 // ─── FAQs ─────────────────────────────────────────────────────────────────────
 const FAQS = [
   { q: "Kurulum ne kadar sürer?", a: "PoliçePilot bulut tabanlıdır, kurulum gerektirmez. Kaydolduktan sonra 5 dakika içinde acentenizin teklif formunu müşterilerinizle paylaşabilirsiniz." },
@@ -396,86 +366,6 @@ function BrowserChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Demo form ────────────────────────────────────────────────────────────────
-function DemoForm() {
-  const [sent, setSent] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", agency: "" });
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.name || !form.email) return;
-    setSent(true);
-  }
-
-  if (sent) return (
-    <div className="text-center py-8">
-      <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-        <CheckCircle2 className="w-7 h-7 text-emerald-600" />
-      </div>
-      <h3 className="text-lg font-bold text-slate-900 mb-1">Talebiniz alındı!</h3>
-      <p className="text-gray-500 text-sm">Ekibimiz en kısa sürede sizi arayacak.</p>
-    </div>
-  );
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1.5">Ad Soyad *</label>
-          <input
-            type="text"
-            required
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Ahmet Yılmaz"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition placeholder:text-gray-300"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1.5">E-posta *</label>
-          <input
-            type="email"
-            required
-            value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            placeholder="ornek@acente.com"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition placeholder:text-gray-300"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1.5">Telefon</label>
-          <input
-            type="tel"
-            value={form.phone}
-            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-            placeholder="0532 000 00 00"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition placeholder:text-gray-300"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1.5">Acente Adı</label>
-          <input
-            type="text"
-            value={form.agency}
-            onChange={(e) => setForm((f) => ({ ...f, agency: e.target.value }))}
-            placeholder="Atlas Sigorta"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition placeholder:text-gray-300"
-          />
-        </div>
-      </div>
-      <button
-        type="submit"
-        className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
-      >
-        Demo Talep Et — Ücretsiz
-      </button>
-      <p className="text-center text-xs text-gray-400">
-        Kredi kartı gerekmez · Kurulum yok · 14 gün ücretsiz
-      </p>
-    </form>
-  );
-}
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const [activeScreen, setActiveScreen] = useState<ScreenId>("dashboard");
@@ -502,8 +392,7 @@ export default function HomePage() {
             <nav className="hidden lg:flex items-center gap-0.5">
               {[
                 { label: "Özellikler",    href: "#ozellikler" },
-                { label: "Ekranlar",      href: "#ekranlar" },
-                { label: "Fiyatlandırma", href: "#fiyatlar" },
+                { label: "Nasıl Çalışır", href: "#ekranlar" },
                 { label: "SSS",           href: "#sss" },
               ].map((item) => (
                 <a key={item.label} href={item.href}
@@ -519,10 +408,10 @@ export default function HomePage() {
                 className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
                 Giriş Yap
               </Link>
-              <a href="#demo"
+              <Link href="/register"
                 className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm">
-                Ücretsiz Demo
-              </a>
+                Ücretsiz Başla
+              </Link>
             </div>
 
             {/* Mobile burger */}
@@ -540,7 +429,7 @@ export default function HomePage() {
           <div className="lg:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-0.5">
             {[
               { label: "Özellikler",    href: "#ozellikler" },
-              { label: "Fiyatlandırma", href: "#fiyatlar" },
+              { label: "Nasıl Çalışır", href: "#ekranlar" },
               { label: "SSS",           href: "#sss" },
             ].map((item) => (
               <a key={item.label} href={item.href} onClick={() => setMenuOpen(false)}
@@ -550,7 +439,7 @@ export default function HomePage() {
             ))}
             <div className="pt-3 mt-2 border-t border-gray-100 flex gap-3">
               <Link href="/login" className="flex-1 text-center py-2 rounded-xl border border-gray-200 text-sm font-semibold text-slate-700">Giriş Yap</Link>
-              <a href="#demo" className="flex-1 text-center py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold">Demo Al</a>
+              <Link href="/register" className="flex-1 text-center py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold">Ücretsiz Başla</Link>
             </div>
           </div>
         )}
@@ -591,11 +480,11 @@ export default function HomePage() {
 
           {/* CTA buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
-            <a href="#demo"
+            <Link href="/register"
               className="inline-flex items-center gap-2 px-7 py-3.5 bg-blue-600 text-white font-bold text-base rounded-xl hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/50 hover:-translate-y-0.5">
-              Ücretsiz Demo Al
+              Ücretsiz Başla
               <ArrowRight className="w-4 h-4" />
-            </a>
+            </Link>
             <Link href="/login"
               className="inline-flex items-center gap-2 px-7 py-3.5 bg-white/10 text-white font-semibold text-base rounded-xl border border-white/20 hover:bg-white/15 transition-all backdrop-blur-sm">
               CRM&apos;i İncele
@@ -759,101 +648,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ══ PRICING ═════════════════════════════════════════════════════════ */}
-      <section id="fiyatlar" className="py-24 bg-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-14">
-            <p className="text-sm font-bold text-blue-600 uppercase tracking-wider mb-2">Fiyatlandırma</p>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3">
-              Acentenizin büyüklüğüne göre seçin
-            </h2>
-            <p className="text-slate-500 text-base">14 gün ücretsiz deneyin. Kredi kartı gerekmez.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative rounded-3xl p-8 flex flex-col ${
-                  plan.highlight
-                    ? "bg-blue-600 text-white shadow-2xl shadow-blue-200 scale-105"
-                    : "bg-white border border-gray-100 shadow-sm"
-                }`}
-              >
-                {plan.highlight && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="bg-amber-400 text-amber-900 text-[10px] font-extrabold px-3 py-1 rounded-full shadow-md uppercase tracking-wider">
-                      En Popüler
-                    </span>
-                  </div>
-                )}
-
-                <div className="mb-6">
-                  <p className={`text-sm font-bold mb-1 ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>{plan.name}</p>
-                  <div className="flex items-baseline gap-1 mb-1">
-                    <span className={`text-4xl font-extrabold ${plan.highlight ? "text-white" : "text-slate-900"}`}>{plan.price}</span>
-                    {plan.period && <span className={`text-sm ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>{plan.period}</span>}
-                  </div>
-                  <p className={`text-xs ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>{plan.desc}</p>
-                </div>
-
-                <ul className="space-y-3 flex-1 mb-8">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2.5">
-                      <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.highlight ? "text-blue-200" : "text-blue-500"}`} />
-                      <span className={`text-sm ${plan.highlight ? "text-blue-100" : "text-slate-600"}`}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <a
-                  href="#demo"
-                  className={`block text-center py-3 rounded-xl font-bold text-sm transition-all ${
-                    plan.highlight
-                      ? "bg-white text-blue-600 hover:bg-blue-50"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
-                >
-                  {plan.cta}
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══ DEMO FORM ═══════════════════════════════════════════════════════ */}
-      <section id="demo" className="py-24 bg-slate-50 border-t border-gray-100">
-        <div className="max-w-xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-10">
-            <p className="text-sm font-bold text-blue-600 uppercase tracking-wider mb-2">Demo Talep Et</p>
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-3">
-              14 gün ücretsiz deneyin
-            </h2>
-            <p className="text-slate-500 text-base">
-              Formu doldurun, ekibimiz size özel demo planı oluştursun.
-            </p>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-xl p-8">
-            <DemoForm />
-          </div>
-
-          <div className="flex flex-wrap justify-center gap-6 mt-8">
-            {[
-              { Icon: ShieldCheck, label: "Güvenli & KVKK Uyumlu" },
-              { Icon: Zap,         label: "5 dk kurulum" },
-              { Icon: Phone,       label: "Birebir onboarding" },
-            ].map(({ Icon, label }) => (
-              <div key={label} className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
-                <Icon className="w-4 h-4 text-blue-500" />
-                {label}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ══ FAQ ═════════════════════════════════════════════════════════════ */}
       <section id="sss" className="py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
@@ -938,7 +732,7 @@ export default function HomePage() {
                 Acente Girişi
               </Link>
               <Link href="/register" className="text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
-                Ücretsiz Kayıt Ol <ChevronRight className="w-3.5 h-3.5" />
+                Ücretsiz Başla <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
@@ -15,7 +15,12 @@ function slugify(str: string): string {
 }
 
 export default function RegisterPage() {
-  // — acente fields
+  // — invite mode (via ?invite=agencySlug)
+  const [isInvite,      setIsInvite]      = useState(false);
+  const [inviteAgency,  setInviteAgency]  = useState<{ name: string; slug: string } | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+
+  // — acente fields (only used in non-invite mode)
   const [agencyName,  setAgencyName]  = useState("");
   const [agencySlug,  setAgencySlug]  = useState("");
   const [agencyPhone, setAgencyPhone] = useState("");
@@ -28,6 +33,26 @@ export default function RegisterPage() {
 
   // — ui state
   const [loading, setLoading] = useState(false);
+
+  // Detect ?invite= param on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const inviteSlug = params.get("invite");
+    if (!inviteSlug) return;
+
+    setIsInvite(true);
+    setInviteLoading(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase.from("agencies") as any)
+      .select("name, slug")
+      .eq("slug", inviteSlug)
+      .maybeSingle()
+      .then(({ data }: { data: { name: string; slug: string } | null }) => {
+        setInviteAgency(data);
+        setInviteLoading(false);
+      });
+  }, []);
   const [error,   setError]   = useState("");
   const [done,    setDone]    = useState(false);
   const [finalSlug, setFinalSlug] = useState("");
@@ -45,9 +70,35 @@ export default function RegisterPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (password.length < 6) { setError("Şifre en az 6 karakter olmalı."); return; }
+
+    if (isInvite) {
+      // ── Invite mode: join existing agency ──────────────────────────────────
+      if (!inviteAgency) { setError("Geçersiz davet linki."); return; }
+      setError("");
+      setLoading(true);
+
+      const { error: authError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name:           fullName.trim(),
+            agency_invite_slug:  inviteAgency.slug, // trigger looks up existing agency
+          },
+        },
+      });
+
+      if (authError) { setError(authError.message); setLoading(false); return; }
+      setFinalSlug(inviteAgency.slug);
+      setDone(true);
+      setLoading(false);
+      return;
+    }
+
+    // ── New agency registration mode ────────────────────────────────────────
     if (!agencyName.trim())  { setError("Acente adı zorunludur."); return; }
     if (!agencySlug.trim())  { setError("Acente bağlantısı zorunludur."); return; }
-    if (password.length < 6) { setError("Şifre en az 6 karakter olmalı."); return; }
     setError("");
     setLoading(true);
 
@@ -119,7 +170,9 @@ export default function RegisterPage() {
             </svg>
           </div>
           <h1 className="text-white font-bold text-xl tracking-tight">PoliçePilot</h1>
-          <p className="text-slate-400 text-sm mt-1">Yeni acente kaydı oluştur</p>
+          <p className="text-slate-400 text-sm mt-1">
+            {isInvite ? "Ekip davetini kabul et" : "Yeni acente kaydı oluştur"}
+          </p>
         </div>
 
         <div
@@ -130,6 +183,31 @@ export default function RegisterPage() {
             WebkitBackdropFilter: "blur(20px)",
           }}
         >
+          {/* ── Invite mode: agency banner ─────────────────────────── */}
+          {isInvite && !done && (
+            <div className="mb-4">
+              {inviteLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : inviteAgency ? (
+                <div className="flex items-center gap-3 bg-blue-500/20 border border-blue-400/30 rounded-xl px-4 py-3 mb-2">
+                  <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    {inviteAgency.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-200 font-medium">Davet geldi</p>
+                    <p className="text-sm text-white font-bold">{inviteAgency.name}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-red-500/20 border border-red-400/30 rounded-xl px-4 py-3 mb-2">
+                  <p className="text-sm text-red-300">Geçersiz davet linki.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {done ? (
             /* ── Success state ────────────────────────────────────────── */
             <div className="text-center py-4">
@@ -167,7 +245,8 @@ export default function RegisterPage() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
 
-              {/* ── Section: Acente Bilgileri ──────────────────────────── */}
+              {/* ── Section: Acente Bilgileri (hidden in invite mode) ─── */}
+              {!isInvite && (
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
                   Acente Bilgileri
@@ -227,9 +306,10 @@ export default function RegisterPage() {
                   </div>
                 </div>
               </div>
+              )} {/* end !isInvite agency section */}
 
               {/* Divider */}
-              <div className="h-px bg-white/10" />
+              {!isInvite && <div className="h-px bg-white/10" />}
 
               {/* ── Section: Yetkili Bilgileri ─────────────────────────── */}
               <div>
