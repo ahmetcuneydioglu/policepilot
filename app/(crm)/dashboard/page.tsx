@@ -8,6 +8,7 @@ import WeeklyChart from "@/components/WeeklyChart";
 import { supabase } from "@/lib/supabase";
 import { useNotifications } from "@/lib/NotificationContext";
 import NotifPermissionButton from "@/components/NotifPermissionButton";
+import { useAuth } from "@/lib/AuthContext";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity, Car, Home,
@@ -101,6 +102,7 @@ function timeAgo(iso: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { notifications, newNotifAt } = useNotifications();
+  const { role, agencyId } = useAuth();
   const [cardHighlighted, setCardHighlighted] = useState(false);
   const [isDemo, setIsDemo]         = useState(false);
   const [stats, setStats]           = useState({ customers: 0, requests: 0, renewals: 0, today: 0 });
@@ -108,6 +110,7 @@ export default function DashboardPage() {
   const [recentReqs, setRecentReqs] = useState<RecentRequest[]>([]);
   const [loading, setLoading]       = useState(true);
   const [distReady, setDistReady]   = useState(false);
+  const [agencyName, setAgencyName] = useState<string | null>(null);
   const feedIdxRef                  = useRef(0);
 
   // Push a new item to the live feed with fade-in animation
@@ -150,13 +153,19 @@ export default function DashboardPage() {
       const in30  = new Date(Date.now() + 30 * 864e5).toISOString().split("T")[0];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      function withAgency(q: any) {
+        if (role === "agency_user" && agencyId) return q.eq("agency_id", agencyId);
+        return q;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const results = await Promise.all([
-        supabase.from("customers").select("*", { count: "exact", head: true }),
-        supabase.from("requests").select("*", { count: "exact", head: true }).in("status", ["Yeni", "İşlemde"]),
-        supabase.from("policies").select("*", { count: "exact", head: true }).eq("status", "Aktif").lte("end_date", in30).gte("end_date", today),
-        supabase.from("customers").select("*", { count: "exact", head: true }).gte("created_at", today),
-        supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4),
-        supabase.from("requests").select("id, request_type, status, created_at, customers(name)").order("created_at", { ascending: false }).limit(6),
+        withAgency(supabase.from("customers").select("*", { count: "exact", head: true })),
+        withAgency(supabase.from("requests").select("*", { count: "exact", head: true }).in("status", ["Yeni", "İşlemde"])),
+        withAgency(supabase.from("policies").select("*", { count: "exact", head: true }).eq("status", "Aktif").lte("end_date", in30).gte("end_date", today)),
+        withAgency(supabase.from("customers").select("*", { count: "exact", head: true }).gte("created_at", today)),
+        withAgency(supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4)),
+        withAgency(supabase.from("requests").select("id, request_type, status, created_at, customers(name)").order("created_at", { ascending: false }).limit(6)),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ]) as any[];
 
@@ -213,12 +222,24 @@ export default function DashboardPage() {
       setFeedItems(initialFeed);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setRecentReqs((recentRequests ?? []) as any);
+
+      // Fetch agency name for header
+      if (role === "agency_user" && agencyId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: agencyData } = await (supabase.from("agencies") as any)
+          .select("name")
+          .eq("id", agencyId)
+          .maybeSingle();
+        if (agencyData?.name) setAgencyName(agencyData.name);
+      }
+
       setLoading(false);
       setTimeout(() => setDistReady(true), 300);
     }
 
     load();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, agencyId]);
 
   // ── Highlight "Yeni Gelen Talepler" card for 3 s on new realtime notif ───
   useEffect(() => {
@@ -267,11 +288,20 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center gap-2.5 mb-1">
             <h1 className="text-2xl font-bold text-slate-900">
-              {isDemo ? "Atlas Sigorta — Demo Paneli" : "Dashboard"}
+              {isDemo
+                ? "Atlas Sigorta — Demo Paneli"
+                : agencyName
+                ? `${agencyName} Paneli`
+                : "Dashboard"}
             </h1>
             {isDemo && (
               <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200">
                 DEMO
+              </span>
+            )}
+            {!isDemo && agencyName && (
+              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold border border-blue-200">
+                {role === "agency_user" ? "Acente" : ""}
               </span>
             )}
           </div>

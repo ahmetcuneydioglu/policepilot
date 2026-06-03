@@ -43,7 +43,9 @@ export default function CustomersPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  // re-fetch whenever auth resolves (role/agencyId may be null on first render)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [role, agencyId]);
 
   function handleClose() {
     setShowAdd(false);

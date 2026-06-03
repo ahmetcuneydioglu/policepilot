@@ -41,7 +41,9 @@ export default function RequestsPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  // re-fetch when auth resolves (role/agencyId may be null on first render)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [role, agencyId]);
 
   async function updateStatus(id: string, status: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
