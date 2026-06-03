@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/AuthContext";
 import type { Policy } from "@/lib/database.types";
 import WhatsAppModal from "@/components/WhatsAppModal";
 
@@ -60,16 +61,21 @@ export default function PoliciesPage() {
   const [waPolicy, setWaPolicy] = useState<PolicyWithCustomer | null>(null);
   const [toast, setToast] = useState("");
 
+  const { role, agencyId } = useAuth();
+
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase.from("policies") as any)
+    let q = (supabase.from("policies") as any)
       .select("*, customers(name, phone)")
-      .order("end_date", { ascending: true })
-      .then(({ data }: { data: PolicyWithCustomer[] | null }) => {
-        setPolicies(data ?? []);
-        setLoading(false);
-      });
-  }, []);
+      .order("end_date", { ascending: true });
+    if (role === "agency_user" && agencyId) {
+      q = q.eq("agency_id", agencyId);
+    }
+    q.then(({ data }: { data: PolicyWithCustomer[] | null }) => {
+      setPolicies(data ?? []);
+      setLoading(false);
+    });
+  }, [role, agencyId]);
 
   const critical = policies.filter((p) => daysLeft(p.end_date) <= 5 && p.status === "Aktif");
   const warning = policies.filter((p) => {

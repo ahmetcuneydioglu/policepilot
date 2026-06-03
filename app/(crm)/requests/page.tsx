@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/AuthContext";
 import type { Request, Customer } from "@/lib/database.types";
 import AddRequestModal from "@/components/AddRequestModal";
 
@@ -15,19 +16,26 @@ const statusStyles: Record<string, string> = {
 type RequestWithCustomer = Request & { customers: { name: string } | null };
 
 export default function RequestsPage() {
+  const { role, agencyId } = useAuth();
   const [requests, setRequests] = useState<RequestWithCustomer[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
 
   async function load() {
-    const [{ data: reqs }, { data: custs }] = await Promise.all([
-      supabase
-        .from("requests")
-        .select("*, customers(name)")
-        .order("created_at", { ascending: false }),
-      supabase.from("customers").select("id, name, phone, insurance_type, note, created_at").order("name"),
-    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let reqQuery = (supabase.from("requests") as any)
+      .select("*, customers(name)")
+      .order("created_at", { ascending: false });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let custQuery = (supabase.from("customers") as any)
+      .select("id, name, phone, insurance_type, note, created_at")
+      .order("name");
+    if (role === "agency_user" && agencyId) {
+      reqQuery  = reqQuery.eq("agency_id", agencyId);
+      custQuery = custQuery.eq("agency_id", agencyId);
+    }
+    const [{ data: reqs }, { data: custs }] = await Promise.all([reqQuery, custQuery]);
     setRequests((reqs as RequestWithCustomer[]) ?? []);
     setCustomers((custs as Customer[]) ?? []);
     setLoading(false);

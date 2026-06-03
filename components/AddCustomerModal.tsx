@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 const insuranceTypes = ["Kasko", "Trafik", "Konut", "Sağlık", "Hayat", "DASK", "Ferdi Kaza"];
 
-type Props = { onClose: () => void };
+type Props = { onClose: () => void; agencyId?: string | null };
 
 function checkEnv(): string | null {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return "NEXT_PUBLIC_SUPABASE_URL eksik — .env.local dosyasını kontrol edin.";
@@ -13,7 +13,7 @@ function checkEnv(): string | null {
   return null;
 }
 
-export default function AddCustomerModal({ onClose }: Props) {
+export default function AddCustomerModal({ onClose, agencyId }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ name: "", phone: "", insurance_type: "", note: "" });
@@ -45,6 +45,7 @@ export default function AddCustomerModal({ onClose }: Props) {
       phone: form.phone.trim(),
       insurance_type: form.insurance_type,
       note: form.note.trim() || null,
+      agency_id: agencyId ?? null,
     };
 
     console.log("CUSTOMER_INSERT_PAYLOAD", payload);

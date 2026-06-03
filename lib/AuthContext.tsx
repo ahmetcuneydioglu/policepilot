@@ -25,6 +25,8 @@ type AuthCtxType = {
   user: User | null;
   profile: Profile | null;
   role: string | null;
+  /** Shorthand for profile?.agency_id */
+  agencyId: string | null;
   /** Where the role was resolved from */
   roleSource: "profile" | "jwt" | null;
   /** Non-null when profiles fetch returned an error */
@@ -38,6 +40,7 @@ const AuthContext = createContext<AuthCtxType>({
   user: null,
   profile: null,
   role: null,
+  agencyId: null,
   roleSource: null,
   profileError: null,
   loading: true,
@@ -146,10 +149,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ? "jwt"
     : null;
 
-  console.log("[AuthContext] role:", role, "source:", roleSource, "profile:", profile?.role, "jwt:", jwtRole);
+  const agencyId = profile?.agency_id ?? null;
+
+  console.log("[AuthContext] role:", role, "source:", roleSource, "agencyId:", agencyId);
 
   return (
-    <AuthContext.Provider value={{ user, profile, role, roleSource, profileError, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, role, agencyId, roleSource, profileError, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

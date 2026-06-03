@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/AuthContext";
 import type { Customer } from "@/lib/database.types";
 import CustomersTable from "@/components/CustomersTable";
 import AddCustomerModal from "@/components/AddCustomerModal";
 
 export default function CustomersPage() {
+  const { role, agencyId } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
@@ -15,9 +17,14 @@ export default function CustomersPage() {
   async function load() {
     setFetchError("");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.from("customers") as any)
+    let query = (supabase.from("customers") as any)
       .select("*")
       .order("created_at", { ascending: false });
+    // agency_user sees only their own agency's customers
+    if (role === "agency_user" && agencyId) {
+      query = query.eq("agency_id", agencyId);
+    }
+    const { data, error } = await query;
 
     if (error) {
       console.error("CUSTOMERS_FETCH_ERROR", error);
@@ -88,7 +95,7 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {showAdd && <AddCustomerModal onClose={handleClose} />}
+      {showAdd && <AddCustomerModal onClose={handleClose} agencyId={agencyId} />}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Routes that never require authentication
 const PUBLIC_PATHS = new Set(["/", "/login", "/register"]);
-const PUBLIC_PREFIXES = ["/teklif-al", "/_next", "/api", "/favicon"];
+const PUBLIC_PREFIXES = ["/teklif-al", "/a/", "/_next", "/api", "/favicon"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -53,8 +53,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // ── /leads is super_admin-only ────────────────────────────────────────────
-  if (pathname.startsWith("/leads")) {
+  // ── super_admin-only routes ───────────────────────────────────────────────
+  const SUPER_ADMIN_PREFIXES = ["/leads", "/agencies"];
+  if (SUPER_ADMIN_PREFIXES.some((p) => pathname.startsWith(p))) {
     const role = (user.app_metadata as Record<string, string> | undefined)
       ?.role;
     if (role !== "super_admin") {
