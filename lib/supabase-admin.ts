@@ -1,9 +1,13 @@
 /**
  * lib/supabase-admin.ts
  * Service-role Supabase client — SERVER SIDE ONLY.
- * Never import this in client components ("use client").
- * Uses SUPABASE_SERVICE_ROLE_KEY which is NOT exposed to the browser.
+ *
+ * The `import "server-only"` line below causes an immediate build error
+ * if this module is ever imported from a "use client" component or any
+ * other browser-destined code. The service role key never reaches the bundle.
  */
+
+import "server-only"; // 🔒 build fails if imported from client code
 
 import { createClient } from "@supabase/supabase-js";
 
