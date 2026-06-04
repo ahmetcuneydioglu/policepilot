@@ -48,7 +48,7 @@ const PLAN_LABELS: Record<string, { label: string; cls: string }> = {
 const EMPTY_FORM = {
   name: "", slug: "", phone: "", email: "", website: "",
   primary_color: "#2563eb", logo_url: "",
-  max_users: "10", max_customers: "100", max_requests: "100", max_policies: "100",
+  max_users: "20", max_customers: "20", max_requests: "20", max_policies: "20",
   plan: "starter",
 };
 
@@ -175,10 +175,10 @@ export default function AgenciesPage() {
       website:       ag.website ?? "",
       primary_color: ag.primary_color,
       logo_url:      ag.logo_url ?? "",
-      max_users:     String(ag.max_users     ?? 10),
-      max_customers: String(ag.max_customers ?? 100),
-      max_requests:  String(ag.max_requests  ?? 100),
-      max_policies:  String(ag.max_policies  ?? 100),
+      max_users:     String(ag.max_users     ?? 20),
+      max_customers: String(ag.max_customers ?? 20),
+      max_requests:  String(ag.max_requests  ?? 20),
+      max_policies:  String(ag.max_policies  ?? 20),
       plan:          ag.plan ?? "starter",
     });
     setFormError("");
@@ -202,10 +202,10 @@ export default function AgenciesPage() {
       website:       form.website.trim() || null,
       primary_color: form.primary_color  || "#2563eb",
       logo_url:      form.logo_url.trim() || null,
-      max_users:     parseInt(form.max_users,     10) || 10,
-      max_customers: parseInt(form.max_customers, 10) || 100,
-      max_requests:  parseInt(form.max_requests,  10) || 100,
-      max_policies:  parseInt(form.max_policies,  10) || 100,
+      max_users:     parseInt(form.max_users,     10) || 20,
+      max_customers: parseInt(form.max_customers, 10) || 20,
+      max_requests:  parseInt(form.max_requests,  10) || 20,
+      max_policies:  parseInt(form.max_policies,  10) || 20,
       plan:          form.plan || "starter",
     };
 
@@ -416,10 +416,10 @@ export default function AgenciesPage() {
             const agencyProfiles = profiles.filter((p) => p.agency_id === ag.id);
             const c = counts[ag.id] ?? { users: 0, customers: 0, requests: 0, policies: 0 };
 
-            const maxUsers     = ag.max_users     ?? 10;
-            const maxCustomers = ag.max_customers ?? 100;
-            const maxRequests  = ag.max_requests  ?? 100;
-            const maxPolicies  = ag.max_policies  ?? 100;
+            const maxUsers     = ag.max_users     ?? 20;
+            const maxCustomers = ag.max_customers ?? 20;
+            const maxRequests  = ag.max_requests  ?? 20;
+            const maxPolicies  = ag.max_policies  ?? 20;
 
             const isActive   = ag.is_active ?? true;
             const plan       = ag.plan ?? "starter";

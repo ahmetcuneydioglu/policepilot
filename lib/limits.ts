@@ -44,10 +44,10 @@ export async function getAgencyLimits(client: any, agencyId: string): Promise<Ag
     id:             data.id,
     is_active:      data.is_active      ?? true,
     plan:           data.plan           ?? "starter",
-    max_users:      data.max_users      ?? 10,
-    max_customers:  data.max_customers  ?? 100,
-    max_requests:   data.max_requests   ?? 100,
-    max_policies:   data.max_policies   ?? 100,
+    max_users:      data.max_users      ?? 20,
+    max_customers:  data.max_customers  ?? 20,
+    max_requests:   data.max_requests   ?? 20,
+    max_policies:   data.max_policies   ?? 20,
   };
 }
 

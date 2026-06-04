@@ -5,8 +5,7 @@
       "name": "sigorta-crm-main",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--", "-p", "3001"],
-      "port": 3001,
-      "cwd": "/Users/ahmetcnd/Documents/sigortacrm/sigorta-crm-ai"
+      "port": 3001
     }
   ]
 }
