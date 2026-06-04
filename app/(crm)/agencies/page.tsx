@@ -14,14 +14,13 @@ type Agency = {
   website: string | null;
   primary_color: string;
   created_at: string;
-  // plan fields (may be null if column not yet added)
-  max_users:      number | null;
-  max_customers:  number | null;
-  max_requests:   number | null;
-  max_policies:   number | null;
-  is_active:      boolean | null;
-  plan:           string | null;
-  expires_at:     string | null;
+  max_users:     number | null;
+  max_customers: number | null;
+  max_requests:  number | null;
+  max_policies:  number | null;
+  is_active:     boolean | null;
+  plan:          string | null;
+  expires_at:    string | null;
 };
 
 type Profile = {
@@ -31,6 +30,15 @@ type Profile = {
   agency_id: string | null;
 };
 
+/** Per-agency resource counts fetched from each table. */
+type AgencyCounts = {
+  users:     number;
+  customers: number;
+  requests:  number;
+  policies:  number;
+};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 const PLAN_LABELS: Record<string, { label: string; cls: string }> = {
   starter:    { label: "Starter",    cls: "bg-gray-100 text-gray-600 border-gray-200" },
   pro:        { label: "Pro",        cls: "bg-blue-100 text-blue-700 border-blue-200" },
@@ -51,39 +59,105 @@ function slugify(str: string) {
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-// ─── Main page ───────────────────────────────────────────────────────────────
-export default function AgenciesPage() {
-  const [agencies, setAgencies]     = useState<Agency[]>([]);
-  const [profiles, setProfiles]     = useState<Profile[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [showForm, setShowForm]     = useState(false);
-  const [editingId, setEditingId]   = useState<string | null>(null);
-  const [form, setForm]             = useState(EMPTY_FORM);
-  const [saving, setSaving]         = useState(false);
-  const [formError, setFormError]   = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [assignUserId, setAssignUserId]   = useState("");
-  const [assignSaving, setAssignSaving]   = useState(false);
-  // inline max_users edit
-  const [editingLimit, setEditingLimit]   = useState<string | null>(null);
-  const [limitValue, setLimitValue]       = useState("");
+// ─── Mini counter row ─────────────────────────────────────────────────────────
+function CounterBadge({
+  icon, label, current, max,
+}: { icon: string; label: string; current: number; max: number }) {
+  const pct     = max > 0 ? current / max : 0;
+  const atLimit = current >= max;
+  const nearLimit = pct >= 0.8 && !atLimit;
 
+  const cls = atLimit
+    ? "bg-red-50 border-red-200 text-red-700"
+    : nearLimit
+    ? "bg-amber-50 border-amber-200 text-amber-700"
+    : "bg-slate-50 border-gray-200 text-slate-600";
+
+  return (
+    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-semibold ${cls}`}>
+      <span>{icon}</span>
+      <span>{label}:</span>
+      <span className="font-extrabold">{current}</span>
+      <span className="opacity-60">/ {max}</span>
+      {atLimit && <span className="ml-0.5">⚠</span>}
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+export default function AgenciesPage() {
+  const [agencies,  setAgencies]  = useState<Agency[]>([]);
+  const [profiles,  setProfiles]  = useState<Profile[]>([]);
+  /** Keyed by agency.id — holds actual record counts from each table. */
+  const [counts,    setCounts]    = useState<Record<string, AgencyCounts>>({});
+  const [loading,   setLoading]   = useState(true);
+  const [showForm,  setShowForm]  = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form,      setForm]      = useState(EMPTY_FORM);
+  const [saving,    setSaving]    = useState(false);
+  const [formError, setFormError] = useState("");
+  const [expandedId,setExpandedId]= useState<string | null>(null);
+  const [assignUserId,  setAssignUserId]  = useState("");
+  const [assignSaving,  setAssignSaving]  = useState(false);
+
+  // ─── Load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: ag }, { data: pr }] = await Promise.all([
+
+    // Parallel: agencies + profiles + all agency_id columns from the 3 data tables
+    const [
+      { data: ag },
+      { data: pr },
+      { data: custRows },
+      { data: reqRows },
+      { data: polRows },
+    ] = await Promise.all([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase.from("agencies") as any).select("*").order("created_at", { ascending: false }),
+      (supabase.from("agencies")  as any).select("*").order("created_at", { ascending: false }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase.from("profiles") as any).select("id, full_name, role, agency_id").order("full_name"),
+      (supabase.from("profiles")  as any).select("id, full_name, role, agency_id").order("full_name"),
+      // Fetch only agency_id to count rows per agency without pulling full records
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase.from("customers") as any).select("agency_id"),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase.from("requests")  as any).select("agency_id"),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase.from("policies")  as any).select("agency_id"),
     ]);
+
     if (ag) setAgencies(ag as Agency[]);
     if (pr) setProfiles(pr as Profile[]);
+
+    // Build counts map from raw rows
+    const newCounts: Record<string, AgencyCounts> = {};
+
+    function tally(rows: { agency_id: string | null }[] | null, key: keyof AgencyCounts) {
+      (rows ?? []).forEach((r) => {
+        if (!r.agency_id) return;
+        if (!newCounts[r.agency_id]) newCounts[r.agency_id] = { users: 0, customers: 0, requests: 0, policies: 0 };
+        newCounts[r.agency_id][key] += 1;
+      });
+    }
+
+    // Users come from profiles
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (pr ?? []).forEach((p: any) => {
+      if (!p.agency_id) return;
+      if (!newCounts[p.agency_id]) newCounts[p.agency_id] = { users: 0, customers: 0, requests: 0, policies: 0 };
+      newCounts[p.agency_id].users += 1;
+    });
+
+    tally(custRows as { agency_id: string | null }[] | null, "customers");
+    tally(reqRows  as { agency_id: string | null }[] | null, "requests");
+    tally(polRows  as { agency_id: string | null }[] | null, "policies");
+
+    setCounts(newCounts);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Open add / edit form ──────────────────────────────────────────────────
+  // ─── Form helpers ──────────────────────────────────────────────────────────
   function openAdd() {
     setEditingId(null);
     setForm(EMPTY_FORM);
@@ -96,8 +170,8 @@ export default function AgenciesPage() {
     setForm({
       name:          ag.name,
       slug:          ag.slug,
-      phone:         ag.phone ?? "",
-      email:         ag.email ?? "",
+      phone:         ag.phone  ?? "",
+      email:         ag.email  ?? "",
       website:       ag.website ?? "",
       primary_color: ag.primary_color,
       logo_url:      ag.logo_url ?? "",
@@ -111,21 +185,22 @@ export default function AgenciesPage() {
     setShowForm(true);
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) { setFormError("Acente adı zorunludur."); return; }
     if (!form.slug.trim()) { setFormError("Slug zorunludur."); return; }
     if (!/^[a-z0-9-]+$/.test(form.slug)) { setFormError("Slug yalnızca küçük harf, rakam ve tire içerebilir."); return; }
 
-    setSaving(true); setFormError("");
+    setSaving(true);
+    setFormError("");
+
     const payload = {
       name:          form.name.trim(),
       slug:          form.slug.trim(),
-      phone:         form.phone.trim() || null,
-      email:         form.email.trim() || null,
+      phone:         form.phone.trim()   || null,
+      email:         form.email.trim()   || null,
       website:       form.website.trim() || null,
-      primary_color: form.primary_color || "#2563eb",
+      primary_color: form.primary_color  || "#2563eb",
       logo_url:      form.logo_url.trim() || null,
       max_users:     parseInt(form.max_users,     10) || 10,
       max_customers: parseInt(form.max_customers, 10) || 100,
@@ -146,10 +221,10 @@ export default function AgenciesPage() {
       setFormError(msg.includes("unique") ? `"${form.slug}" slug zaten kullanımda.` : msg);
       return;
     }
-    setShowForm(false); load();
+    setShowForm(false);
+    load();
   }
 
-  // ── Delete ───────────────────────────────────────────────────────────────
   async function handleDelete(id: string, name: string) {
     if (!confirm(`"${name}" acentesi silinsin mi? Bu işlem geri alınamaz.`)) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -157,7 +232,6 @@ export default function AgenciesPage() {
     load();
   }
 
-  // ── Toggle active ─────────────────────────────────────────────────────────
   async function toggleActive(ag: Agency) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from("agencies") as any)
@@ -166,31 +240,21 @@ export default function AgenciesPage() {
     load();
   }
 
-  // ── Save max_users inline ─────────────────────────────────────────────────
-  async function saveLimit(agencyId: string) {
-    const v = parseInt(limitValue, 10);
-    if (isNaN(v) || v < 1) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from("agencies") as any).update({ max_users: v }).eq("id", agencyId);
-    setEditingLimit(null);
-    load();
-  }
-
-  // ── Assign user ───────────────────────────────────────────────────────────
   async function handleAssignUser(agencyId: string, maxUsers: number) {
     if (!assignUserId) return;
-    const currentCount = profiles.filter((p) => p.agency_id === agencyId).length;
-    if (currentCount >= maxUsers) {
-      alert(`Paket limitine ulaşıldı. Maks. kullanıcı sayısı: ${maxUsers}. Limiti artırmak için super admin ile iletişime geçin.`);
+    const currentUsers = counts[agencyId]?.users ?? 0;
+    if (currentUsers >= maxUsers) {
+      alert(`Kullanıcı limitine ulaşıldı (${currentUsers}/${maxUsers}). Limiti artırmak için Düzenle'yi kullanın.`);
       return;
     }
     setAssignSaving(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from("profiles") as any).update({ agency_id: agencyId }).eq("id", assignUserId);
-    setAssignSaving(false); setAssignUserId(""); load();
+    setAssignSaving(false);
+    setAssignUserId("");
+    load();
   }
 
-  // ── Remove user ───────────────────────────────────────────────────────────
   async function handleUnassignUser(profileId: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from("profiles") as any).update({ agency_id: null }).eq("id", profileId);
@@ -199,14 +263,16 @@ export default function AgenciesPage() {
 
   const unassigned = profiles.filter((p) => !p.agency_id);
 
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Acenteler</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {loading ? "Yükleniyor..." : `${agencies.length} acente · ${profiles.length} kullanıcı`}
+            {loading ? "Yükleniyor..." : `${agencies.length} acente`}
           </p>
         </div>
         <button onClick={openAdd}
@@ -218,7 +284,7 @@ export default function AgenciesPage() {
         </button>
       </div>
 
-      {/* ── Add / Edit Form ─────────────────────────────────────────────── */}
+      {/* ── Add / Edit Form ────────────────────────────────────────────────── */}
       {showForm && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-slate-800 mb-4">
@@ -226,6 +292,7 @@ export default function AgenciesPage() {
           </h2>
           <form onSubmit={handleSave}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+
               {/* Name */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Acente Adı *</label>
@@ -258,37 +325,21 @@ export default function AgenciesPage() {
                 </select>
               </div>
 
-              {/* Max users */}
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Maks. Kullanıcı</label>
-                <input type="number" min="1" max="200" value={form.max_users}
-                  onChange={(e) => setForm((p) => ({ ...p, max_users: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
-              </div>
-
-              {/* Max customers */}
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Maks. Müşteri</label>
-                <input type="number" min="1" max="100000" value={form.max_customers}
-                  onChange={(e) => setForm((p) => ({ ...p, max_customers: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
-              </div>
-
-              {/* Max requests */}
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Maks. Teklif Talebi</label>
-                <input type="number" min="1" max="100000" value={form.max_requests}
-                  onChange={(e) => setForm((p) => ({ ...p, max_requests: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
-              </div>
-
-              {/* Max policies */}
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Maks. Poliçe</label>
-                <input type="number" min="1" max="100000" value={form.max_policies}
-                  onChange={(e) => setForm((p) => ({ ...p, max_policies: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
-              </div>
+              {/* Limits — 4 fields */}
+              {[
+                { key: "max_users",     label: "Maks. Kullanıcı" },
+                { key: "max_customers", label: "Maks. Müşteri" },
+                { key: "max_requests",  label: "Maks. Teklif Talebi" },
+                { key: "max_policies",  label: "Maks. Poliçe" },
+              ].map(({ key, label }) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                  <input type="number" min="1" max="100000"
+                    value={form[key as keyof typeof form]}
+                    onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                </div>
+              ))}
 
               {/* Phone */}
               <div>
@@ -350,7 +401,7 @@ export default function AgenciesPage() {
         </div>
       )}
 
-      {/* ── Agencies list ───────────────────────────────────────────────── */}
+      {/* ── Agencies list ──────────────────────────────────────────────────── */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
@@ -363,96 +414,94 @@ export default function AgenciesPage() {
         <div className="space-y-3">
           {agencies.map((ag) => {
             const agencyProfiles = profiles.filter((p) => p.agency_id === ag.id);
-            const maxUsers       = ag.max_users ?? 10;
-            const isActive       = ag.is_active ?? true;
-            const plan           = ag.plan ?? "starter";
-            const planMeta       = PLAN_LABELS[plan] ?? PLAN_LABELS["starter"];
-            const pct            = Math.min((agencyProfiles.length / maxUsers) * 100, 100);
-            const atLimit        = agencyProfiles.length >= maxUsers;
-            const isExpanded     = expandedId === ag.id;
+            const c = counts[ag.id] ?? { users: 0, customers: 0, requests: 0, policies: 0 };
+
+            const maxUsers     = ag.max_users     ?? 10;
+            const maxCustomers = ag.max_customers ?? 100;
+            const maxRequests  = ag.max_requests  ?? 100;
+            const maxPolicies  = ag.max_policies  ?? 100;
+
+            const isActive   = ag.is_active ?? true;
+            const plan       = ag.plan ?? "starter";
+            const planMeta   = PLAN_LABELS[plan] ?? PLAN_LABELS["starter"];
+            const isExpanded = expandedId === ag.id;
+
+            // Any resource at limit?
+            const anyAtLimit =
+              c.users     >= maxUsers     ||
+              c.customers >= maxCustomers ||
+              c.requests  >= maxRequests  ||
+              c.policies  >= maxPolicies;
 
             return (
-              <div key={ag.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isActive ? "border-gray-100" : "border-red-100 opacity-70"}`}>
+              <div key={ag.id}
+                className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
+                  isActive ? "border-gray-100" : "border-red-100 opacity-75"
+                }`}>
+
                 {/* Agency row */}
-                <div className="flex items-center gap-4 px-5 py-4">
+                <div className="flex items-start gap-4 px-5 py-4">
+
                   {/* Color badge */}
-                  <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center text-white font-bold text-sm"
+                  <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center text-white font-bold text-sm mt-0.5"
                     style={{ backgroundColor: ag.primary_color }}>
                     {ag.name.slice(0, 2).toUpperCase()}
                   </div>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+
+                    {/* Top row: name + badges */}
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
                       <p className="font-semibold text-slate-900 text-sm">{ag.name}</p>
-                      <span className="text-[10px] font-mono text-slate-400 bg-slate-50 border border-gray-200 px-1.5 py-0.5 rounded">/a/{ag.slug}</span>
-                      {/* Plan badge */}
+                      <span className="text-[10px] font-mono text-slate-400 bg-slate-50 border border-gray-200 px-1.5 py-0.5 rounded">
+                        /a/{ag.slug}
+                      </span>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wide ${planMeta.cls}`}>
                         {planMeta.label}
                       </span>
-                      {/* Active/inactive */}
                       {!isActive && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-red-50 text-red-600 border-red-200 uppercase">
                           Pasif
                         </span>
                       )}
-                    </div>
-
-                    {/* User limit bar */}
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden flex-shrink-0">
-                        <div
-                          className={`h-full rounded-full transition-all ${atLimit ? "bg-red-500" : "bg-blue-500"}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      {/* Inline limit edit */}
-                      {editingLimit === ag.id ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min="1" max="200"
-                            value={limitValue}
-                            onChange={(e) => setLimitValue(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") saveLimit(ag.id); if (e.key === "Escape") setEditingLimit(null); }}
-                            className="w-16 px-1.5 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
-                            autoFocus
-                          />
-                          <button onClick={() => saveLimit(ag.id)} className="text-[10px] text-blue-600 font-semibold">Kaydet</button>
-                          <button onClick={() => setEditingLimit(null)} className="text-[10px] text-gray-400">İptal</button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setEditingLimit(ag.id); setLimitValue(String(maxUsers)); }}
-                          className={`text-[10px] font-medium hover:underline ${atLimit ? "text-red-600" : "text-slate-500"}`}
-                          title="Limiti düzenle"
-                        >
-                          {agencyProfiles.length} / {maxUsers} kullanıcı
-                          {atLimit && " ⚠ Limit doldu"}
-                        </button>
+                      {anyAtLimit && isActive && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
+                          ⚠ Limit uyarısı
+                        </span>
                       )}
                     </div>
+
+                    {/* ── Resource counters — the critical part ── */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <CounterBadge icon="👤" label="Kullanıcı" current={c.users}     max={maxUsers}     />
+                      <CounterBadge icon="👥" label="Müşteri"   current={c.customers} max={maxCustomers} />
+                      <CounterBadge icon="📋" label="Teklif"    current={c.requests}  max={maxRequests}  />
+                      <CounterBadge icon="📄" label="Poliçe"    current={c.policies}  max={maxPolicies}  />
+                    </div>
+
+                    {/* Contact info */}
+                    {(ag.phone || ag.email) && (
+                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                        {ag.phone && <span className="text-[11px] text-slate-400">{ag.phone}</span>}
+                        {ag.email && <span className="text-[11px] text-slate-400">{ag.email}</span>}
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
                   <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
-                    {/* Active toggle */}
-                    <button
-                      onClick={() => toggleActive(ag)}
+                    <button onClick={() => toggleActive(ag)}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                         isActive
                           ? "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
                           : "text-red-600 border-red-200 hover:bg-red-50"
-                      }`}
-                      title={isActive ? "Pasife al" : "Aktife al"}
-                    >
+                      }`}>
                       {isActive ? "✓ Aktif" : "✗ Pasif"}
                     </button>
 
-                    <button
-                      onClick={() => setExpandedId(isExpanded ? null : ag.id)}
-                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 transition-colors"
-                    >
+                    <button onClick={() => setExpandedId(isExpanded ? null : ag.id)}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 transition-colors">
                       Kullanıcılar {isExpanded ? "▲" : "▼"}
                     </button>
 
@@ -468,20 +517,38 @@ export default function AgenciesPage() {
                   </div>
                 </div>
 
-                {/* Expanded: users */}
+                {/* Expanded: users panel */}
                 {isExpanded && (
                   <div className="border-t border-gray-100 px-5 py-4 bg-slate-50/50">
-                    {/* Limit warning */}
-                    {atLimit && (
-                      <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
+                    {/* Limit warnings */}
+                    {c.users >= maxUsers && (
+                      <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-2">
                         <span className="text-red-500 text-sm">⚠</span>
                         <p className="text-xs text-red-700 font-semibold">
-                          Paket limitine ulaşıldı ({agencyProfiles.length}/{maxUsers}). Yeni kullanıcı eklemek için limiti artırın.
+                          Kullanıcı limiti doldu ({c.users}/{maxUsers})
+                        </p>
+                      </div>
+                    )}
+                    {c.customers >= maxCustomers && (
+                      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-2">
+                        <span className="text-amber-500 text-sm">⚠</span>
+                        <p className="text-xs text-amber-700 font-semibold">
+                          Müşteri limiti doldu ({c.customers}/{maxCustomers})
+                        </p>
+                      </div>
+                    )}
+                    {c.requests >= maxRequests && (
+                      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-2">
+                        <span className="text-amber-500 text-sm">⚠</span>
+                        <p className="text-xs text-amber-700 font-semibold">
+                          Teklif talebi limiti doldu ({c.requests}/{maxRequests})
                         </p>
                       </div>
                     )}
 
-                    <p className="text-xs font-semibold text-slate-600 mb-3">Bağlı Kullanıcılar ({agencyProfiles.length}/{maxUsers})</p>
+                    <p className="text-xs font-semibold text-slate-600 mb-3">
+                      Bağlı Kullanıcılar ({c.users}/{maxUsers})
+                    </p>
 
                     {agencyProfiles.length === 0 ? (
                       <p className="text-xs text-slate-400 mb-3">Henüz kullanıcı yok.</p>
@@ -502,9 +569,9 @@ export default function AgenciesPage() {
                       </div>
                     )}
 
-                    {/* Assign user (disabled at limit) */}
+                    {/* Assign user — disabled at user limit */}
                     {unassigned.length > 0 && (
-                      <div className={`flex items-center gap-2 ${atLimit ? "opacity-50 pointer-events-none" : ""}`}>
+                      <div className={`flex items-center gap-2 ${c.users >= maxUsers ? "opacity-50 pointer-events-none" : ""}`}>
                         <select value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}
                           className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white">
                           <option value="">Kullanıcı seç...</option>
@@ -512,8 +579,7 @@ export default function AgenciesPage() {
                             <option key={p.id} value={p.id}>{p.full_name ?? "İsimsiz"} ({p.role})</option>
                           ))}
                         </select>
-                        <button
-                          onClick={() => handleAssignUser(ag.id, maxUsers)}
+                        <button onClick={() => handleAssignUser(ag.id, maxUsers)}
                           disabled={!assignUserId || assignSaving}
                           className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
                           Ata
@@ -521,7 +587,7 @@ export default function AgenciesPage() {
                       </div>
                     )}
 
-                    {/* Public link + invite */}
+                    {/* Links */}
                     <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-2">
                       <div>
                         <p className="text-[10px] text-slate-500 mb-1">Müşteri teklif linki:</p>
@@ -536,12 +602,8 @@ export default function AgenciesPage() {
                             {typeof window !== "undefined" ? window.location.origin : ""}/register?invite={ag.slug}
                           </code>
                           <button
-                            onClick={() => {
-                              const url = `${window.location.origin}/register?invite=${ag.slug}`;
-                              navigator.clipboard.writeText(url);
-                            }}
-                            className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded font-semibold hover:bg-blue-100 transition-colors whitespace-nowrap"
-                          >
+                            onClick={() => navigator.clipboard.writeText(`${window.location.origin}/register?invite=${ag.slug}`)}
+                            className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded font-semibold hover:bg-blue-100 transition-colors whitespace-nowrap">
                             Kopyala
                           </button>
                         </div>
