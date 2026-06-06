@@ -7,9 +7,9 @@ export type Customer = {
   created_at: string;
 };
 
-export type RequestStatus = "Yeni" | "İşlemde" | "Tamamlandı" | "İptal";
+export type RequestStatus = 'Yeni' | 'İşlemde' | 'Tamamlandı' | 'İptal';
 
-export type PolicyStatus = "Aktif" | "Pasif";
+export type PolicyStatus = 'Aktif' | 'Pasif';
 
 export type Request = {
   id: string;
@@ -27,13 +27,7 @@ export type Policy = {
   policy_type: string;
   start_date: string;
   end_date: string;
-  premium: number | null;
+  premium?: number | null;
   status: PolicyStatus;
-  agency_id: string | null;
-  insurance_company: string | null;
-  policy_no: string | null;
-  commission: number | null;
-  note: string | null;
-  created_at: string;
   customers?: { name: string; phone: string } | null;
 };

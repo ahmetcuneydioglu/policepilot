@@ -24,15 +24,29 @@ create table if not exists public.requests (
 
 -- ─── policies ─────────────────────────────────────────────────────────────────
 create table if not exists public.policies (
-  id            uuid primary key default gen_random_uuid(),
-  customer_id   uuid not null references public.customers(id) on delete cascade,
-  policy_type   text not null,
-  start_date    date not null,
-  end_date      date not null,
-  status        text not null default 'Aktif'
-                check (status in ('Aktif', 'Pasif')),
-  created_at    timestamptz not null default now()
+  id                uuid primary key default gen_random_uuid(),
+  customer_id       uuid not null references public.customers(id) on delete cascade,
+  policy_type       text not null,
+  start_date        date not null,
+  end_date          date not null,
+  status            text not null default 'Aktif'
+                    check (status in ('Aktif', 'Pasif')),
+  agency_id         uuid references auth.users(id) on delete set null,
+  premium           numeric(12, 2),
+  insurance_company text,
+  policy_no         text,
+  commission        numeric(12, 2),
+  note              text,
+  created_at        timestamptz not null default now()
 );
+
+-- Mevcut tabloya eksik kolonları ekle (ALTER — tablo zaten varsa)
+alter table public.policies add column if not exists agency_id         uuid references auth.users(id) on delete set null;
+alter table public.policies add column if not exists premium           numeric(12, 2);
+alter table public.policies add column if not exists insurance_company text;
+alter table public.policies add column if not exists policy_no         text;
+alter table public.policies add column if not exists commission        numeric(12, 2);
+alter table public.policies add column if not exists note              text;
 
 -- ─── RLS — demo için açık politikalar ─────────────────────────────────────────
 -- Üretimde auth.uid() bazlı kısıtlamalar ekleyin.
