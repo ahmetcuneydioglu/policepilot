@@ -6,29 +6,47 @@
  *   2. Galeriden seç
  *   3. Dosya seç (PDF / diğer)
  *
- * Props:
- *   entity       — 'customers' | 'requests' | 'policies'
- *   entityId     — ilgili kaydın UUID'si
- *   agencyId     — acente UUID (nullable)
- *   uploadedBy   — oturum açmış kullanıcı UUID (nullable)
- *   onUploaded   — yükleme sonrası çağrılır
+ * Düzeltilen hatalar:
+ *  - iOS -54 "process may not map database": ActionSheetIOS kapandıktan sonra
+ *    picker açmadan önce 350ms bekleme eklendi (iOS dismiss animasyonu).
+ *  - Kamera/galeri izni reddedilince Ayarlar'a yönlendirme eklendi.
+ *  - Dosya okuma fetch() → expo-file-system (storage.ts'de).
  */
 
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator,
-  Alert, ActionSheetIOS, Platform,
+  Alert, ActionSheetIOS, Platform, Linking,
 } from 'react-native';
 import { Colors, Spacing, Radius } from '@/lib/theme';
 import { uploadDocument, EntityType, ACCEPTED_MIME_TYPES } from '@/lib/storage';
 import type { DocumentRecord } from '@/lib/types';
 
-// Defensive imports — native modül yoksa crash olmaz
+// ─── Defensive imports ────────────────────────────────────────────────────────
 function getImagePicker() {
   try { return require('expo-image-picker'); } catch { return null; }
 }
 function getDocumentPicker() {
   try { return require('expo-document-picker'); } catch { return null; }
+}
+
+// ─── iOS'ta action sheet kapandıktan sonra gecikme ────────────────────────────
+// ActionSheetIOS dismiss animasyonu ~300ms sürer.
+// Bu süre dolmadan UIDocumentPickerViewController veya kamera açılırsa
+// iOS "process may not map database" (-54) hatası fırlatır.
+function delayedOpen(fn: () => void, ms = 380) {
+  setTimeout(fn, ms);
+}
+
+// ─── İzin reddedilince Ayarlar'a yönlendirme ─────────────────────────────────
+function openSettings(title: string, desc: string) {
+  Alert.alert(title, desc, [
+    { text: 'İptal', style: 'cancel' },
+    {
+      text: 'Ayarları Aç',
+      onPress: () => Linking.openSettings(),
+    },
+  ]);
 }
 
 type Props = {
@@ -48,14 +66,34 @@ export default function DocumentUploader({
   async function pickFromCamera() {
     const ImagePicker = getImagePicker();
     if (!ImagePicker) {
-      Alert.alert('Hata', 'Kamera modülü yüklenemedi. Rebuild gerekebilir.');
+      Alert.alert('Modül Eksik', 'Kamera modülü yüklenemedi.\nnpx expo run:ios --device ile rebuild yapın.');
       return;
     }
 
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (perm.status !== 'granted') {
-      Alert.alert('İzin Gerekli', 'Kamera kullanmak için izin verin.');
+    // Mevcut izin durumunu önce kontrol et
+    const { status: existing } = await ImagePicker.getCameraPermissionsAsync();
+
+    if (existing === 'denied') {
+      // Daha önce reddedilmiş — sistem diyaloğu göstermez, direkt Ayarlar'a yönlendir
+      openSettings(
+        'Kamera İzni Gerekli',
+        'PolicePilot\'un kamerayı kullanabilmesi için Ayarlar > PolicePilot > Kamera iznini açın.'
+      );
       return;
+    }
+
+    if (existing !== 'granted') {
+      // İlk kez soruluyor
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        // Kullanıcı reddetti
+        Alert.alert(
+          'Kamera İzni Verilmedi',
+          'Evrak fotoğrafı çekmek için kamera iznine ihtiyaç var.',
+          [{ text: 'Tamam' }]
+        );
+        return;
+      }
     }
 
     const result = await ImagePicker.launchCameraAsync({
@@ -78,14 +116,26 @@ export default function DocumentUploader({
   async function pickFromGallery() {
     const ImagePicker = getImagePicker();
     if (!ImagePicker) {
-      Alert.alert('Hata', 'Galeri modülü yüklenemedi. Rebuild gerekebilir.');
+      Alert.alert('Modül Eksik', 'Galeri modülü yüklenemedi.\nnpx expo run:ios --device ile rebuild yapın.');
       return;
     }
 
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== 'granted') {
-      Alert.alert('İzin Gerekli', 'Galeriye erişmek için izin verin.');
+    const { status: existing } = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+    if (existing === 'denied') {
+      openSettings(
+        'Fotoğraf İzni Gerekli',
+        'PolicePilot\'un galeriye erişebilmesi için Ayarlar > PolicePilot > Fotoğraflar iznini açın.'
+      );
       return;
+    }
+
+    if (existing !== 'granted') {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('İzin Verilmedi', 'Galeriye erişmek için fotoğraf izni gerekli.', [{ text: 'Tamam' }]);
+        return;
+      }
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -96,7 +146,17 @@ export default function DocumentUploader({
 
     if (result.canceled || !result.assets?.length) return;
     const asset = result.assets[0];
-    const mime = asset.type === 'image' ? 'image/jpeg' : 'image/jpeg';
+
+    // mimeType tespiti — HEIC/HEIF için de doğru type kullan
+    let mime = 'image/jpeg';
+    if (asset.fileName) {
+      const ext = asset.fileName.split('.').pop()?.toLowerCase();
+      if (ext === 'png')              mime = 'image/png';
+      else if (ext === 'heic')        mime = 'image/heic';
+      else if (ext === 'heif')        mime = 'image/heif';
+      else if (ext === 'webp')        mime = 'image/webp';
+    }
+
     await doUpload(
       asset.uri,
       asset.fileName ?? `image_${Date.now()}.jpg`,
@@ -109,13 +169,13 @@ export default function DocumentUploader({
   async function pickDocument() {
     const DocumentPicker = getDocumentPicker();
     if (!DocumentPicker) {
-      Alert.alert('Hata', 'Dosya seçici modülü yüklenemedi. Rebuild gerekebilir.');
+      Alert.alert('Modül Eksik', 'Dosya seçici modülü yüklenemedi.\nnpx expo run:ios --device ile rebuild yapın.');
       return;
     }
 
     const result = await DocumentPicker.getDocumentAsync({
       type: ACCEPTED_MIME_TYPES,
-      copyToCacheDirectory: true,
+      copyToCacheDirectory: true,   // Kritik: önbelleğe kopyalar → FileSystem erişimi güvenli
       multiple: false,
     });
 
@@ -130,7 +190,12 @@ export default function DocumentUploader({
   }
 
   // ── Ortak yükleme fonksiyonu ─────────────────────────────────────────────────
-  async function doUpload(uri: string, fileName: string, mimeType: string, fileSize: number | null) {
+  async function doUpload(
+    uri: string,
+    fileName: string,
+    mimeType: string,
+    fileSize: number | null
+  ) {
     setLoading(true);
     try {
       const result = await uploadDocument({
@@ -144,13 +209,15 @@ export default function DocumentUploader({
         Alert.alert('Yükleme Başarısız', result.error);
       }
     } catch (err: any) {
-      Alert.alert('Hata', err?.message ?? 'Bilinmeyen hata');
+      Alert.alert('Hata', err?.message ?? 'Bilinmeyen hata oluştu');
     } finally {
       setLoading(false);
     }
   }
 
-  // ── iOS Action Sheet / Android menü ─────────────────────────────────────────
+  // ── iOS Action Sheet ─────────────────────────────────────────────────────────
+  // delayedOpen ile action sheet'in kapanma animasyonu tamamlandıktan sonra
+  // picker açılır → iOS -54 hatasını önler
   function showPicker() {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -158,24 +225,27 @@ export default function DocumentUploader({
           options: ['İptal', '📷 Kamera ile Çek', '🖼️ Galeriden Seç', '📎 Dosya Seç (PDF/Belge)'],
           cancelButtonIndex: 0,
           title: 'Evrak Ekle',
+          message: 'PDF, JPG veya PNG desteklenir',
         },
         (buttonIndex) => {
-          if (buttonIndex === 1) pickFromCamera();
-          if (buttonIndex === 2) pickFromGallery();
-          if (buttonIndex === 3) pickDocument();
+          // ⚠️ Kritik: dismiss animasyonu (350ms) bekle
+          if (buttonIndex === 1) delayedOpen(pickFromCamera);
+          if (buttonIndex === 2) delayedOpen(pickFromGallery);
+          if (buttonIndex === 3) delayedOpen(pickDocument);
         }
       );
     } else {
-      // Android — Alert tabanlı menü
+      // Android — Alert tabanlı menü (animasyon sorunu yok)
       Alert.alert('Evrak Ekle', 'Kaynak seçin:', [
         { text: '📷 Kamera', onPress: pickFromCamera },
-        { text: '🖼️ Galeri', onPress: pickFromGallery },
+        { text: '🖼️ Galeri',  onPress: pickFromGallery },
         { text: '📎 Dosya Seç', onPress: pickDocument },
         { text: 'İptal', style: 'cancel' },
       ]);
     }
   }
 
+  // ── Loading state ─────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={styles.loadingRow}>

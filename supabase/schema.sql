@@ -48,6 +48,42 @@ alter table public.policies add column if not exists policy_no         text;
 alter table public.policies add column if not exists commission        numeric(12, 2);
 alter table public.policies add column if not exists note              text;
 
+-- ─── documents ────────────────────────────────────────────────────────────────
+-- Müşteri, talep ve poliçelere eklenebilen dosya/evrak kayıtları.
+-- Gerçek dosyalar Supabase Storage "documents" bucket'ında tutulur.
+-- Hem mobil hem web tarafından kullanılacak ortak tablo.
+create table if not exists public.documents (
+  id           uuid primary key default gen_random_uuid(),
+  agency_id    uuid,                                              -- acente filtresi
+  customer_id  uuid references public.customers(id) on delete cascade,
+  request_id   uuid references public.requests(id)  on delete cascade,
+  policy_id    uuid references public.policies(id)  on delete cascade,
+  file_name    text not null,
+  file_path    text not null,       -- Storage içindeki yol
+  file_type    text not null,       -- MIME tipi
+  file_size    bigint,              -- Byte cinsinden boyut
+  bucket       text not null default 'documents',
+  uploaded_by  uuid,                -- auth.uid()
+  created_at   timestamptz not null default now()
+);
+
+alter table public.documents enable row level security;
+
+-- Giriş yapmış herkes kendi acentesinin dokümanlarını görebilir
+create policy "auth read documents"
+  on public.documents for select
+  using (auth.uid() is not null);
+
+-- Giriş yapmış herkes ekleyebilir
+create policy "auth insert documents"
+  on public.documents for insert
+  with check (auth.uid() is not null);
+
+-- Yükleyen kullanıcı silebilir
+create policy "uploader delete documents"
+  on public.documents for delete
+  using (auth.uid() = uploaded_by);
+
 -- ─── RLS — demo için açık politikalar ─────────────────────────────────────────
 -- Üretimde auth.uid() bazlı kısıtlamalar ekleyin.
 

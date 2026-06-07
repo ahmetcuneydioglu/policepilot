@@ -8,6 +8,10 @@
  *  - RLS her zaman aktif (documents tablosu + Storage bucket)
  *  - Bucket adı: "documents"
  *  - Dosya yolu: {agency_id}/{entity}/{entity_id}/{timestamp}_{filename}
+ *
+ * ÖNEMLI: Dosya okuma için expo-file-system kullanılır.
+ * fetch(uri) React Native'de file:// URI'lerde güvenilmez — iOS'ta
+ * "process may not map database" (-54) hatasına yol açar.
  */
 
 import { supabase } from './supabase';
@@ -27,6 +31,81 @@ export const ACCEPTED_MIME_TYPES = [
   'image/heif',
   'image/webp',
 ];
+
+// ─── Base64 → Uint8Array (React Native'de fetch yerine kullanılır) ────────────
+function base64ToUint8Array(base64: string): Uint8Array {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) {
+    lookup[chars.charCodeAt(i)] = i;
+  }
+
+  // Padding temizle
+  const cleaned = base64.replace(/=+$/, '');
+  const len = cleaned.length;
+  const bufLen = Math.floor(len * 0.75);
+  const bytes = new Uint8Array(bufLen);
+
+  let p = 0;
+  for (let i = 0; i < len; i += 4) {
+    const e1 = lookup[cleaned.charCodeAt(i)];
+    const e2 = lookup[cleaned.charCodeAt(i + 1)];
+    const e3 = lookup[cleaned.charCodeAt(i + 2)];
+    const e4 = lookup[cleaned.charCodeAt(i + 3)];
+
+    bytes[p++] = (e1 << 2) | (e2 >> 4);
+    if (i + 2 < len) bytes[p++] = ((e2 & 15) << 4) | (e3 >> 2);
+    if (i + 3 < len) bytes[p++] = ((e3 & 3) << 6) | (e4 & 63);
+  }
+  return bytes.slice(0, p);
+}
+
+// ─── expo-file-system ile dosyayı base64 olarak oku ─────────────────────────
+//
+// SDK 55 ÖNEMLİ NOT:
+//   require('expo-file-system')       → YENİ API (File / Directory / Paths sınıfları)
+//   require('expo-file-system/legacy') → ESKİ API (readAsStringAsync, EncodingType vb.)
+//
+// EncodingType sade 'expo-file-system/legacy'de var.
+// Yeni API'den import edince FileSystem.EncodingType === undefined → crash.
+//
+// İki strateji denenecek:
+//   1. Yeni API: new File(uri).base64()          — hızlı, modern
+//   2. Legacy API: readAsStringAsync + 'base64'  — güvenli fallback
+//
+async function readFileAsBase64(uri: string): Promise<string> {
+  // ── Strateji 1: Yeni File sınıfı (SDK 55 birincil API) ────────────────────
+  try {
+    const { File } = require('expo-file-system');
+    if (typeof File === 'function') {
+      const file = new File(uri);
+      const base64 = await file.base64();
+      if (typeof base64 === 'string' && base64.length > 0) {
+        return base64;
+      }
+    }
+  } catch {
+    // Yeni API başarısız — legacy ile dene
+  }
+
+  // ── Strateji 2: Legacy API (expo-file-system/legacy) ──────────────────────
+  try {
+    const FileSystemLegacy = require('expo-file-system/legacy');
+    // Enum yerine string literal kullan — EncodingType undefined olsa bile çalışır
+    const base64 = await FileSystemLegacy.readAsStringAsync(uri, {
+      encoding: 'base64',
+    });
+    if (typeof base64 === 'string' && base64.length > 0) {
+      return base64;
+    }
+    throw new Error('Boş base64 döndü');
+  } catch (legacyErr: any) {
+    throw new Error(
+      `Dosya okunamadı (legacy): ${legacyErr?.message ?? legacyErr}\n` +
+      'URI: ' + uri.slice(0, 80)
+    );
+  }
+}
 
 // ─── Dosya yolu oluştur ────────────────────────────────────────────────────────
 export function buildStoragePath(
@@ -64,11 +143,12 @@ export async function uploadDocument(params: UploadDocumentParams): Promise<Uplo
     entity, entityId, agencyId, uploadedBy,
   } = params;
 
-  // 1. ArrayBuffer olarak oku
-  let arrayBuffer: ArrayBuffer;
+  // 1. Dosyayı expo-file-system üzerinden base64 olarak oku
+  //    fetch(uri) iOS'ta file:// URI'lerde -54 hatasına yol açar!
+  let uint8Array: Uint8Array;
   try {
-    const response = await fetch(uri);
-    arrayBuffer = await response.arrayBuffer();
+    const base64 = await readFileAsBase64(uri);
+    uint8Array = base64ToUint8Array(base64);
   } catch (err: any) {
     return { ok: false, error: `Dosya okunamadı: ${err?.message ?? err}` };
   }
@@ -76,10 +156,10 @@ export async function uploadDocument(params: UploadDocumentParams): Promise<Uplo
   // 2. Storage path oluştur
   const path = buildStoragePath(agencyId, entity, entityId, fileName);
 
-  // 3. Supabase Storage'a yükle
+  // 3. Supabase Storage'a yükle (Uint8Array — React Native'de en güvenilir yol)
   const { error: storageError } = await (supabase.storage as any)
     .from(BUCKET)
-    .upload(path, arrayBuffer, {
+    .upload(path, uint8Array, {
       contentType: mimeType,
       upsert: false,
     });
