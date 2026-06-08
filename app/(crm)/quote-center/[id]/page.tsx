@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import {
   ChevronLeft, CheckCircle2, XCircle, Clock, Plus,
@@ -151,17 +150,23 @@ export default function QuoteRunDetailPage() {
   const [copied,   setCopied]   = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
 
-  // ── Load ─────────────────────────────────────────────────────────────────
+  // ── Load — API route (service role, RLS bypass) ──────────────────────────
   const load = useCallback(async () => {
     if (!id) return;
-    const [{ data: runData }, { data: resultsData }] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase.from("quote_runs") as any).select("*").eq("id", id).maybeSingle(),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase.from("quote_results") as any).select("*").eq("quote_run_id", id).order("price", { ascending: true }),
-    ]);
-    setRun(runData ?? null);
-    setResults(resultsData ?? []);
+    try {
+      const res  = await fetch(`/api/quote-runs/${id}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setRun(null);
+        setResults([]);
+      } else {
+        setRun(data.run ?? null);
+        setResults(data.results ?? []);
+      }
+    } catch {
+      setRun(null);
+      setResults([]);
+    }
     setLoading(false);
   }, [id]);
 

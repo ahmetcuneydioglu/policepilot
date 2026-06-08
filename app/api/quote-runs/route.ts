@@ -1,6 +1,6 @@
 /**
- * POST /api/quote-runs
- * Teklif çalışması oluşturma — service role ile (RLS bypass).
+ * GET  /api/quote-runs          — liste (service role, RLS bypass)
+ * POST /api/quote-runs          — oluşturma
  * Agency_user ve super_admin için çalışır.
  */
 
@@ -8,6 +8,51 @@ import { NextResponse }          from "next/server";
 import type { NextRequest }      from "next/server";
 import { createServerClient }    from "@supabase/ssr";
 import { getSupabaseAdmin }      from "@/lib/supabase-admin";
+
+function sessionClient(request: NextRequest) {
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieHeader.split(";").map((c) => {
+            const [name, ...rest] = c.trim().split("=");
+            return { name, value: rest.join("=") };
+          });
+        },
+        setAll() {},
+      },
+    }
+  );
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { data: { user } } = await sessionClient(request).auth.getUser();
+    if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+
+    const admin = getSupabaseAdmin();
+    const { searchParams } = new URL(request.url);
+    const agency_id = searchParams.get("agency_id");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = (admin.from("quote_runs") as any)
+      .select("*, quote_results(id, price)")
+      .order("created_at", { ascending: false });
+
+    if (agency_id) {
+      query = query.eq("agency_id", agency_id);
+    }
+
+    const { data, error } = await query;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ runs: data ?? [] });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {

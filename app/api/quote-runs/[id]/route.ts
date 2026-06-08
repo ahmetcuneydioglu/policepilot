@@ -1,6 +1,7 @@
 /**
- * PATCH /api/quote-runs/[id]  — durum güncelleme
- * DELETE /api/quote-runs/[id] — silme
+ * GET    /api/quote-runs/[id]  — tek çalışma + sonuçlar
+ * PATCH  /api/quote-runs/[id]  — durum güncelleme
+ * DELETE /api/quote-runs/[id]  — silme
  */
 
 import { NextResponse }       from "next/server";
@@ -25,6 +26,41 @@ function sessionClient(request: NextRequest) {
       },
     }
   );
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const { data: { user } } = await sessionClient(request).auth.getUser();
+    if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+
+    const admin = getSupabaseAdmin();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: run, error: runError } = await (admin.from("quote_runs") as any)
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (runError) return NextResponse.json({ error: runError.message }, { status: 500 });
+    if (!run)     return NextResponse.json({ error: "Bulunamadı." }, { status: 404 });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: results, error: resError } = await (admin.from("quote_results") as any)
+      .select("*")
+      .eq("quote_run_id", id)
+      .order("price", { ascending: true });
+
+    if (resError) return NextResponse.json({ error: resError.message }, { status: 500 });
+
+    return NextResponse.json({ run, results: results ?? [] });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
 
 export async function PATCH(

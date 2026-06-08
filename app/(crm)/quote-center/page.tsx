@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import {
   Plus, TrendingUp, CheckCircle2, XCircle, Clock,
@@ -82,7 +81,7 @@ function fmt(n: number | null) {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function QuoteCenterPage() {
   const router = useRouter();
-  const { role, agencyId } = useAuth();
+  const { agencyId } = useAuth();
 
   const [runs, setRuns]         = useState<QuoteRun[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -90,34 +89,30 @@ export default function QuoteCenterPage() {
   const [search, setSearch]     = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
+  // ── Fetch — API route (service role, RLS bypass) ─────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q = (supabase.from("quote_runs") as any)
-      .select(`
-        id, agency_id, customer_name, customer_phone, product_type,
-        status, notes, created_at, updated_at,
-        quote_results(id, price)
-      `)
-      .order("created_at", { ascending: false });
-
-    if (role === "agency_user" && agencyId) q = q.eq("agency_id", agencyId);
-
-    const { data } = await q;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const shaped: QuoteRun[] = (data ?? []).map((r: any) => {
-      const results = r.quote_results ?? [];
-      const prices  = results.map((x: any) => x.price).filter((p: any) => p != null);
-      return {
-        ...r,
-        result_count: results.length,
-        best_price:   prices.length > 0 ? Math.min(...prices) : null,
-      };
-    });
-    setRuns(shaped);
+    try {
+      const params = agencyId ? `?agency_id=${agencyId}` : "";
+      const res    = await fetch(`/api/quote-runs${params}`);
+      const data   = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const shaped: QuoteRun[] = (data.runs ?? []).map((r: any) => {
+        const results = r.quote_results ?? [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const prices  = results.map((x: any) => x.price).filter((p: any) => p != null);
+        return {
+          ...r,
+          result_count: results.length,
+          best_price:   prices.length > 0 ? Math.min(...prices) : null,
+        };
+      });
+      setRuns(shaped);
+    } catch {
+      setRuns([]);
+    }
     setLoading(false);
-  }, [role, agencyId]);
+  }, [agencyId]);
 
   useEffect(() => { load(); }, [load]);
 
