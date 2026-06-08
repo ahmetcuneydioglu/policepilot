@@ -63,14 +63,15 @@ type CompanyRow = {
 
 type FormState = {
   // Step 1
-  customerMode:   CustomerMode;
-  customerId:     string;
-  customerName:   string;
-  customerPhone:  string;
-  customerEmail:  string;
-  customerTc:     string;
-  customerDob:    string;
-  customerCity:   string;
+  customerMode:     CustomerMode;
+  customerId:       string;
+  customerAgencyId: string;   // ← müşterinin kendi agency_id'si (super_admin için)
+  customerName:     string;
+  customerPhone:    string;
+  customerEmail:    string;
+  customerTc:       string;
+  customerDob:      string;
+  customerCity:     string;
   customerDistrict: string;
   // Step 2
   productType:    string;
@@ -95,7 +96,7 @@ type FormState = {
 };
 
 const INIT: FormState = {
-  customerMode: "existing", customerId: "", customerName: "", customerPhone: "",
+  customerMode: "existing", customerId: "", customerAgencyId: "", customerName: "", customerPhone: "",
   customerEmail: "", customerTc: "", customerDob: "", customerCity: "", customerDistrict: "",
   productType: "", plaka: "", ruhsatSeri: "", kullanimTarzi: "OTOMOBİL",
   motorNo: "", sasiNo: "", marka: "", model: "", modelYili: "", tescilTarihi: "",
@@ -185,7 +186,7 @@ export default function NewQuoteRunPage() {
   const [plakaFetched, setPlakaFetched] = useState(false);
 
   // Existing customers
-  const [customers, setCustomers] = useState<Array<{ id: string; name: string; phone: string }>>([]);
+  const [customers, setCustomers] = useState<Array<{ id: string; name: string; phone: string; agency_id: string }>>([]);
   const [custSearch, setCustSearch] = useState("");
 
   // Simulate API timers
@@ -196,7 +197,7 @@ export default function NewQuoteRunPage() {
     async function loadCustomers() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let q = (supabase.from("customers") as any)
-        .select("id, name, phone")
+        .select("id, name, phone, agency_id")   // ← agency_id de çekiliyor
         .order("name");
       if (role === "agency_user" && agencyId) q = q.eq("agency_id", agencyId);
       const { data } = await q;
@@ -324,16 +325,27 @@ export default function NewQuoteRunPage() {
     try {
       const cfg = PRODUCTS.find(p => p.type === form.productType);
 
+      // Resolve agency_id:
+      //   - agency_user  → agencyId (JWT)
+      //   - super_admin  → müşterinin agency_id'si (form.customerAgencyId)
+      const effectiveAgencyId = agencyId || form.customerAgencyId || null;
+
+      if (!effectiveAgencyId) {
+        setError("Acente belirlenemedi. Lütfen listeden bir müşteri seçin.");
+        setSaving(false);
+        return;
+      }
+
       // Create customer if new mode
       let customerId    = form.customerId || null;
       let customerName  = form.customerName;
       let customerPhone = form.customerPhone;
 
-      if (form.customerMode === "new" && agencyId) {
+      if (form.customerMode === "new") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: nc, error: ce } = await (supabase.from("customers") as any)
           .insert({
-            agency_id: agencyId, name: form.customerName,
+            agency_id: effectiveAgencyId, name: form.customerName,
             phone: form.customerPhone, insurance_type: form.productType,
           })
           .select("id, name, phone").single();
@@ -355,7 +367,7 @@ export default function NewQuoteRunPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: run, error: re } = await (supabase.from("quote_runs") as any)
         .insert({
-          agency_id: agencyId, customer_id: customerId, product_type: form.productType,
+          agency_id: effectiveAgencyId, customer_id: customerId, product_type: form.productType,
           product_data: productData, customer_name: customerName, customer_phone: customerPhone,
           customer_email: form.customerEmail, customer_tc: form.customerTc,
           notes: form.notes || null, status: "Yeni",
@@ -500,7 +512,7 @@ export default function NewQuoteRunPage() {
                     {filteredCustomers.length === 0 ? (
                       <p className="text-sm text-gray-400 text-center py-4 italic">Müşteri bulunamadı</p>
                     ) : filteredCustomers.map(c => (
-                      <button key={c.id} onClick={() => setForm(prev => ({ ...prev, customerId: c.id, customerName: c.name, customerPhone: c.phone }))}
+                      <button key={c.id} onClick={() => setForm(prev => ({ ...prev, customerId: c.id, customerAgencyId: c.agency_id, customerName: c.name, customerPhone: c.phone }))}
                         className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
                           form.customerId === c.id ? "border-blue-400 bg-blue-50" : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
                         }`}
