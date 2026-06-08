@@ -22,6 +22,9 @@ import { Colors, Spacing, Radius } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import type { Policy, PolicyStatus, Customer } from '@/lib/types';
 import DocumentSection from '@/components/DocumentSection';
+import { checkLimit } from '@/lib/limits';
+import type { LimitResult } from '@/lib/limits';
+import LimitModal from '@/components/LimitModal';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -466,6 +469,7 @@ function AddModal({
   const [commission, setCommission] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [limitModal, setLimitModal] = useState<LimitResult | null>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -508,6 +512,15 @@ function AddModal({
     if (!endDate) return Alert.alert('Hata', 'Bitiş tarihi giriniz.');
 
     setSaving(true);
+
+    // ── Poliçe limiti kontrolü ───────────────────────────────────────────────
+    const limitResult = await checkLimit(agencyId, 'policies');
+    if (!limitResult.ok) {
+      setLimitModal(limitResult);
+      setSaving(false);
+      return;
+    }
+
     const insert: Record<string, unknown> = {
       customer_id: selectedCustomer.id,
       policy_type: policyType,
@@ -544,6 +557,18 @@ function AddModal({
               <Text style={addStyles.closeBtnText}>✕</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Limit modal */}
+          {limitModal && (
+            <LimitModal
+              visible
+              entity="policies"
+              current={limitModal.current}
+              max={limitModal.max}
+              reason={limitModal.reason}
+              onClose={() => setLimitModal(null)}
+            />
+          )}
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={addStyles.content} keyboardShouldPersistTaps="handled">
             {/* Customer search */}

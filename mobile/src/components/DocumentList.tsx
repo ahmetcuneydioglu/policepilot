@@ -21,9 +21,11 @@ import { getSignedUrl, deleteDocument, fileIcon, formatFileSize } from '@/lib/st
 import type { DocumentRecord } from '@/lib/types';
 
 // Defensive imports
-function getWebBrowser() { try { return require('expo-web-browser'); } catch { return null; } }
-function getSharing()    { try { return require('expo-sharing');     } catch { return null; } }
-function getFileSystem() { try { return require('expo-file-system'); } catch { return null; } }
+// SDK 55: expo-file-system yeni API'si (File/Directory) cacheDirectory ve downloadAsync içermez.
+// Bu fonksiyonlar legacy API'de → 'expo-file-system/legacy'
+function getWebBrowser() { try { return require('expo-web-browser');       } catch { return null; } }
+function getSharing()    { try { return require('expo-sharing');            } catch { return null; } }
+function getFileSystem() { try { return require('expo-file-system/legacy'); } catch { return null; } }
 
 type Props = {
   documents: DocumentRecord[];
@@ -53,6 +55,8 @@ function DocRow({
   });
   const sizeStr = doc.file_size ? formatFileSize(doc.file_size) : '';
 
+  // 👁️ Göz — dosyayı tarayıcıda önizle (download yok, signed URL direkt açılır)
+  // iOS WebKit: PDF ve görselleri native olarak render eder
   async function openFile() {
     setOpening(true);
     try {
@@ -62,56 +66,22 @@ function DocRow({
         return;
       }
 
-      if (isImage) {
-        // Görüntüyü expo-web-browser'da aç
-        const Browser = getWebBrowser();
-        if (Browser) {
-          await Browser.openBrowserAsync(signedUrl);
-        } else {
-          Alert.alert('Hata', 'Tarayıcı modülü yüklenemedi.');
-        }
-      } else if (isPdf) {
-        // PDF: önce cihaza indir, sonra paylaş/aç
-        await downloadAndOpen(signedUrl, doc.file_name);
-      } else {
-        const Browser = getWebBrowser();
-        if (Browser) await Browser.openBrowserAsync(signedUrl);
-      }
-    } finally {
-      setOpening(false);
-    }
-  }
-
-  async function downloadAndOpen(url: string, name: string) {
-    const FileSystem = getFileSystem();
-    if (!FileSystem) {
-      Alert.alert('Hata', 'Dosya sistemi modülü yüklenemedi.');
-      return;
-    }
-
-    try {
-      // Legacy API — expo-file-system v55'te her ikisi de çalışır
-      const localUri = FileSystem.cacheDirectory + name;
-      const { uri: downloadedUri } = await FileSystem.downloadAsync(url, localUri);
-
-      // Paylaşma ile aç (iOS: Files/Preview, Android: ilgili uygulama)
-      const Sharing = getSharing();
-      if (Sharing) {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(downloadedUri, {
-            mimeType: 'application/pdf',
-            dialogTitle: name,
-            UTI: 'com.adobe.pdf',
-          });
-          return;
-        }
-      }
-      // Sharing yoksa web browser'da signed URL'i aç
       const Browser = getWebBrowser();
-      if (Browser) await Browser.openBrowserAsync(url);
+      if (!Browser) {
+        Alert.alert('Hata', 'Tarayıcı modülü yüklenemedi.');
+        return;
+      }
+
+      // expo-web-browser iOS'ta PDF'i native WebKit viewer ile, görseli de
+      // inline olarak açar — paylaşım ekranı çıkmaz
+      await Browser.openBrowserAsync(signedUrl, {
+        presentationStyle: Browser.WebBrowserPresentationStyle?.FULL_SCREEN,
+        controlsColor: '#2563EB',
+      });
     } catch (err: any) {
       Alert.alert('Hata', `Dosya açılamadı: ${err?.message ?? err}`);
+    } finally {
+      setOpening(false);
     }
   }
 

@@ -10,6 +10,9 @@ import { Colors, Spacing, Radius } from '@/lib/theme';
 import { Customer } from '@/lib/types';
 import { useProfile } from '@/lib/useProfile';
 import DocumentSection from '@/components/DocumentSection';
+import LimitModal from '@/components/LimitModal';
+import { checkLimit, limitErrorMessage } from '@/lib/limits';
+import type { LimitResult } from '@/lib/limits';
 
 const W = Dimensions.get('window').width;
 
@@ -87,22 +90,153 @@ function CustomerCard({
   );
 }
 
+// ─── Silme onay modal'ı ───────────────────────────────────────────────────────
+function DeleteConfirmModal({
+  visible,
+  customerName,
+  deleting,
+  onConfirm,
+  onCancel,
+}: {
+  visible: boolean;
+  customerName: string;
+  deleting: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
+      <View style={dcm.overlay}>
+        <TouchableOpacity style={dcm.backdrop} activeOpacity={1} onPress={onCancel} />
+        <View style={dcm.card}>
+          <View style={dcm.iconWrap}>
+            <Text style={dcm.icon}>🗑️</Text>
+          </View>
+          <Text style={dcm.title}>Müşteriyi Sil</Text>
+          <Text style={dcm.desc}>
+            <Text style={dcm.name}>{customerName}</Text>
+            {' '}silinecek.\n\nBu müşteriye ait tüm talepler, poliçeler ve evraklar da kalıcı olarak silinir. Bu işlem geri alınamaz.
+          </Text>
+          <TouchableOpacity
+            style={[dcm.deleteBtn, deleting && dcm.deleteBtnDisabled]}
+            onPress={onConfirm}
+            disabled={deleting}
+            activeOpacity={0.8}
+          >
+            {deleting
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={dcm.deleteBtnText}>Evet, Sil</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity style={dcm.cancelBtn} onPress={onCancel} activeOpacity={0.8}>
+            <Text style={dcm.cancelBtnText}>Vazgeç</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const dcm = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  iconWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  icon: { fontSize: 30 },
+  title: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.heading,
+    marginBottom: 10,
+  },
+  desc: {
+    fontSize: 14,
+    color: Colors.secondary,
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 22,
+  },
+  name: {
+    fontWeight: '700',
+    color: Colors.heading,
+  },
+  deleteBtn: {
+    backgroundColor: Colors.danger,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  deleteBtnDisabled: { opacity: 0.5 },
+  deleteBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cancelBtn: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cancelBtnText: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+});
+
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 function CustomerDetailModal({
   customer,
   onClose,
   onUpdated,
+  onDeleted,
   userId,
 }: {
   customer: Customer;
   onClose: () => void;
   onUpdated: () => void;
+  onDeleted: () => void;
   userId: string | null;
 }) {
   const [tab, setTab] = useState<'info' | 'notes'>('info');
   const [note, setNote] = useState(customer.note ?? '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function saveNote() {
     setSaving(true);
@@ -111,6 +245,21 @@ function CustomerDetailModal({
     setSaved(true);
     onUpdated();
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    const { error } = await (supabase.from('customers') as any)
+      .delete()
+      .eq('id', customer.id);
+    setDeleting(false);
+    if (error) {
+      setShowDeleteConfirm(false);
+      Alert.alert('Silinemedi', error.message);
+      return;
+    }
+    setShowDeleteConfirm(false);
+    onDeleted();
   }
 
   const group = groupOf(customer.insurance_type);
@@ -155,10 +304,27 @@ function CustomerDetailModal({
               <Text style={styles.typeChipSmallText}>{customer.insurance_type}</Text>
             </View>
           </View>
+          {/* Silme butonu */}
+          <TouchableOpacity
+            onPress={() => setShowDeleteConfirm(true)}
+            style={styles.deleteIconBtn}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.deleteIconBtnText}>🗑️</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
             <Text style={styles.closeBtnText}>✕</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Silme onay modalı */}
+        <DeleteConfirmModal
+          visible={showDeleteConfirm}
+          customerName={customer.name}
+          deleting={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
 
         {/* Call / WhatsApp */}
         {customer.phone ? (
@@ -301,6 +467,8 @@ function AddCustomerModal({
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
   const [done, setDone]               = useState(false);
+  // Limit modal state
+  const [limitModal, setLimitModal]   = useState<{ entity: 'customers' | 'policies'; result: LimitResult } | null>(null);
 
   const group = groupOf(insuranceType);
 
@@ -311,6 +479,14 @@ function AddCustomerModal({
     }
     setSaving(true);
     setError('');
+
+    // ── Müşteri limiti kontrolü ──────────────────────────────────────────────
+    const limitResult = await checkLimit(agencyId, 'customers');
+    if (!limitResult.ok) {
+      setLimitModal({ entity: 'customers', result: limitResult });
+      setSaving(false);
+      return;
+    }
 
     const extra: Record<string, string> = {};
     if (group === 'vehicle') {
@@ -356,6 +532,17 @@ function AddCustomerModal({
 
     // Poliçe bitiş tarihi varsa otomatik poliçe oluştur
     if (policyEndDate) {
+      // Poliçe limiti de kontrol et
+      const polLimitResult = await checkLimit(agencyId, 'policies');
+      if (!polLimitResult.ok) {
+        // Müşteri eklendi ama poliçe eklenemez — şık modal ile bilgilendir
+        setSaving(false);
+        setDone(true);
+        onSaved();
+        setLimitModal({ entity: 'policies', result: polLimitResult });
+        return;
+      }
+
       const { data: cust } = await (supabase.from('customers') as any)
         .select('id')
         .eq('name', name.trim())
@@ -418,6 +605,18 @@ function AddCustomerModal({
             {error ? (
               <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>
             ) : null}
+
+            {/* Limit modal */}
+            {limitModal && (
+              <LimitModal
+                visible
+                entity={limitModal.entity}
+                current={limitModal.result.current}
+                max={limitModal.result.max}
+                reason={limitModal.result.reason}
+                onClose={() => setLimitModal(null)}
+              />
+            )}
 
             {/* Temel Bilgiler */}
             <SectionTitle title="Temel Bilgiler" />
@@ -726,6 +925,7 @@ export default function CustomersScreen() {
           customer={selected}
           onClose={() => setSelected(null)}
           onUpdated={fetchCustomers}
+          onDeleted={() => { setSelected(null); fetchCustomers(); }}
           userId={userId}
         />
       )}
@@ -808,6 +1008,13 @@ const styles = StyleSheet.create({
   },
   detailAvatarText: { color: '#fff', fontWeight: '700', fontSize: 18 },
   detailName: { color: '#fff', fontWeight: '700', fontSize: 17 },
+  deleteIconBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(220,38,38,0.18)',
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 8,
+  },
+  deleteIconBtnText: { fontSize: 16 },
   typeChipSmall: {
     alignSelf: 'flex-start', backgroundColor: 'rgba(99,179,237,0.3)',
     borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4,

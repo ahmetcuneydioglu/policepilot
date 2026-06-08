@@ -51,6 +51,32 @@ export type DocumentRecord = {
   created_at: string;
 };
 
+export type Agency = {
+  id: string;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  primary_color: string;
+  created_at: string;
+  max_users: number | null;
+  max_customers: number | null;
+  max_requests: number | null;
+  max_policies: number | null;
+  is_active: boolean | null;
+  plan: string | null;
+  expires_at: string | null;
+};
+
+export type AgencyCounts = {
+  users: number;
+  customers: number;
+  requests: number;
+  policies: number;
+};
+
 export type Policy = {
   id: string;
   customer_id: string;

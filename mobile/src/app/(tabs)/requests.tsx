@@ -13,6 +13,9 @@ import { Request, RequestStatus, Customer } from '@/lib/types';
 import { useProfile } from '@/lib/useProfile';
 import { useNotificationStore } from '@/lib/NotificationContext';
 import { clearBadge } from '@/lib/notifications';
+import { checkLimit } from '@/lib/limits';
+import type { LimitResult } from '@/lib/limits';
+import LimitModal from '@/components/LimitModal';
 import DocumentSection from '@/components/DocumentSection';
 
 // ── Constants (web ile birebir) ───────────────────────────────────────────────
@@ -293,6 +296,7 @@ function AddRequestModal({
   const [priceOffer, setPriceOffer] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [limitModal, setLimitModal] = useState<LimitResult | null>(null);
 
   async function searchCustomers(q: string) {
     setCustomerSearch(q);
@@ -317,6 +321,14 @@ function AddRequestModal({
     if (!requestType)       { setError('Talep türü seçiniz.'); return; }
     setSaving(true);
     setError('');
+
+    // ── Talep limiti kontrolü ────────────────────────────────────────────────
+    const limitResult = await checkLimit(agencyId, 'requests');
+    if (!limitResult.ok) {
+      setLimitModal(limitResult);
+      setSaving(false);
+      return;
+    }
 
     const payload: any = {
       customer_id:  selectedCustomer.id,
@@ -347,6 +359,18 @@ function AddRequestModal({
             {error ? (
               <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>
             ) : null}
+
+            {/* Limit modal */}
+            {limitModal && (
+              <LimitModal
+                visible
+                entity="requests"
+                current={limitModal.current}
+                max={limitModal.max}
+                reason={limitModal.reason}
+                onClose={() => setLimitModal(null)}
+              />
+            )}
 
             {/* Müşteri seç */}
             <Text style={styles.sectionTitle}>Müşteri *</Text>

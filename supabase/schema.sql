@@ -54,7 +54,7 @@ alter table public.policies add column if not exists note              text;
 -- Hem mobil hem web tarafından kullanılacak ortak tablo.
 create table if not exists public.documents (
   id           uuid primary key default gen_random_uuid(),
-  agency_id    uuid,                                              -- acente filtresi
+  agency_id    uuid,                          -- acente filtresi (FK yok — agencies tablosuna referans)
   customer_id  uuid references public.customers(id) on delete cascade,
   request_id   uuid references public.requests(id)  on delete cascade,
   policy_id    uuid references public.policies(id)  on delete cascade,
@@ -105,6 +105,103 @@ create policy "public read policies"   on public.policies  for select using (tru
 create policy "public insert policies"  on public.policies  for insert with check (true);
 create policy "public update policies"  on public.policies  for update using (true);
 create policy "public delete policies"  on public.policies  for delete using (true);
+
+-- ─── agencies ─────────────────────────────────────────────────────────────────
+-- Acente kayıtları. Web panelinde oluşturulur, mobil super_admin tarafından yönetilir.
+create table if not exists public.agencies (
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  slug          text not null unique,
+  logo_url      text,
+  phone         text,
+  email         text,
+  website       text,
+  primary_color text not null default '#2563eb',
+  is_active     boolean not null default true,
+  plan          text not null default 'starter'
+                check (plan in ('starter', 'pro', 'enterprise')),
+  expires_at    timestamptz,
+  max_users     integer not null default 20,
+  max_customers integer not null default 200,
+  max_requests  integer not null default 500,
+  max_policies  integer not null default 500,
+  created_at    timestamptz not null default now()
+);
+
+alter table public.agencies enable row level security;
+
+-- super_admin: tüm acenteleri görür / düzenler / siler
+-- agency_user: yalnızca kendi acentesini görür
+create policy "agencies select"
+  on public.agencies for select
+  using (
+    exists (
+      select 1 from public.profiles
+      where id = auth.uid() and role = 'super_admin'
+    )
+    or
+    exists (
+      select 1 from public.profiles
+      where id = auth.uid() and agency_id = agencies.id
+    )
+  );
+
+create policy "agencies insert"
+  on public.agencies for insert
+  with check (
+    exists (
+      select 1 from public.profiles
+      where id = auth.uid() and role = 'super_admin'
+    )
+  );
+
+create policy "agencies update"
+  on public.agencies for update
+  using (
+    exists (
+      select 1 from public.profiles
+      where id = auth.uid() and role = 'super_admin'
+    )
+  );
+
+create policy "agencies delete"
+  on public.agencies for delete
+  using (
+    exists (
+      select 1 from public.profiles
+      where id = auth.uid() and role = 'super_admin'
+    )
+  );
+
+-- profiles tablosu RLS (kullanıcı yönetimi için)
+-- super_admin tüm profilleri görebilir ve agency_id güncelleyebilir
+alter table public.profiles enable row level security;
+
+create policy "profiles select"
+  on public.profiles for select
+  using (
+    auth.uid() = id
+    or
+    exists (
+      select 1 from public.profiles p2
+      where p2.id = auth.uid() and p2.role = 'super_admin'
+    )
+  );
+
+create policy "profiles insert"
+  on public.profiles for insert
+  with check (auth.uid() = id);
+
+create policy "profiles update"
+  on public.profiles for update
+  using (
+    auth.uid() = id
+    or
+    exists (
+      select 1 from public.profiles p2
+      where p2.id = auth.uid() and p2.role = 'super_admin'
+    )
+  );
 
 -- ─── Örnek seed verisi ────────────────────────────────────────────────────────
 insert into public.customers (name, phone, insurance_type, note) values

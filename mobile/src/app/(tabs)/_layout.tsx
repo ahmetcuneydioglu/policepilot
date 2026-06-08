@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { Text, Platform } from 'react-native';
 import { Colors } from '@/lib/theme';
 import { useNotificationStore } from '@/lib/NotificationContext';
+import { useProfile } from '@/lib/useProfile';
 
 function TabBarIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
@@ -11,6 +12,9 @@ function TabBarIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
 
 export default function TabsLayout() {
   const { unreadCount } = useNotificationStore();
+  const { role } = useProfile();
+
+  const isSuperAdmin = role === 'super_admin';
 
   return (
     <Tabs
@@ -68,6 +72,15 @@ export default function TabsLayout() {
         options={{
           title: 'Poliçeler',
           tabBarIcon: ({ focused }) => <TabBarIcon emoji="📄" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: 'Yönetim',
+          tabBarIcon: ({ focused }) => <TabBarIcon emoji="⚙️" focused={focused} />,
+          // super_admin değilse sekmeyi tab bar'dan gizle
+          href: isSuperAdmin ? undefined : null,
         }}
       />
     </Tabs>
