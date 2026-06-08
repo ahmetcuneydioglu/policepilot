@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import {
   ChevronLeft, CheckCircle2, XCircle, Clock, Plus,
-  Trash2, Edit3, MessageSquare, FileText, Copy,
+  Trash2, MessageSquare, FileText, Copy,
   Sparkles, TrendingUp, Car, Home, Heart, Globe,
   Shield, RefreshCw, Check, ArrowUpRight,
 } from "lucide-react";
@@ -84,14 +84,16 @@ function AddResultForm({ runId, onAdded }: { runId: string; onAdded: () => void 
   async function handleAdd() {
     if (!company) return;
     setSaving(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from("quote_results") as any).insert({
-      quote_run_id: runId,
-      company_name: company,
-      price:        price ? parseFloat(price) : null,
-      installment,
-      note: note || null,
-      status: "Aktif",
+    await fetch("/api/quote-results", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quote_run_id: runId,
+        company_name: company,
+        price:        price ? parseFloat(price) : null,
+        installment,
+        note: note || null,
+      }),
     });
     setCompany(""); setPrice(""); setNote("");
     setSaving(false);
@@ -140,7 +142,7 @@ function AddResultForm({ runId, onAdded }: { runId: string; onAdded: () => void 
 export default function QuoteRunDetailPage() {
   const { id }  = useParams<{ id: string }>();
   const router  = useRouter();
-  const { agencyId } = useAuth();
+  useAuth(); // oturum kontrolü için bağlamda tutuyoruz
 
   const [run,      setRun]      = useState<QuoteRun | null>(null);
   const [results,  setResults]  = useState<QuoteResult[]>([]);
@@ -165,39 +167,49 @@ export default function QuoteRunDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Update status ─────────────────────────────────────────────────────────
+  // ── Update status — API route (service role) ─────────────────────────────
   async function updateStatus(status: QuoteRunStatus, wonResultId?: string) {
     if (!run) return;
     setSavingStatus(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from("quote_runs") as any)
-      .update({ status, ...(wonResultId ? { won_result_id: wonResultId } : {}) })
-      .eq("id", run.id);
+    await fetch(`/api/quote-runs/${run.id}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status,
+        ...(wonResultId !== undefined ? { won_result_id: wonResultId } : {}),
+      }),
+    });
     await load();
     setSavingStatus(false);
   }
 
-  // ── Delete result ─────────────────────────────────────────────────────────
+  // ── Delete result — API route ─────────────────────────────────────────────
   async function deleteResult(resultId: string) {
     if (!confirm("Bu teklif silinecek. Onaylıyor musunuz?")) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from("quote_results") as any).delete().eq("id", resultId);
+    await fetch(`/api/quote-results/${resultId}`, { method: "DELETE" });
     load();
   }
 
-  // ── Mark as won ───────────────────────────────────────────────────────────
+  // ── Mark as won — API route ───────────────────────────────────────────────
   async function markWon(result: QuoteResult) {
-    // Mark this result as selected
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from("quote_results") as any)
-      .update({ status: "Seçildi" }).eq("id", result.id);
-    // Reset others
-    const others = results.filter(r => r.id !== result.id).map(r => r.id);
-    if (others.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.from("quote_results") as any)
-        .update({ status: "Aktif" }).in("id", others);
-    }
+    // Seçilen teklifi "Seçildi" yap
+    await fetch(`/api/quote-results/${result.id}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "Seçildi" }),
+    });
+    // Diğerlerini "Aktif" yap
+    await Promise.all(
+      results
+        .filter(r => r.id !== result.id)
+        .map(r =>
+          fetch(`/api/quote-results/${r.id}`, {
+            method:  "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "Aktif" }),
+          })
+        )
+    );
     await updateStatus("Kazanıldı", result.id);
   }
 

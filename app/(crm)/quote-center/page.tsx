@@ -143,8 +143,7 @@ export default function QuoteCenterPage() {
   async function deleteRun(id: string) {
     if (!confirm("Bu teklif çalışması silinecek. Onaylıyor musunuz?")) return;
     setDeleting(id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from("quote_runs") as any).delete().eq("id", id);
+    await fetch(`/api/quote-runs/${id}`, { method: "DELETE" });
     await load();
     setDeleting(null);
   }

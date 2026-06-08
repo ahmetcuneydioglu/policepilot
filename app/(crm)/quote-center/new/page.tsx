@@ -318,39 +318,20 @@ export default function NewQuoteRunPage() {
     setStep(s => s + 1);
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Submit → API route (service role, RLS bypass) ────────────────────────
   async function handleSubmit() {
     setSaving(true);
     setError(null);
     try {
       const cfg = PRODUCTS.find(p => p.type === form.productType);
 
-      // Resolve agency_id:
-      //   - agency_user  → agencyId (JWT)
-      //   - super_admin  → müşterinin agency_id'si (form.customerAgencyId)
+      // agency_id: agency_user → JWT'den, super_admin → seçilen müşterinin acentesi
       const effectiveAgencyId = agencyId || form.customerAgencyId || null;
 
       if (!effectiveAgencyId) {
         setError("Acente belirlenemedi. Lütfen listeden bir müşteri seçin.");
         setSaving(false);
         return;
-      }
-
-      // Create customer if new mode
-      let customerId    = form.customerId || null;
-      let customerName  = form.customerName;
-      let customerPhone = form.customerPhone;
-
-      if (form.customerMode === "new") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: nc, error: ce } = await (supabase.from("customers") as any)
-          .insert({
-            agency_id: effectiveAgencyId, name: form.customerName,
-            phone: form.customerPhone, insurance_type: form.productType,
-          })
-          .select("id, name, phone").single();
-        if (ce) throw ce;
-        customerId = nc.id; customerName = nc.name; customerPhone = nc.phone;
       }
 
       const productData = cfg?.group === "vehicle"
@@ -364,33 +345,43 @@ export default function NewQuoteRunPage() {
         ? { group: cfg?.group, yas: form.yas, cinsiyet: form.cinsiyet, il: form.il, ilce: form.ilce }
         : { group: cfg?.group };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: run, error: re } = await (supabase.from("quote_runs") as any)
-        .insert({
-          agency_id: effectiveAgencyId, customer_id: customerId, product_type: form.productType,
-          product_data: productData, customer_name: customerName, customer_phone: customerPhone,
-          customer_email: form.customerEmail, customer_tc: form.customerTc,
-          notes: form.notes || null, status: "Yeni",
-        })
-        .select("id").single();
-      if (re) throw re;
-
-      // Insert company results (only filled or noOffer rows)
-      const resultRows = form.companies
+      // Fiyatı olan veya "teklif yok" işaretli şirketleri gönder
+      const results = form.companies
         .filter(c => c.price || c.state === "noOffer")
         .map(c => ({
-          quote_run_id: run.id, company_name: c.name,
-          price:        c.price ? parseFloat(c.price.replace(/\D/g, "")) : null,
-          installment:  c.installment, note: c.note,
+          company_name: c.name,
+          price:        c.price ? parseFloat(c.price.replace(/[^\d.]/g, "")) : null,
+          installment:  c.installment,
+          note:         c.note || null,
           status:       c.state === "noOffer" ? "Teklif Yok" : "Aktif",
         }));
 
-      if (resultRows.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase.from("quote_results") as any).insert(resultRows);
+      // API route: service role kullanır → RLS bypass → agency_user'da da çalışır
+      const res = await fetch("/api/quote-runs", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agency_id:      effectiveAgencyId,
+          customer_id:    form.customerMode === "existing" ? form.customerId || null : null,
+          create_customer: form.customerMode === "new",
+          customer_name:  form.customerName,
+          customer_phone: form.customerPhone,
+          customer_email: form.customerEmail,
+          customer_tc:    form.customerTc,
+          product_type:   form.productType,
+          product_data:   productData,
+          notes:          form.notes || null,
+          results,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "Sunucu hatası");
       }
 
-      router.push(`/quote-center/${run.id}`);
+      router.push(`/quote-center/${data.runId}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Bir hata oluştu");
       setSaving(false);
