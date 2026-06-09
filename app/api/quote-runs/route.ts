@@ -74,26 +74,6 @@ export async function POST(request: NextRequest) {
       results,           // Array<{ company_name, price, installment, note, status }>
     } = body;
 
-    // ── Temel doğrulama ───────────────────────────────────────────────────
-    if (!agency_id) {
-      return NextResponse.json(
-        { error: "Acente bilgisi eksik. Lütfen tekrar giriş yapın." },
-        { status: 400 }
-      );
-    }
-    if (!product_type) {
-      return NextResponse.json(
-        { error: "Sigorta türü seçilmedi." },
-        { status: 400 }
-      );
-    }
-    if (!customer_name?.trim() && !customer_id) {
-      return NextResponse.json(
-        { error: "Müşteri bilgisi gerekli." },
-        { status: 400 }
-      );
-    }
-
     // ── Oturum doğrulama ──────────────────────────────────────────────────
     const cookieHeader = request.headers.get("cookie") ?? "";
     const supabaseSession = createServerClient(
@@ -120,6 +100,38 @@ export async function POST(request: NextRequest) {
     // ── Service role client (RLS bypass) ──────────────────────────────────
     const admin = getSupabaseAdmin();
 
+    // ── Agency ID: client'tan gelmediyse profil tablosundan çek ──────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let resolvedAgencyId: string | null = agency_id ?? null;
+    if (!resolvedAgencyId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: prof } = await (admin.from("profiles") as any)
+        .select("agency_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      resolvedAgencyId = prof?.agency_id ?? null;
+    }
+
+    // ── Temel doğrulama ───────────────────────────────────────────────────
+    if (!resolvedAgencyId) {
+      return NextResponse.json(
+        { error: "Acente bilgisi bulunamadı. Lütfen tekrar giriş yapın." },
+        { status: 400 }
+      );
+    }
+    if (!product_type) {
+      return NextResponse.json(
+        { error: "Sigorta türü seçilmedi." },
+        { status: 400 }
+      );
+    }
+    if (!customer_name?.trim() && !customer_id) {
+      return NextResponse.json(
+        { error: "Müşteri bilgisi gerekli." },
+        { status: 400 }
+      );
+    }
+
     // ── Gerekirse yeni müşteri oluştur ────────────────────────────────────
     let resolvedCustomerId = customer_id || null;
 
@@ -127,7 +139,7 @@ export async function POST(request: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: newCustomer, error: custErr } = await (admin.from("customers") as any)
         .insert({
-          agency_id,
+          agency_id: resolvedAgencyId,
           name:           customer_name.trim(),
           phone:          customer_phone?.trim() || "",
           insurance_type: product_type,
@@ -147,7 +159,7 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: run, error: runErr } = await (admin.from("quote_runs") as any)
       .insert({
-        agency_id,
+        agency_id: resolvedAgencyId,
         customer_id:    resolvedCustomerId,
         product_type,
         product_data:   product_data ?? {},

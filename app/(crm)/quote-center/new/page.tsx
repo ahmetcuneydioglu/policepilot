@@ -11,6 +11,7 @@ import {
   Search, RefreshCw, Info,
   CheckCircle2, XCircle, AlertCircle, FileText,
   Zap, User, Settings, Sparkles, Award,
+  MessageSquare, Copy, Building2,
 } from "lucide-react";
 import {
   DEMO_MODE,
@@ -255,6 +256,13 @@ export default function NewQuoteRunPage() {
   const [customers,  setCustomers]  = useState<Array<{ id: string; name: string; phone: string; agency_id: string }>>([]);
   const [custSearch, setCustSearch] = useState("");
 
+  // Agencies (super_admin için)
+  const [agencies,      setAgencies]      = useState<Array<{ id: string; name: string }>>([]);
+  const [adminAgencyId, setAdminAgencyId] = useState("");
+
+  // WhatsApp copy state
+  const [waCopied, setWaCopied] = useState(false);
+
   // Timer refs
   const tcTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const plakaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -270,6 +278,17 @@ export default function NewQuoteRunPage() {
     }
     loadCustomers();
   }, [role, agencyId]);
+
+  // ── Agencies load (super_admin) ───────────────────────────────────────────
+  useEffect(() => {
+    if (role !== "super_admin") return;
+    async function loadAgencies() {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase.from("agencies") as any).select("id, name").order("name");
+      setAgencies(data ?? []);
+    }
+    loadAgencies();
+  }, [role]);
 
   // ── Init company list when product changes ────────────────────────────────
   useEffect(() => {
@@ -403,12 +422,13 @@ export default function NewQuoteRunPage() {
     setError(null);
     try {
       const cfg = PRODUCTS.find(p => p.type === form.productType);
-      const effectiveAgencyId = agencyId || form.customerAgencyId || null;
-      if (!effectiveAgencyId) {
-        setError("Acente belirlenemedi. Lütfen listeden bir müşteri seçin.");
-        setSaving(false);
-        return;
-      }
+      // Agency ID: auth context > existing customer's agency > admin selector
+      // API route will ALSO do a profile lookup as server-side fallback
+      const effectiveAgencyId =
+        agencyId ||
+        form.customerAgencyId ||
+        adminAgencyId ||
+        undefined; // API'nin profile'dan bulmasına izin ver
 
       const productData = cfg?.group === "vehicle"
         ? { group: cfg.group, plaka: form.plaka, ruhsatSeri: form.ruhsatSeri,
@@ -435,7 +455,7 @@ export default function NewQuoteRunPage() {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          agency_id:       effectiveAgencyId,
+          agency_id:       effectiveAgencyId ?? null,
           customer_id:     form.customerMode === "existing" ? form.customerId || null : null,
           create_customer: form.customerMode === "new",
           customer_name:   form.customerName,
@@ -456,6 +476,19 @@ export default function NewQuoteRunPage() {
       setError(e instanceof Error ? e.message : "Bir hata oluştu");
       setSaving(false);
     }
+  }
+
+  // ── WhatsApp mesajı (wizard içi) ──────────────────────────────────────────
+  function buildWizardWhatsApp(): string {
+    const top = [...form.companies]
+      .filter(c => c.state === "filled" && c.price)
+      .sort((a, b) => parseFloat(a.price) - parseFloat(b.price))
+      .slice(0, 5);
+    if (top.length === 0) return "";
+    const lines = top.map((c, i) =>
+      `${i === 0 ? "🏆" : `${i + 1}.`} ${c.name}: ${parseInt(c.price).toLocaleString("tr-TR")} ₺${c.installment && c.installment !== "Peşin" ? ` (${c.installment})` : ""}`
+    );
+    return `Merhaba ${form.customerName || "Sayın Müşterimiz"},\n\n${form.productType} sigortanız için teklifleriniz hazır:\n\n${lines.join("\n")}\n\nEn uygun seçenek için sizi arayacağız.\n\nİyi günler dileriz.`;
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -657,6 +690,26 @@ export default function NewQuoteRunPage() {
               {/* New customer */}
               {form.customerMode === "new" && (
                 <div className="space-y-4">
+
+                  {/* Super admin: acente seç */}
+                  {role === "super_admin" && (
+                    <div className="p-3.5 rounded-xl bg-violet-50 border border-violet-200">
+                      <label className="block text-[11px] font-bold text-violet-700 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5" /> Acente Seç *
+                      </label>
+                      <select
+                        value={adminAgencyId}
+                        onChange={e => setAdminAgencyId(e.target.value)}
+                        className="w-full px-3.5 py-2.5 text-sm bg-white border border-violet-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-400/30 focus:border-violet-400 transition-all"
+                      >
+                        <option value="">— Acente seçin —</option>
+                        {agencies.map(a => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <Field label="TC Kimlik / Vergi No">
                     <div className="flex gap-2">
                       <input type="text" placeholder="12345678901" value={form.customerTc}
@@ -1102,6 +1155,57 @@ export default function NewQuoteRunPage() {
                     </div>
                   </div>
                 ) : null;
+              })()}
+
+              {/* ── WhatsApp Paneli ── tüm teklifler gelince */}
+              {allLoaded && filledCount >= 1 && (() => {
+                const waMsg = buildWizardWhatsApp();
+                if (!waMsg) return null;
+                return (
+                  <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm overflow-hidden">
+                    <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                          <MessageSquare className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800">Müşteri WhatsApp Mesajı</h3>
+                          <p className="text-[11px] text-slate-400">En iyi {Math.min(filledCount, 5)} teklif hazır</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(waMsg);
+                            setWaCopied(true);
+                            setTimeout(() => setWaCopied(false), 2000);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                        >
+                          {waCopied
+                            ? <><Check className="w-3.5 h-3.5 text-emerald-600" /> Kopyalandı!</>
+                            : <><Copy className="w-3.5 h-3.5" /> Kopyala</>}
+                        </button>
+                        {form.customerPhone && (
+                          <a
+                            href={`https://wa.me/${form.customerPhone.replace(/\D/g, "")}?text=${encodeURIComponent(waMsg)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-500/20"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            WhatsApp&apos;ta Gönder
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed bg-slate-50 rounded-xl p-4 border border-slate-100 text-xs">
+                        {waMsg}
+                      </pre>
+                    </div>
+                  </div>
+                );
               })()}
 
               <p className="text-[11px] text-slate-400 text-center">
