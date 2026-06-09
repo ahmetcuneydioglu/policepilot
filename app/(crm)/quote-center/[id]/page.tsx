@@ -12,6 +12,7 @@ import {
   Phone, Mail, User, Award, AlertTriangle,
   AlertCircle, Info, Ban,
 } from "lucide-react";
+import QuoteWhatsAppModal, { type WaQuoteResult, type WaQuoteRun } from "@/components/QuoteWhatsAppModal";
 import { STATUS_UI, legacyStatusToResult, type ResultStatus } from "@/lib/quote-providers";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -255,7 +256,7 @@ function ErrorDetailModal({ result, onClose }: { result: QuoteResult; onClose: (
 export default function QuoteRunDetailPage() {
   const { id } = useParams<{ id: string }>();
   useRouter();
-  useAuth();
+  const { agencyId } = useAuth();
 
   const [run,          setRun]          = useState<QuoteRun | null>(null);
   const [results,      setResults]      = useState<QuoteResult[]>([]);
@@ -264,6 +265,8 @@ export default function QuoteRunDetailPage() {
   const [copied,       setCopied]       = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [errorModal,   setErrorModal]   = useState<QuoteResult | null>(null);
+  const [waOpen,       setWaOpen]       = useState(false);
+  const [agencyName,   setAgencyName]   = useState<string | undefined>();
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -279,6 +282,19 @@ export default function QuoteRunDetailPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
+
+  // Agency name fetch
+  useEffect(() => {
+    if (!agencyId) return;
+    import("@/lib/supabase").then(({ supabase }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase.from("agencies") as any)
+        .select("name").eq("id", agencyId).single()
+        .then(({ data }: { data: { name: string } | null }) => {
+          if (data?.name) setAgencyName(data.name);
+        });
+    });
+  }, [agencyId]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   async function updateStatus(status: QuoteRunStatus, wonResultId?: string) {
@@ -477,6 +493,17 @@ export default function QuoteRunDetailPage() {
               <RefreshCw className="w-3.5 h-3.5" /> Sıfırla
             </button>
           )}
+          <Link href={`/quote-center/${run.id}/summary`}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" /> Teklif Özeti
+          </Link>
+          <button
+            onClick={() => setWaOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+          >
+            <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Gönder
+          </button>
           {savingStatus && <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />}
         </div>
       </div>
@@ -801,7 +828,7 @@ export default function QuoteRunDetailPage() {
             </div>
           </div>
 
-          {/* ── WhatsApp ── */}
+          {/* ── WhatsApp section — compact ── */}
           {successResults.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -814,7 +841,16 @@ export default function QuoteRunDetailPage() {
                     <p className="text-[11px] text-slate-400">Müşteriye hazır teklif mesajı</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setWaOpen(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition-all shadow-sm"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" /> Mesajı Düzenle &amp; Gönder
+                </button>
+              </div>
+              <div className="p-5">
+                <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed bg-slate-50 rounded-xl p-4 border border-slate-100">{whatsappMsg}</pre>
+                <div className="flex gap-2 mt-3">
                   <button
                     onClick={() => { navigator.clipboard.writeText(whatsappMsg); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors"
@@ -822,19 +858,27 @@ export default function QuoteRunDetailPage() {
                     {copied ? <><Check className="w-3.5 h-3.5 text-emerald-600" /> Kopyalandı!</> : <><Copy className="w-3.5 h-3.5" /> Kopyala</>}
                   </button>
                   {run.customer_phone && (
-                    <a href={`https://wa.me/${run.customer_phone.replace(/\D/g, "")}?text=${encodeURIComponent(whatsappMsg)}`}
+                    <a href={`https://wa.me/${run.customer_phone.replace(/\D/g, "").replace(/^0/, "90")}?text=${encodeURIComponent(whatsappMsg)}`}
                       target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-500/20"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" /> WhatsApp&apos;ta Aç
+                      <MessageSquare className="w-3.5 h-3.5" /> Hızlı Gönder
                     </a>
                   )}
                 </div>
               </div>
-              <div className="p-5">
-                <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed bg-slate-50 rounded-xl p-4 border border-slate-100">{whatsappMsg}</pre>
-              </div>
             </div>
+          )}
+
+          {/* QuoteWhatsAppModal */}
+          {waOpen && (
+            <QuoteWhatsAppModal
+              run={run as WaQuoteRun}
+              results={results as WaQuoteResult[]}
+              agencyName={agencyName}
+              onClose={() => setWaOpen(false)}
+              onSent={() => { updateStatus("Teklif Verildi"); }}
+            />
           )}
         </div>
       </div>
