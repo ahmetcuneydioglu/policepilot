@@ -91,17 +91,15 @@ export async function issuePolicy(input: IssuePolicyInput): Promise<IssuePolicyR
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: policy, error: polErr } = await (admin.from("policies") as any)
     .insert({
-      agency_id:      run.agency_id,
-      customer_id:    run.customer_id   ?? null,
-      customer_name:  run.customer_name ?? null,
-      customer_phone: run.customer_phone ?? null,
-      policy_no:      policyNo,
-      insurance_type: run.product_type,
-      company:        result.company_name,
-      premium:        result.price,
-      status:         "Aktif",
-      start_date:     startDate.toISOString().slice(0, 10),
-      end_date:       endDate.toISOString().slice(0, 10),
+      agency_id:         run.agency_id,
+      customer_id:       run.customer_id ?? null,
+      policy_no:         policyNo,
+      policy_type:       run.product_type,
+      insurance_company: result.company_name,
+      premium:           result.price,
+      status:            "Aktif",
+      start_date:        startDate.toISOString().slice(0, 10),
+      end_date:          endDate.toISOString().slice(0, 10),
       // Teklif & ödeme referansları
       quote_result_id: result.id,
       quote_run_id:    run.id,
@@ -110,10 +108,9 @@ export async function issuePolicy(input: IssuePolicyInput): Promise<IssuePolicyR
       issued_at:       issuedAt,
       source:          sourceType,   // "demo" | "manual" | "api" | …
       // Notlar
-      notes: isDemo
+      note: isDemo
         ? `Demo poliçe. Gerçek poliçe değildir. İşlem: ${paymentResult.transactionId}`
         : `Teklif akışından kesildi. İşlem: ${paymentResult.transactionId}`,
-      agent_id: agentUserId,
     })
     .select("id")
     .single();
