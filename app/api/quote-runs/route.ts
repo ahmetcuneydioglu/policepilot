@@ -68,10 +68,14 @@ export async function POST(request: NextRequest) {
       product_type,
       product_data,
       notes,
+      // Engine v2 fields
+      provider_type,     // demo | manual | api | robot | gateway
+      success_count,     // integer
+      error_count,       // integer
       // Yeni müşteri oluşturmak için
       create_customer,   // boolean
       // Şirket teklifleri
-      results,           // Array<{ company_name, price, installment, note, status }>
+      results,           // Array<{ company_name, price, installment, note, status, source_type, ... }>
     } = body;
 
     // ── Oturum doğrulama ──────────────────────────────────────────────────
@@ -159,7 +163,7 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: run, error: runErr } = await (admin.from("quote_runs") as any)
       .insert({
-        agency_id: resolvedAgencyId,
+        agency_id:      resolvedAgencyId,
         customer_id:    resolvedCustomerId,
         product_type,
         product_data:   product_data ?? {},
@@ -169,6 +173,12 @@ export async function POST(request: NextRequest) {
         customer_tc:    customer_tc?.trim() || null,
         notes:          notes?.trim() || null,
         status:         "Yeni",
+        // Engine v2
+        provider_type:   provider_type  ?? "demo",
+        success_count:   success_count  ?? 0,
+        error_count:     error_count    ?? 0,
+        run_started_at:  new Date().toISOString(),
+        run_finished_at: new Date().toISOString(),
       })
       .select("id")
       .single();
@@ -181,11 +191,18 @@ export async function POST(request: NextRequest) {
     // ── quote_results ekle (varsa) ────────────────────────────────────────
     if (Array.isArray(results) && results.length > 0) {
       const resultRows = results.map((r: {
-        company_name: string;
-        price?: number | null;
-        installment?: string;
-        note?: string;
-        status?: string;
+        company_name:  string;
+        price?:        number | null;
+        installment?:  string;
+        note?:         string;
+        status?:       string;
+        source_type?:  string;
+        provider_name?: string;
+        error_source?: string | null;
+        error_code?:   string | null;
+        error_message?: string | null;
+        action_hint?:  string | null;
+        raw_response?: Record<string, unknown>;
       }) => ({
         quote_run_id:  run.id,
         company_name:  r.company_name,
@@ -193,6 +210,14 @@ export async function POST(request: NextRequest) {
         installment:   r.installment ?? "Peşin",
         note:          r.note ?? null,
         status:        r.status ?? "Aktif",
+        // Engine v2
+        source_type:   r.source_type   ?? "demo",
+        provider_name: r.provider_name ?? null,
+        error_source:  r.error_source  ?? null,
+        error_code:    r.error_code    ?? null,
+        error_message: r.error_message ?? null,
+        action_hint:   r.action_hint   ?? null,
+        raw_response:  r.raw_response  ?? {},
       }));
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
