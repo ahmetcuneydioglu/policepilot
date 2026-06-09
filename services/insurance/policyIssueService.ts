@@ -1,35 +1,66 @@
 /**
  * PolicePilot — Policy Issue Service
  *
- * Ödeme onaylandıktan sonra poliçe kaydını oluşturur.
- * Poliçe numarası: <şirket_kodu>-<yıl>-<random6haneli>
+ * Poliçe kaydını oluşturur. Kaynak türüne göre farklı davranır:
  *
- * İleride: şirket API entegrasyonu bu servisten geçecek.
+ *  source_type = "demo"    → DEMO-YYYYMMDD-XXXX no, gerçek ödeme yok
+ *  source_type = "manual"  → MAN-{şirket}-YYYYMMDD-XXXX, manuel kayıt
+ *  source_type = "api" / "gateway" / "robot" → {şirket}-{yıl}-XXXXXX (gerçek entegrasyon)
+ *
+ * ⚠️  Kart bilgisi ASLA buraya taşınmaz. Sadece transactionId kaydedilir.
  */
 
-import { getSupabaseAdmin }    from "@/lib/supabase-admin";
-import type { PaymentResult }  from "@/services/payment/paymentService";
+import { getSupabaseAdmin }       from "@/lib/supabase-admin";
+import type { PaymentResult }     from "@/services/payment/paymentService";
 import type { QuoteIssueContext } from "@/services/insurance/quoteService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface IssuePolicyInput {
-  context:        QuoteIssueContext;
-  paymentResult:  PaymentResult;
-  agentUserId:    string;  // Poliçeyi kesen kullanıcı ID'si (audit log)
+  context:      QuoteIssueContext;
+  paymentResult: PaymentResult;
+  agentUserId:  string;    // Audit log için
+  sourceType:   string;    // "demo" | "manual" | "api" | "gateway" | "robot"
 }
 
 export interface IssuePolicyResult {
   policyId:   string;
   policyNo:   string;
   issuedAt:   string;
+  startDate:  string;     // ISO 8601 — poliçe başlangıç tarihi
+  endDate:    string;     // ISO 8601 — poliçe bitiş tarihi (1 yıl)
+  isDemo:     boolean;
 }
 
-// ─── Policy number generation ─────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function generatePolicyNo(companyCode: string): string {
+function datePart(d = new Date()): string {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function rand4(): string {
+  return Math.random().toString(36).slice(2, 6).toUpperCase();
+}
+
+/**
+ * Kaynak türüne göre poliçe numarası üretir.
+ *
+ * demo    → DEMO-20250609-A3F2
+ * manual  → MAN-ALZ-20250609-A3F2
+ * api/…   → ALZ-2025-123456
+ */
+function generatePolicyNo(sourceType: string, companyCode: string): string {
+  const dp = datePart();
+
+  if (sourceType === "demo") {
+    return `DEMO-${dp}-${rand4()}`;
+  }
+  if (sourceType === "manual") {
+    return `MAN-${companyCode}-${dp}-${rand4()}`;
+  }
+  // api / gateway / robot → gerçek format
   const year = new Date().getFullYear();
-  const seq  = Math.floor(100_000 + Math.random() * 900_000); // 6 haneli
+  const seq  = Math.floor(100_000 + Math.random() * 900_000);
   return `${companyCode}-${year}-${seq}`;
 }
 
@@ -37,44 +68,52 @@ function generatePolicyNo(companyCode: string): string {
 
 /**
  * 1. policies tablosuna yeni satır ekler
- * 2. quote_results.policy_status → "issued"
- * 3. quote_results.payment_status → "paid"
- * 4. Oluşturulan poliçe bilgisini döndürür
+ * 2. quote_results.policy_status → "issued", payment_status → "paid"
+ * 3. quote_runs.status → "Kazanıldı", won_result_id → result.id
  *
- * ⚠️  Kart bilgisi (kart no, CVV, son kullanma tarihi) ASLA buraya taşınmaz.
- *     Sadece paymentResult.transactionId kaydedilir.
+ * ⚠️  Kart no / CVV / SKT ASLA işlenmez. Sadece paymentResult.transactionId saklanır.
  */
 export async function issuePolicy(input: IssuePolicyInput): Promise<IssuePolicyResult> {
-  const { context, paymentResult, agentUserId } = input;
-  const { result, run }                          = context;
+  const { context, paymentResult, agentUserId, sourceType } = input;
+  const { result, run } = context;
 
   const admin      = getSupabaseAdmin();
-  const policyNo   = generatePolicyNo(result.company_code ?? "POL");
+  const isDemo     = sourceType === "demo";
+  const policyNo   = generatePolicyNo(sourceType, result.company_code ?? "POL");
   const issuedAt   = new Date().toISOString();
+
+  // Poliçe geçerlilik süresi: 1 yıl
+  const startDate  = new Date();
+  const endDate    = new Date(startDate);
+  endDate.setFullYear(endDate.getFullYear() + 1);
 
   // ── 1. policies tablosuna yaz ─────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: policy, error: polErr } = await (admin.from("policies") as any)
     .insert({
-      agency_id:       run.agency_id,
-      customer_id:     run.customer_id ?? null,
-      customer_name:   run.customer_name ?? null,
-      customer_phone:  run.customer_phone ?? null,
-      policy_no:       policyNo,
-      insurance_type:  run.product_type,
-      company:         result.company_name,
-      premium:         result.price,
-      status:          "Aktif",
+      agency_id:      run.agency_id,
+      customer_id:    run.customer_id   ?? null,
+      customer_name:  run.customer_name ?? null,
+      customer_phone: run.customer_phone ?? null,
+      policy_no:      policyNo,
+      insurance_type: run.product_type,
+      company:        result.company_name,
+      premium:        result.price,
+      status:         "Aktif",
+      start_date:     startDate.toISOString().slice(0, 10),
+      end_date:       endDate.toISOString().slice(0, 10),
       // Teklif & ödeme referansları
       quote_result_id: result.id,
       quote_run_id:    run.id,
-      transaction_id:  paymentResult.transactionId,  // ✅ Sadece işlem ID'si
+      transaction_id:  paymentResult.transactionId, // ✅ Sadece işlem ID'si
       payment_method:  paymentResult.method,
       issued_at:       issuedAt,
-      source:          "quote_flow",
-      // Genel alanlar
-      notes:           `Teklif akışından kesildi. İşlem: ${paymentResult.transactionId}`,
-      agent_id:        agentUserId,
+      source:          sourceType,   // "demo" | "manual" | "api" | …
+      // Notlar
+      notes: isDemo
+        ? `Demo poliçe. Gerçek poliçe değildir. İşlem: ${paymentResult.transactionId}`
+        : `Teklif akışından kesildi. İşlem: ${paymentResult.transactionId}`,
+      agent_id: agentUserId,
     })
     .select("id")
     .single();
@@ -86,21 +125,30 @@ export async function issuePolicy(input: IssuePolicyInput): Promise<IssuePolicyR
 
   // ── 2. quote_results güncelle ─────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updErr } = await (admin.from("quote_results") as any)
-    .update({
-      policy_status:  "issued",
-      payment_status: "paid",
-    })
+  const { error: resUpdErr } = await (admin.from("quote_results") as any)
+    .update({ policy_status: "issued", payment_status: "paid" })
     .eq("id", result.id);
 
-  if (updErr) {
-    console.warn("[policyIssueService] quote_result update warning:", updErr.message);
-    // Poliçe kaydı başarılı, güncelleme hatası kritik değil — devam et
+  if (resUpdErr) {
+    console.warn("[policyIssueService] quote_result update warning:", resUpdErr.message);
+  }
+
+  // ── 3. quote_run → Kazanıldı + won_result_id ─────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: runUpdErr } = await (admin.from("quote_runs") as any)
+    .update({ status: "Kazanıldı", won_result_id: result.id })
+    .eq("id", run.id);
+
+  if (runUpdErr) {
+    console.warn("[policyIssueService] quote_run status update warning:", runUpdErr.message);
   }
 
   return {
     policyId:  policy.id,
     policyNo,
     issuedAt,
+    startDate: startDate.toISOString(),
+    endDate:   endDate.toISOString(),
+    isDemo,
   };
 }
