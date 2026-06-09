@@ -424,6 +424,21 @@ function PolicyDetailModal({
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [waOpen, setWaOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const [vehicleData, setVehicleData] = useState<Record<string, string> | null>(null);
+
+  // Araç verisini lazy fetch — sadece quote_run_id varsa
+  useEffect(() => {
+    if (!policy.quote_run_id) return;
+    (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase.from("quote_runs") as any)
+        .select("product_data")
+        .eq("id", policy.quote_run_id)
+        .single();
+      if (data?.product_data) setVehicleData(data.product_data);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [policy.quote_run_id]);
 
   const isDemo   = policy.source === "demo"   || (policy.policy_no?.startsWith("DEMO-") ?? false);
   const src      = sourceInfo(policy.source);
@@ -431,7 +446,7 @@ function PolicyDetailModal({
   const days     = policy.status === "Aktif" && !isExpired(policy.end_date) ? daysLeft(policy.end_date) : 0;
   const expired  = isExpired(policy.end_date);
 
-  const pd = policy.quote_runs?.product_data ?? {};
+  const pd = vehicleData ?? {};
   const hasVehicle = !!(pd.plaka || pd.marka || pd.model);
 
   // renewal ring colour
@@ -847,12 +862,13 @@ export default function PoliciesPage() {
   const fetchPolicies = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase.from("policies") as any)
-      .select("*, customers(name, phone), quote_runs(product_data)")
+      .select("*, customers(name, phone)")
       .order("end_date", { ascending: true });
     if (role === "agency_user" && agencyId) {
       q = q.eq("agency_id", agencyId);
     }
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) console.error("[policies] fetch error:", error.message);
     setPolicies((data ?? []) as PolicyWithCustomer[]);
     setLoading(false);
   }, [role, agencyId]);
