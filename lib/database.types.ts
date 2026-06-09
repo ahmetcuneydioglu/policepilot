@@ -35,5 +35,12 @@ export type Policy = {
   commission: number | null;
   note: string | null;
   created_at: string;
+  // Teklif & ödeme referansları (migration ile eklendi)
+  quote_result_id?: string | null;
+  quote_run_id?: string | null;
+  transaction_id?: string | null;
+  payment_method?: string | null;
+  issued_at?: string | null;
+  source?: string | null;         // "demo" | "manual" | "api" | "robot" | "gateway"
   customers?: { name: string; phone: string } | null;
 };

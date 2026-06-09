@@ -8,7 +8,8 @@ import WhatsAppModal from "@/components/WhatsAppModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PolicyWithCustomer = Policy & {
-  customers: { name: string; phone: string } | null;
+  customers:  { name: string; phone: string } | null;
+  quote_runs?: { product_data: Record<string, string> } | null;
 };
 
 type FilterKey = "Tümü" | "Aktif" | "Yaklaşan" | "Geçmiş" | "Pasif";
@@ -395,6 +396,18 @@ function PolicyFormModal({
   );
 }
 
+// ─── Source helpers ───────────────────────────────────────────────────────────
+function sourceInfo(src: string | null | undefined): { label: string; cls: string; icon: string } {
+  switch (src) {
+    case "demo":    return { label: "Demo",         cls: "bg-amber-100 text-amber-700 border-amber-300",   icon: "🎭" };
+    case "manual":  return { label: "Manuel",       cls: "bg-blue-100 text-blue-700 border-blue-300",      icon: "📋" };
+    case "api":     return { label: "API",          cls: "bg-violet-100 text-violet-700 border-violet-300", icon: "🔗" };
+    case "robot":   return { label: "Robot",        cls: "bg-indigo-100 text-indigo-700 border-indigo-300", icon: "🤖" };
+    case "gateway": return { label: "InsurGateway", cls: "bg-teal-100 text-teal-700 border-teal-300",      icon: "🌐" };
+    default:        return { label: "Manuel",       cls: "bg-blue-100 text-blue-700 border-blue-300",      icon: "📋" };
+  }
+}
+
 // ─── Detail / View Modal ──────────────────────────────────────────────────────
 function PolicyDetailModal({
   policy,
@@ -412,8 +425,17 @@ function PolicyDetailModal({
   const [waOpen, setWaOpen] = useState(false);
   const [toast, setToast] = useState("");
 
-  const badge = expiryBadge(policy.end_date, policy.status);
-  const days = policy.status === "Aktif" && !isExpired(policy.end_date) ? daysLeft(policy.end_date) : 0;
+  const isDemo   = policy.source === "demo"   || (policy.policy_no?.startsWith("DEMO-") ?? false);
+  const src      = sourceInfo(policy.source);
+  const badge    = expiryBadge(policy.end_date, policy.status);
+  const days     = policy.status === "Aktif" && !isExpired(policy.end_date) ? daysLeft(policy.end_date) : 0;
+  const expired  = isExpired(policy.end_date);
+
+  const pd = policy.quote_runs?.product_data ?? {};
+  const hasVehicle = !!(pd.plaka || pd.marka || pd.model);
+
+  // renewal ring colour
+  const ringCls = days <= 5 ? "text-red-500 stroke-red-500" : days <= 15 ? "text-amber-500 stroke-amber-500" : days <= 30 ? "text-yellow-500 stroke-yellow-500" : "text-emerald-500 stroke-emerald-500";
 
   async function toggleStatus() {
     setTogglingStatus(true);
@@ -437,101 +459,254 @@ function PolicyDetailModal({
     );
   }
 
+  const fmtDate = (d: string) =>
+    new Date(d).toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" });
+
+  const printContent = `
+    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px;color:#1e293b">
+      ${isDemo ? `<div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-weight:700;color:#92400e;font-size:13px">⚠️ DEMO POLİÇE — Gerçek poliçe değildir, hukuki geçerliliği yoktur</div>` : ""}
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #0f172a;padding-bottom:16px;margin-bottom:24px">
+        <div><h1 style="margin:0;font-size:22px;font-weight:800">PoliçePilot</h1><p style="margin:4px 0 0;font-size:12px;color:#64748b">Sigorta CRM Sistemi</p></div>
+        <p style="font-size:11px;color:#94a3b8;margin:0">${new Date().toLocaleDateString("tr-TR")}</p>
+      </div>
+      <h2 style="margin:0 0 16px;font-size:16px">Poliçe Özeti</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">
+        ${[
+          ["Poliçe Numarası", policy.policy_no ?? "—"],
+          ["Sigorta Şirketi", policy.insurance_company ?? "—"],
+          ["Poliçe Türü", policy.policy_type],
+          ["Prim", policy.premium != null ? `₺${policy.premium.toLocaleString("tr-TR")}` : "—"],
+          ["Başlangıç", fmtDate(policy.start_date)],
+          ["Bitiş", fmtDate(policy.end_date)],
+          ["Durum", policy.status],
+        ].map(([k, v]) => `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 16px 8px 0;font-weight:600;color:#64748b;width:160px">${k}</td><td style="padding:8px 0">${v}</td></tr>`).join("")}
+      </table>
+      ${policy.customers ? `<h3 style="font-size:14px;margin:0 0 10px">Sigortalı</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">
+        ${[["Ad Soyad", policy.customers.name], ...(policy.customers.phone ? [["Telefon", policy.customers.phone]] : [])].map(([k,v]) => `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 16px 8px 0;font-weight:600;color:#64748b;width:160px">${k}</td><td>${v}</td></tr>`).join("")}
+      </table>` : ""}
+      ${hasVehicle ? `<h3 style="font-size:14px;margin:0 0 10px">Araç</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">
+        ${[["Plaka", pd.plaka], ["Marka", pd.marka], ["Model", pd.model], ["Yıl", pd.yil], ["Ruhsat Seri", pd.belge_seri]].filter(([,v]) => v).map(([k,v]) => `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 16px 8px 0;font-weight:600;color:#64748b;width:160px">${k}</td><td style="font-family:monospace">${v}</td></tr>`).join("")}
+      </table>` : ""}
+      <p style="font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:16px;margin-top:24px;text-align:center">PoliçePilot Sigorta CRM • Otomatik oluşturulmuştur</p>
+    </div>
+  `;
+
+  function handlePrint() {
+    const w = window.open("", "_blank", "width=700,height=800");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>Poliçe Özeti</title></head><body>${printContent}</body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col animate-fade-in-up">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col animate-fade-in-up overflow-hidden">
+
+          {/* Demo banner */}
+          {isDemo && (
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-center text-xs font-bold px-4 py-2.5 flex items-center justify-center gap-2 flex-shrink-0">
+              <span>⚠️</span>
+              <span>DEMO POLİÇE — Gerçek poliçe değildir, hukuki geçerliliği yoktur</span>
+            </div>
+          )}
 
           {/* Header */}
-          <div className="px-6 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-2xl shrink-0">
+          <div className={`px-6 py-5 flex-shrink-0 ${isDemo
+            ? "bg-gradient-to-r from-amber-600 to-orange-600"
+            : "bg-gradient-to-r from-indigo-600 to-violet-600"}`}>
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl">📄</div>
+                <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center text-2xl shadow-inner">
+                  {policy.policy_type === "Kasko" ? "🚗" : policy.policy_type === "Trafik" ? "🛣️" : policy.policy_type === "Konut" ? "🏠" : policy.policy_type === "Sağlık" ? "❤️" : policy.policy_type === "DASK" ? "🌍" : "🛡️"}
+                </div>
                 <div>
-                  <h2 className="font-bold text-white text-base">{policy.policy_type}</h2>
-                  <p className="text-blue-100 text-xs mt-0.5">{policy.customers?.name ?? "—"}</p>
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-bold text-white text-base">{policy.policy_type}</h2>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${src.cls}`}>
+                      {src.icon} {src.label}
+                    </span>
+                  </div>
+                  <p className="text-white/70 text-xs mt-0.5">{policy.customers?.name ?? "—"}</p>
                 </div>
               </div>
-              <button onClick={onClose} className="text-white/70 hover:text-white p-1 transition-colors">
+              <button onClick={onClose} className="text-white/60 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-all">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            {/* Badge */}
+
+            {/* Renewal countdown */}
             <div className="mt-4 flex items-center gap-3">
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${badge.cls}`}>
                 <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
                 {badge.label}
               </span>
-              {days > 0 && days <= 30 && (
-                <span className="text-white/80 text-xs">Yenileme zamanı yaklaşıyor</span>
+              {!expired && policy.status === "Aktif" && days <= 30 && (
+                <span className="text-white/80 text-xs">⏰ Yenileme zamanı yaklaşıyor</span>
+              )}
+              {!expired && policy.status === "Aktif" && days > 30 && (
+                <span className="text-white/60 text-xs">{fmtDate(policy.end_date)}&apos;de bitiyor</span>
               )}
             </div>
           </div>
 
-          {/* Content */}
-          <div className="overflow-y-auto flex-1 p-6 space-y-5">
+          {/* Scrollable content */}
+          <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
-            {/* Poliçe Bilgileri */}
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Poliçe Bilgileri</p>
-              <div className="space-y-0 bg-gray-50/60 rounded-xl px-4 divide-y divide-gray-100">
-                <InfoRow label="Durum" value={policy.status} />
-                <InfoRow label="Başlangıç" value={policy.start_date} />
-                <InfoRow label="Bitiş" value={policy.end_date} />
-                {policy.premium != null && (
-                  <InfoRow label="Prim" value={`₺${policy.premium.toLocaleString("tr-TR")}`} />
-                )}
-                {policy.commission != null && (
-                  <InfoRow label="Komisyon" value={`₺${policy.commission.toLocaleString("tr-TR")}`} />
-                )}
-                {policy.insurance_company && (
-                  <InfoRow label="Şirket" value={policy.insurance_company} />
-                )}
-                {policy.policy_no && (
-                  <InfoRow label="Poliçe No" value={policy.policy_no} />
-                )}
+            {/* Kalan gün kartı — sadece aktif + yaklaşan */}
+            {policy.status === "Aktif" && !expired && days <= 30 && (
+              <div className={`rounded-2xl p-4 flex items-center gap-4 border-2 ${
+                days <= 5  ? "bg-red-50 border-red-200" :
+                days <= 15 ? "bg-amber-50 border-amber-200" :
+                             "bg-yellow-50 border-yellow-200"
+              }`}>
+                <div className={`flex-shrink-0 w-14 h-14 rounded-full border-4 flex flex-col items-center justify-center ${ringCls} border-current`}>
+                  <span className={`text-xl font-black leading-none ${ringCls.split(" ")[0]}`}>{days}</span>
+                  <span className={`text-[9px] font-bold uppercase ${ringCls.split(" ")[0]}`}>gün</span>
+                </div>
+                <div>
+                  <p className={`font-bold text-sm ${days <= 5 ? "text-red-700" : days <= 15 ? "text-amber-700" : "text-yellow-700"}`}>
+                    {days <= 5 ? "Kritik — çok yakında bitiyor!" : days <= 15 ? "Yakında bitiyor" : "Yenileme zamanı yaklaşıyor"}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${days <= 5 ? "text-red-600" : days <= 15 ? "text-amber-600" : "text-yellow-600"}`}>
+                    Bitiş: {fmtDate(policy.end_date)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ─── Poliçe bilgileri ─── */}
+            <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-white">
+                <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Poliçe Bilgileri</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {[
+                  ["Durum", <span key="st" className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${policy.status === "Aktif" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{policy.status}</span>],
+                  ["Başlangıç", fmtDate(policy.start_date)],
+                  ["Bitiş",     fmtDate(policy.end_date)],
+                  policy.premium    != null ? ["Prim",      `₺${policy.premium.toLocaleString("tr-TR")}`]    : null,
+                  policy.commission != null ? ["Komisyon",  `₺${policy.commission.toLocaleString("tr-TR")}`] : null,
+                  policy.insurance_company  ? ["Şirket",   policy.insurance_company] : null,
+                  policy.policy_no          ? ["Poliçe No", <span key="pno" className="font-mono text-sm font-semibold">{policy.policy_no}</span>] : null,
+                  policy.issued_at          ? ["Kesim Tarihi", fmtDate(policy.issued_at)] : null,
+                ].filter(Boolean).map((row) => {
+                  const [k, v] = row as [string, React.ReactNode];
+                  return (
+                    <div key={k} className="flex items-center justify-between px-4 py-2.5">
+                      <span className="text-xs text-slate-400 font-medium w-28 shrink-0">{k}</span>
+                      <span className="text-sm text-slate-800 font-medium text-right">{v}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Müşteri */}
+            {/* ─── Müşteri ─── */}
             {policy.customers && (
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Müşteri</p>
-                <div className="bg-gray-50/60 rounded-xl px-4 divide-y divide-gray-100">
-                  <InfoRow label="Ad Soyad" value={policy.customers.name} />
+              <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-white">
+                  <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Müşteri</span>
+                </div>
+                <div className="p-4 flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm flex-shrink-0">
+                    {policy.customers.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-slate-900 truncate">{policy.customers.name}</p>
+                    {policy.customers.phone && (
+                      <a href={`tel:${policy.customers.phone}`} className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors">
+                        📞 {policy.customers.phone}
+                      </a>
+                    )}
+                  </div>
                   {policy.customers.phone && (
-                    <InfoRow label="Telefon" value={policy.customers.phone} />
+                    <a
+                      href={`https://wa.me/${policy.customers.phone.replace(/\D/g, "").replace(/^0/, "90")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-sm shadow-emerald-500/25"
+                    >
+                      {WA_SVG}
+                      WA
+                    </a>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Notlar */}
+            {/* ─── Araç Bilgileri ─── */}
+            {hasVehicle && (
+              <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-white">
+                  <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H4a2 2 0 01-2-2V6a2 2 0 012-2h9.5L17 9.5V14a2 2 0 01-2 2h-1m-6 4a2 2 0 100-4 2 2 0 000 4zm8 0a2 2 0 100-4 2 2 0 000 4z" /></svg>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Araç Bilgileri</span>
+                </div>
+                <div className="p-4 grid grid-cols-2 gap-3">
+                  {[
+                    ["Plaka",       pd.plaka,       true],
+                    ["Marka",       pd.marka,       false],
+                    ["Model",       pd.model,       false],
+                    ["Model Yılı",  pd.yil,         false],
+                    ["Ruhsat Seri", pd.belge_seri,  true],
+                  ].filter(([,v]) => v).map(([k, v, mono]) => (
+                    <div key={k as string} className="bg-white rounded-xl p-3 border border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{k as string}</p>
+                      <p className={`font-bold text-slate-800 truncate ${mono ? "font-mono text-sm" : "text-sm"}`}>{v as string}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ─── Notlar ─── */}
             {policy.note && (
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Notlar</p>
-                <p className="text-sm text-slate-700 bg-gray-50 rounded-xl p-4 leading-relaxed">{policy.note}</p>
+              <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-white">
+                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Notlar</span>
+                </div>
+                <p className="text-sm text-slate-700 p-4 leading-relaxed">{policy.note}</p>
               </div>
             )}
           </div>
 
           {/* Footer actions */}
-          <div className="px-6 py-4 border-t border-gray-100 shrink-0 space-y-2">
-            {/* WhatsApp + Düzenle */}
+          <div className="px-5 py-4 border-t border-slate-100 flex-shrink-0 space-y-2 bg-white">
+
+            {/* WhatsApp Hatırlatma — belirgin */}
+            <button
+              onClick={() => setWaOpen(true)}
+              className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white text-sm font-bold transition-all shadow-md shadow-emerald-500/20"
+            >
+              {WA_SVG}
+              WhatsApp Hatırlatma Oluştur
+            </button>
+
+            {/* Yazdır + Düzenle */}
             <div className="flex gap-2">
               <button
-                onClick={() => setWaOpen(true)}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 border border-emerald-100 transition-all"
+                onClick={handlePrint}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold transition-all border border-slate-200"
               >
-                {WA_SVG}
-                Hatırlat
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                  <rect width="12" height="8" x="6" y="14"/>
+                </svg>
+                Yazdır / PDF
               </button>
               <button
                 onClick={() => setEditing(true)}
-                className="flex-1 py-2.5 rounded-xl bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 border border-blue-100 transition-all"
+                className="flex-1 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 border border-indigo-100 transition-all"
               >
                 ✏️ Düzenle
               </button>
@@ -559,7 +734,7 @@ function PolicyDetailModal({
           phone={policy.customers?.phone ?? ""}
           insuranceType={policy.policy_type}
           onClose={() => setWaOpen(false)}
-          onSent={() => setToast("WhatsApp mesajı hazırlandı")}
+          onSent={() => setToast("WhatsApp hatırlatması hazırlandı")}
         />
       )}
 
@@ -672,7 +847,7 @@ export default function PoliciesPage() {
   const fetchPolicies = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase.from("policies") as any)
-      .select("*, customers(name, phone)")
+      .select("*, customers(name, phone), quote_runs(product_data)")
       .order("end_date", { ascending: true });
     if (role === "agency_user" && agencyId) {
       q = q.eq("agency_id", agencyId);
