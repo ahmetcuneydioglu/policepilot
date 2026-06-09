@@ -38,20 +38,24 @@ type QuoteRun = {
 };
 
 type QuoteResult = {
-  id:            string;
-  quote_run_id:  string;
-  company_name:  string;
-  price:         number | null;
-  installment:   string | null;
-  note:          string | null;
-  status:        string;         // engine status OR legacy Aktif/Teklif Yok/Seçildi
-  source_type:   string | null;
-  provider_name: string | null;
-  error_source:  string | null;
-  error_code:    string | null;
-  error_message: string | null;
-  action_hint:   string | null;
-  created_at:    string;
+  id:              string;
+  quote_run_id:    string;
+  company_name:    string;
+  price:           number | null;
+  installment:     string | null;
+  note:            string | null;
+  status:          string;         // engine status OR legacy Aktif/Teklif Yok/Seçildi
+  source_type:     string | null;
+  provider_name:   string | null;
+  error_source:    string | null;
+  error_code:      string | null;
+  error_message:   string | null;
+  action_hint:     string | null;
+  // Poliçeleştirme alanları
+  can_issue_policy: boolean | null;
+  payment_status:   string | null;
+  policy_status:    string | null;
+  created_at:       string;
 };
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -640,10 +644,10 @@ export default function QuoteRunDetailPage() {
                 {/* Col headers */}
                 <div className="grid grid-cols-12 gap-2 px-5 py-2.5 bg-slate-50/80 border-b border-slate-50">
                   <div className="col-span-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">#</div>
-                  <div className="col-span-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Şirket</div>
+                  <div className="col-span-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Şirket</div>
                   <div className="col-span-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fiyat / Durum</div>
                   <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Taksit</div>
-                  <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">İşlem</div>
+                  <div className="col-span-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">İşlem</div>
                 </div>
 
                 <div className="divide-y divide-slate-50">
@@ -676,7 +680,7 @@ export default function QuoteRunDetailPage() {
                         </div>
 
                         {/* Company */}
-                        <div className="col-span-4 flex items-center gap-2.5">
+                        <div className="col-span-3 flex items-center gap-2.5">
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
                             isBest  ? "bg-emerald-100 text-emerald-700" :
                             hasErr  ? "bg-rose-50 text-rose-400"         :
@@ -718,13 +722,28 @@ export default function QuoteRunDetailPage() {
                         </div>
 
                         {/* Actions */}
-                        <div className="col-span-2 flex items-center justify-end gap-1.5">
+                        <div className="col-span-3 flex items-center justify-end gap-1.5 flex-wrap">
                           {r.price != null && run.status !== "Kazanıldı" && rStatus === "success" && (
                             <button onClick={() => markWon(r)}
                               className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-bold hover:bg-emerald-100 transition-colors ring-1 ring-emerald-200"
                             >
                               <CheckCircle2 className="w-3 h-3" /> Seç
                             </button>
+                          )}
+                          {/* Poliçeleştir butonu — başarılı teklifler için */}
+                          {rStatus === "success" && r.price != null && (
+                            r.policy_status === "issued" ? (
+                              <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 text-teal-700 text-[10px] font-bold ring-1 ring-teal-200">
+                                <Check className="w-3 h-3" /> Kesildi
+                              </span>
+                            ) : (
+                              <Link href={`/policies/issue/${r.id}`}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-50 text-violet-700 text-[10px] font-bold hover:bg-violet-100 transition-colors ring-1 ring-violet-200"
+                                title="Bu tekliften poliçe kes"
+                              >
+                                <FileText className="w-3 h-3" /> Poliçeleştir
+                              </Link>
+                            )
                           )}
                           {hasErr && (
                             <button onClick={() => setErrorModal(r)}
