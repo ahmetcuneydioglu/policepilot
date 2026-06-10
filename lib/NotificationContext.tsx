@@ -325,10 +325,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   // ── Renewal notifications — notifications tablosu realtime aboneliği ──────
   // Cron job'ın ürettiği yenileme bildirimleri buradan browser notification'a dönüşür.
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading) {
+      console.log("[NOTIF] auth yükleniyor, abonelik bekliyor");
+      return;
+    }
 
     const rtFilter = realtimeAgencyFilter(role, agencyId);
-    if (rtFilter === null) return; // agency_user, henüz agencyId yok
+    if (rtFilter === null) {
+      console.log("[NOTIF] agencyId yok, abonelik atlandı (role:", role, ")");
+      return; // agency_user, henüz agencyId yok
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const insertConfig: Record<string, any> = {
@@ -339,6 +345,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (rtFilter !== undefined) insertConfig.filter = rtFilter;
 
     const channelName = agencyId ? `notif-renewals-${agencyId}` : "notif-renewals-global";
+    console.log("[NOTIF] kanal oluşturuluyor:", channelName, "filter:", rtFilter ?? "(yok — super_admin)");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const channel = (supabase.channel(channelName) as any)
@@ -347,11 +354,34 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         insertConfig,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (payload: any) => {
+          console.log("[NOTIF] insert received", payload);
           const notif = payload.new;
-          if (!notif?.id) return;
+          if (!notif?.id) {
+            console.warn("[NOTIF] payload.new boş veya id yok — atlandı");
+            return;
+          }
+
+          // Bell badge: bildirimi zil listesine ekle → unreadCount artar
+          setNotifications((prev) => [
+            {
+              id:             notif.id,
+              request_type:   notif.type === "renewal" ? "Yenileme" : (notif.type ?? "Bildirim"),
+              customer_name:  notif.title ?? "PoliçePilot",
+              customer_phone: "",
+              created_at:     notif.created_at ?? new Date().toISOString(),
+              isRead:         false,
+            },
+            ...prev,
+          ].slice(0, 20));
 
           // Browser notification
-          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          const perm = typeof window !== "undefined" && "Notification" in window
+            ? Notification.permission
+            : "unsupported";
+          console.log("[NOTIF] Notification.permission =", perm);
+
+          if (perm === "granted") {
+            console.log("[NOTIF] showing browser notification", { title: notif.title, body: notif.body, link: notif.link });
             const n = new Notification(notif.title ?? "PoliçePilot", {
               body: notif.body ?? "",
               icon: "/favicon.ico",
@@ -361,6 +391,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               window.focus();
               window.location.href = notif.link ?? "/renewals";
             };
+          } else {
+            console.warn("[NOTIF] browser notification GÖSTERİLMEDİ — permission:", perm);
           }
 
           triggerBellShake();
@@ -368,9 +400,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           if (soundEnabledRef.current) playBeep();
         }
       )
-      .subscribe();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .subscribe((status: any, err: any) => {
+        if (status === "SUBSCRIBED") console.log("[NOTIF] subscribed —", channelName);
+        else console.log("[NOTIF] kanal durumu:", status, err ? `hata: ${err.message ?? err}` : "");
+      });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      console.log("[NOTIF] kanal kapatılıyor:", channelName);
+      supabase.removeChannel(channel);
+    };
   }, [authLoading, role, agencyId, triggerBellShake, playBeep]);
 
   const markAllRead = useCallback(() => {
