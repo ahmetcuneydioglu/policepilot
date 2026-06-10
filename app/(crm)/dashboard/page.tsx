@@ -14,7 +14,7 @@ import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity, Car, Home,
   Heart, Shield, ArrowUpRight, Sparkles, Plus,
-  AlertTriangle, CalendarClock, ChevronRight,
+  AlertTriangle, CalendarClock, ChevronRight, RefreshCw,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ export default function DashboardPage() {
 
   const [cardHighlighted, setCardHighlighted] = useState(false);
   const [isDemo, setIsDemo]         = useState(false);
-  const [stats, setStats]           = useState({ customers: 0, requests: 0, renewals: 0, today: 0 });
+  const [stats, setStats]           = useState({ customers: 0, requests: 0, renewals: 0, today: 0, renewedThisMonth: 0 });
   const [feedItems, setFeedItems]   = useState<FeedItem[]>([]);
   const [recentReqs, setRecentReqs] = useState<RecentRequest[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -176,7 +176,7 @@ export default function DashboardPage() {
     setLoading(true);
 
     if (demo) {
-      setStats({ customers: 128, requests: 34, renewals: 18, today: 9 });
+      setStats({ customers: 128, requests: 34, renewals: 18, today: 9, renewedThisMonth: 42 });
       const seed = FEED_POOL.slice(0, 6).map((item, i) => ({
         ...item,
         id: `seed-${i}`,
@@ -209,6 +209,7 @@ export default function DashboardPage() {
         withAgencyFilter(supabase.from("requests").select("id, request_type, status, created_at, customers(name)").order("created_at", { ascending: false }).limit(6), role, agencyId),
         withAgencyFilter(supabase.from("policies").select("policy_type, premium").eq("status", "Aktif").lte("end_date", in30).gte("end_date", today), role, agencyId),
         withAgencyFilter(supabase.from("policies").select("end_date").eq("status", "Aktif").gte("end_date", new Date(Date.now() - 60 * 864e5).toISOString().split("T")[0]).lte("end_date", new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0]), role, agencyId),
+        withAgencyFilter(supabase.from("policies").select("*", { count: "exact", head: true }).eq("renewal_status", "completed").gte("renewed_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()), role, agencyId),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ]) as any[];
 
@@ -221,6 +222,7 @@ export default function DashboardPage() {
         { data: recentRequests },
         { data: renewalPolicies },
         { data: urgentPolicies },
+        { count: renewedThisMonth },
       ] = results;
 
       // Acil İşler: yarın / bu hafta / geciken segmentleri
@@ -242,10 +244,11 @@ export default function DashboardPage() {
       setRenewalInfo({ premium: renewalPremium, topBranch });
 
       setStats({
-        customers:  totalCustomers      ?? 0,
-        requests:   openRequests        ?? 0,
-        renewals:   upcomingRenewals    ?? 0,
-        today:      todayCount          ?? 0,
+        customers:        totalCustomers   ?? 0,
+        requests:         openRequests     ?? 0,
+        renewals:         upcomingRenewals ?? 0,
+        today:            todayCount       ?? 0,
+        renewedThisMonth: renewedThisMonth ?? 0,
       });
 
       // Build feed from real data only (no pool fallback for fresh agencies)
@@ -347,10 +350,11 @@ export default function DashboardPage() {
 
   // ── Stat card definitions ────────────────────────────────────────────────
   const STAT_CARDS = [
-    { title: "Toplam Müşteri",    value: stats.customers, Icon: Users,     grad: "from-blue-500 to-blue-600",       bg: "bg-blue-50",    text: "text-blue-600",    badge: "+4 bu hafta",   badgeCls: "text-emerald-700 bg-emerald-50" },
-    { title: "Açık Teklif",       value: stats.requests,  Icon: FileText,  grad: "from-indigo-500 to-indigo-600",   bg: "bg-indigo-50",  text: "text-indigo-600",  badge: "Yeni+İşlemde",  badgeCls: "text-gray-500 bg-gray-50" },
-    { title: "Yaklaşan Yenileme", value: stats.renewals,  Icon: Clock,     grad: "from-amber-500 to-orange-500",    bg: "bg-amber-50",   text: "text-amber-600",   badge: "30 gün içinde", badgeCls: "text-amber-700 bg-amber-50" },
-    { title: "Bugün Eklenen",     value: stats.today,     Icon: Activity,  grad: "from-emerald-500 to-teal-500",    bg: "bg-emerald-50", text: "text-emerald-600", badge: "bugün",         badgeCls: "text-emerald-700 bg-emerald-50" },
+    { title: "Toplam Müşteri",    value: stats.customers,        Icon: Users,     grad: "from-blue-500 to-blue-600",       bg: "bg-blue-50",    text: "text-blue-600",    badge: "+4 bu hafta",   badgeCls: "text-emerald-700 bg-emerald-50" },
+    { title: "Açık Teklif",       value: stats.requests,         Icon: FileText,  grad: "from-indigo-500 to-indigo-600",   bg: "bg-indigo-50",  text: "text-indigo-600",  badge: "Yeni+İşlemde",  badgeCls: "text-gray-500 bg-gray-50" },
+    { title: "Yaklaşan Yenileme", value: stats.renewals,         Icon: Clock,     grad: "from-amber-500 to-orange-500",    bg: "bg-amber-50",   text: "text-amber-600",   badge: "30 gün içinde", badgeCls: "text-amber-700 bg-amber-50" },
+    { title: "Bu Ay Yenilenen",   value: stats.renewedThisMonth, Icon: RefreshCw, grad: "from-violet-500 to-purple-600",   bg: "bg-violet-50",  text: "text-violet-600",  badge: "tamamlandı",    badgeCls: "text-violet-700 bg-violet-50" },
+    { title: "Bugün Eklenen",     value: stats.today,            Icon: Activity,  grad: "from-emerald-500 to-teal-500",    bg: "bg-emerald-50", text: "text-emerald-600", badge: "bugün",         badgeCls: "text-emerald-700 bg-emerald-50" },
   ];
 
   // ── Show onboarding for agency_user with no agency ────────────────────────
@@ -539,7 +543,7 @@ export default function DashboardPage() {
       )}
 
       {/* ══ STAT CARDS ══════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {STAT_CARDS.map((card) => (
           <div
             key={card.title}

@@ -531,6 +531,20 @@ function PolicyDetailModal({
             </div>
           )}
 
+          {/* Yenilendi banner — bu poliçe yeni bir poliçeyle yenilendi */}
+          {policy.renewal_status === "completed" && (
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-2.5 flex items-center justify-center gap-2 flex-shrink-0">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold">
+                ✅ Yenilendi
+              </span>
+              {policy.renewed_at && (
+                <span className="text-[11px] text-white/85">
+                  — Bu poliçe {new Date(policy.renewed_at).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" })} tarihinde yeni bir poliçe ile yenilenmiştir.
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Header */}
           <div className={`px-6 py-5 flex-shrink-0 ${isDemo
             ? "bg-gradient-to-r from-amber-600 to-orange-600"

@@ -76,6 +76,8 @@ export async function POST(request: NextRequest) {
       create_customer,   // boolean
       // Şirket teklifleri
       results,           // Array<{ company_name, price, installment, note, status, source_type, ... }>
+      // Yenileme akışı: bu run hangi poliçenin yenilemesi?
+      renewal_of_policy_id,
     } = body;
 
     // ── Oturum doğrulama ──────────────────────────────────────────────────
@@ -179,6 +181,8 @@ export async function POST(request: NextRequest) {
         error_count:     error_count    ?? 0,
         run_started_at:  new Date().toISOString(),
         run_finished_at: new Date().toISOString(),
+        // Yenileme ilişkisi
+        renewal_of_policy_id: renewal_of_policy_id ?? null,
       })
       .select("id")
       .single();
@@ -186,6 +190,16 @@ export async function POST(request: NextRequest) {
     if (runErr) {
       console.error("[api/quote-runs] run insert error:", runErr);
       return NextResponse.json({ error: runErr.message }, { status: 500 });
+    }
+
+    // ── Yenileme akışı: eski poliçeyi "quoted" işaretle ───────────────────
+    if (renewal_of_policy_id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: renErr } = await (admin.from("policies") as any)
+        .update({ renewal_status: "quoted" })
+        .eq("id", renewal_of_policy_id)
+        .neq("renewal_status", "completed"); // tamamlanmışı geri alma
+      if (renErr) console.warn("[api/quote-runs] renewal_status update warning:", renErr.message);
     }
 
     // ── quote_results ekle (varsa) ────────────────────────────────────────

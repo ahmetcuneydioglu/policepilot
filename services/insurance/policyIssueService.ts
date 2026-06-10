@@ -107,6 +107,8 @@ export async function issuePolicy(input: IssuePolicyInput): Promise<IssuePolicyR
       payment_method:  paymentResult.method,
       issued_at:       issuedAt,
       source:          sourceType,   // "demo" | "manual" | "api" | …
+      // Yenileme ilişkisi: bu poliçe eski bir poliçenin yenilemesi mi?
+      renewed_from_policy_id: run.renewal_of_policy_id ?? null,
       // Notlar
       note: isDemo
         ? `Demo poliçe. Gerçek poliçe değildir. İşlem: ${paymentResult.transactionId}`
@@ -138,6 +140,20 @@ export async function issuePolicy(input: IssuePolicyInput): Promise<IssuePolicyR
 
   if (runUpdErr) {
     console.warn("[policyIssueService] quote_run status update warning:", runUpdErr.message);
+  }
+
+  // ── 4. Yenileme akışı: eski poliçeyi "completed" işaretle ─────────────────
+  // Eski kayıt Yenilemeler listesinden düşer; acente aynı müşteri için
+  // tekrar teklif çalışmak zorunda kalmaz.
+  if (run.renewal_of_policy_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: renewErr } = await (admin.from("policies") as any)
+      .update({ renewal_status: "completed", renewed_at: issuedAt })
+      .eq("id", run.renewal_of_policy_id);
+
+    if (renewErr) {
+      console.warn("[policyIssueService] renewal completion warning:", renewErr.message);
+    }
   }
 
   return {

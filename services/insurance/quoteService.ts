@@ -36,6 +36,7 @@ export interface QuoteRunDetail {
   product_type:   string;
   product_data:   Record<string, string>;
   provider_type:  string | null;
+  renewal_of_policy_id?: string | null; // yenileme akışından açıldıysa kaynak poliçe
 }
 
 export interface QuoteIssueContext {

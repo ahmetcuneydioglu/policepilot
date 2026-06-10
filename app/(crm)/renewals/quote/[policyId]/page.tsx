@@ -198,6 +198,7 @@ export default function RenewalAutoQuotePage() {
               success_count:   successN,
               error_count:     errorN,
               results,
+              renewal_of_policy_id: pol.id, // eski poliçe → quoted, poliçeleşince → completed
             }),
           });
           const data = await res.json();

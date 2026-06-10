@@ -29,6 +29,7 @@ type RenewalPolicy = {
   agency_id: string | null;
   insurance_company: string | null;
   policy_no: string | null;
+  renewal_status: string | null; // pending | quoted | completed
   customers: { name: string; phone: string } | null;
 };
 
@@ -143,8 +144,9 @@ export default function RenewalsPage() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase.from("policies") as any)
-      .select("id, customer_id, policy_type, start_date, end_date, premium, status, agency_id, insurance_company, policy_no, customers(name, phone)")
+      .select("id, customer_id, policy_type, start_date, end_date, premium, status, agency_id, insurance_company, policy_no, renewal_status, customers(name, phone)")
       .eq("status", "Aktif")
+      .neq("renewal_status", "completed") // tamamlanan yenilemeler listeden düşer
       .gte("end_date", from)
       .lte("end_date", to)
       .order("end_date", { ascending: true });
@@ -359,7 +361,14 @@ export default function RenewalsPage() {
 
                     {/* Poliçe */}
                     <div className="col-span-2 min-w-0">
-                      <p className="text-xs font-semibold text-slate-700">{p.policy_type}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-xs font-semibold text-slate-700">{p.policy_type}</p>
+                        {p.renewal_status === "quoted" && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[9px] font-bold ring-1 ring-violet-200">
+                            <Zap className="w-2.5 h-2.5" /> Teklif Çalışıldı
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-slate-400 truncate">{p.insurance_company ?? "—"}</p>
                     </div>
 

@@ -42,5 +42,9 @@ export type Policy = {
   payment_method?: string | null;
   issued_at?: string | null;
   source?: string | null;         // "demo" | "manual" | "api" | "robot" | "gateway"
+  // Yenileme takibi
+  renewal_status?: string | null;          // pending | quoted | completed
+  renewed_from_policy_id?: string | null;  // bu poliçe hangi eski poliçenin yenilemesi
+  renewed_at?: string | null;              // eski poliçenin yenilenme tarihi
   customers?: { name: string; phone: string } | null;
 };
