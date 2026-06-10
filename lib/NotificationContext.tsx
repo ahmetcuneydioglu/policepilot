@@ -322,6 +322,57 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [authLoading, role, agencyId, addNotification]);
 
+  // ── Renewal notifications — notifications tablosu realtime aboneliği ──────
+  // Cron job'ın ürettiği yenileme bildirimleri buradan browser notification'a dönüşür.
+  useEffect(() => {
+    if (authLoading) return;
+
+    const rtFilter = realtimeAgencyFilter(role, agencyId);
+    if (rtFilter === null) return; // agency_user, henüz agencyId yok
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const insertConfig: Record<string, any> = {
+      event: "INSERT",
+      schema: "public",
+      table: "notifications",
+    };
+    if (rtFilter !== undefined) insertConfig.filter = rtFilter;
+
+    const channelName = agencyId ? `notif-renewals-${agencyId}` : "notif-renewals-global";
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const channel = (supabase.channel(channelName) as any)
+      .on(
+        "postgres_changes",
+        insertConfig,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (payload: any) => {
+          const notif = payload.new;
+          if (!notif?.id) return;
+
+          // Browser notification
+          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+            const n = new Notification(notif.title ?? "PoliçePilot", {
+              body: notif.body ?? "",
+              icon: "/favicon.ico",
+              tag:  `pp-notif-${notif.id}`, // aynı bildirim iki kez gösterilmez
+            });
+            n.onclick = () => {
+              window.focus();
+              window.location.href = notif.link ?? "/renewals";
+            };
+          }
+
+          triggerBellShake();
+          setNewNotifAt(Date.now());
+          if (soundEnabledRef.current) playBeep();
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [authLoading, role, agencyId, triggerBellShake, playBeep]);
+
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     if (typeof document !== "undefined") document.title = "PoliçePilot";

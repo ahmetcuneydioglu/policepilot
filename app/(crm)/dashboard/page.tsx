@@ -14,6 +14,7 @@ import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity, Car, Home,
   Heart, Shield, ArrowUpRight, Sparkles, Plus,
+  AlertTriangle, CalendarClock, ChevronRight,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -141,6 +142,7 @@ export default function DashboardPage() {
   const [agencySlug, setAgencySlug]   = useState<string | null>(null);
   const [linkCopied, setLinkCopied]   = useState(false);
   const [renewalInfo, setRenewalInfo] = useState<{ premium: number; topBranch: string | null }>({ premium: 0, topBranch: null });
+  const [urgent, setUrgent] = useState<{ tomorrow: number; thisWeek: number; overdue: number }>({ tomorrow: 0, thisWeek: 0, overdue: 0 });
   const feedIdxRef                  = useRef(0);
 
   // ── Push a new item to the live feed with fade-in animation ───────────────
@@ -206,6 +208,7 @@ export default function DashboardPage() {
         withAgencyFilter(supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4), role, agencyId),
         withAgencyFilter(supabase.from("requests").select("id, request_type, status, created_at, customers(name)").order("created_at", { ascending: false }).limit(6), role, agencyId),
         withAgencyFilter(supabase.from("policies").select("policy_type, premium").eq("status", "Aktif").lte("end_date", in30).gte("end_date", today), role, agencyId),
+        withAgencyFilter(supabase.from("policies").select("end_date").eq("status", "Aktif").gte("end_date", new Date(Date.now() - 60 * 864e5).toISOString().split("T")[0]).lte("end_date", new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0]), role, agencyId),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ]) as any[];
 
@@ -217,7 +220,17 @@ export default function DashboardPage() {
         { data: recentCustomers },
         { data: recentRequests },
         { data: renewalPolicies },
+        { data: urgentPolicies },
       ] = results;
+
+      // Acil İşler: yarın / bu hafta / geciken segmentleri
+      const tomorrowStr = new Date(Date.now() + 864e5).toISOString().split("T")[0];
+      const up = (urgentPolicies ?? []) as { end_date: string }[];
+      setUrgent({
+        tomorrow: up.filter(p => p.end_date === tomorrowStr).length,
+        thisWeek: up.filter(p => p.end_date >= today && p.end_date <= new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0]).length,
+        overdue:  up.filter(p => p.end_date < today).length,
+      });
 
       // Yenileme detayları: tahmini prim + en çok yenilenecek branş
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -483,6 +496,47 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ══ ACİL İŞLER ══════════════════════════════════════════════════════ */}
+      {!loading && (urgent.tomorrow > 0 || urgent.thisWeek > 0 || urgent.overdue > 0) && (
+        <div className="rounded-2xl border-2 border-red-200/70 bg-gradient-to-r from-red-50/80 via-orange-50/60 to-amber-50/50 p-5">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-red-500 flex items-center justify-center shadow-md shadow-red-500/30">
+                <AlertTriangle className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900">Acil İşler</p>
+                <p className="text-[11px] text-slate-400">Yenileme takibi gerektiren poliçeler</p>
+              </div>
+            </div>
+            <Link href="/renewals"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-red-200 text-red-600 text-xs font-bold hover:bg-red-50 transition-colors shadow-sm"
+            >
+              Yenilemelere Git <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { label: "Yarın Bitecek",    value: urgent.tomorrow, Icon: CalendarClock, accent: "text-red-600",    ring: "ring-red-200",    iconBg: "bg-red-100 text-red-600",       filter: "Bugün" },
+              { label: "Bu Hafta Bitecek", value: urgent.thisWeek, Icon: Clock,         accent: "text-orange-600", ring: "ring-orange-200", iconBg: "bg-orange-100 text-orange-600", filter: "Bu Hafta" },
+              { label: "Geciken Yenileme", value: urgent.overdue,  Icon: AlertTriangle, accent: "text-rose-700",   ring: "ring-rose-200",   iconBg: "bg-rose-100 text-rose-600",     filter: "Geciken" },
+            ].map(c => (
+              <Link key={c.label} href="/renewals"
+                className={`flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl p-3.5 ring-1 ${c.ring} hover:shadow-md hover:-translate-y-0.5 transition-all`}
+              >
+                <div className={`w-9 h-9 rounded-xl ${c.iconBg} flex items-center justify-center flex-shrink-0`}>
+                  <c.Icon className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-xl font-bold leading-none ${c.accent}`}>{c.value}</p>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mt-1">{c.label}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ══ STAT CARDS ══════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
