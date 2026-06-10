@@ -123,6 +123,7 @@ export async function getQuoteIssueContext(quoteResultId: string): Promise<Quote
       product_type:   run.product_type,
       product_data:   run.product_data ?? {},
       provider_type:  run.provider_type,
+      renewal_of_policy_id: run.renewal_of_policy_id ?? null,
     },
   };
 }

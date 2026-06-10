@@ -142,17 +142,33 @@ export async function issuePolicy(input: IssuePolicyInput): Promise<IssuePolicyR
     console.warn("[policyIssueService] quote_run status update warning:", runUpdErr.message);
   }
 
-  // ── 4. Yenileme akışı: eski poliçeyi "completed" işaretle ─────────────────
-  // Eski kayıt Yenilemeler listesinden düşer; acente aynı müşteri için
-  // tekrar teklif çalışmak zorunda kalmaz.
+  // ── 4. Yenileme akışı: eski poliçeyi kapat ────────────────────────────────
+  // renewal_status=completed → Yenilemeler listesinden düşer
+  // status=Yenilendi         → Poliçeler ekranında "✅ Yenilendi" rozeti
   if (run.renewal_of_policy_id) {
+    // Kritik alan önce: renewal_status=completed → Yenilemeler listesinden düşer
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: renewErr } = await (admin.from("policies") as any)
       .update({ renewal_status: "completed", renewed_at: issuedAt })
       .eq("id", run.renewal_of_policy_id);
 
     if (renewErr) {
-      console.warn("[policyIssueService] renewal completion warning:", renewErr.message);
+      // Yenileme kapanışı poliçe kesimini engellememeli; ama sessizce de yutulmamalı
+      console.error("[policyIssueService] renewal completion FAILED:", renewErr.message);
+    }
+
+    // status=Yenilendi ayrı update: check constraint migration'ı çalıştırılmadıysa
+    // bu adım başarısız olsa bile completed işareti korunur
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: statusErr } = await (admin.from("policies") as any)
+      .update({ status: "Yenilendi" })
+      .eq("id", run.renewal_of_policy_id);
+
+    if (statusErr) {
+      console.error(
+        "[policyIssueService] old policy status update FAILED (renewal_completion_fix_migration.sql çalıştırıldı mı?):",
+        statusErr.message
+      );
     }
   }
 

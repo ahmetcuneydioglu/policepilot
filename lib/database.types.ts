@@ -9,7 +9,7 @@ export type Customer = {
 
 export type RequestStatus = "Yeni" | "İşlemde" | "Tamamlandı" | "İptal";
 
-export type PolicyStatus = "Aktif" | "Pasif";
+export type PolicyStatus = "Aktif" | "Pasif" | "Yenilendi";
 
 export type Request = {
   id: string;

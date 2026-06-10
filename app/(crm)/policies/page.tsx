@@ -28,6 +28,7 @@ function isExpired(endDate: string): boolean {
 }
 
 function expiryBadge(endDate: string, status: PolicyStatus) {
+  if (status === "Yenilendi") return { label: "✅ Yenilendi", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
   if (status === "Pasif") return { label: "Pasif", cls: "bg-gray-100 text-gray-500 border-gray-200" };
   if (isExpired(endDate)) return { label: "Süresi Doldu", cls: "bg-red-100 text-red-700 border-red-200" };
   const days = daysLeft(endDate);
@@ -532,16 +533,14 @@ function PolicyDetailModal({
           )}
 
           {/* Yenilendi banner — bu poliçe yeni bir poliçeyle yenilendi */}
-          {policy.renewal_status === "completed" && (
+          {(policy.renewal_status === "completed" || policy.status === "Yenilendi") && (
             <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-2.5 flex items-center justify-center gap-2 flex-shrink-0">
               <span className="inline-flex items-center gap-1.5 text-xs font-bold">
                 ✅ Yenilendi
               </span>
-              {policy.renewed_at && (
-                <span className="text-[11px] text-white/85">
-                  — Bu poliçe {new Date(policy.renewed_at).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" })} tarihinde yeni bir poliçe ile yenilenmiştir.
-                </span>
-              )}
+              <span className="text-[11px] text-white/85">
+                — Bu poliçe {policy.renewed_at ? `${new Date(policy.renewed_at).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" })} tarihinde ` : ""}yeni bir poliçe ile yenilenmiştir.
+              </span>
             </div>
           )}
 
@@ -619,7 +618,7 @@ function PolicyDetailModal({
               </div>
               <div className="divide-y divide-slate-100">
                 {[
-                  ["Durum", <span key="st" className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${policy.status === "Aktif" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{policy.status}</span>],
+                  ["Durum", <span key="st" className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${policy.status === "Aktif" ? "bg-emerald-100 text-emerald-700" : policy.status === "Yenilendi" ? "bg-teal-100 text-teal-700" : "bg-gray-100 text-gray-600"}`}>{policy.status === "Yenilendi" ? "✅ Yenilendi" : policy.status}</span>],
                   ["Başlangıç", fmtDate(policy.start_date)],
                   ["Bitiş",     fmtDate(policy.end_date)],
                   policy.premium    != null ? ["Prim",      `₺${policy.premium.toLocaleString("tr-TR")}`]    : null,
@@ -741,18 +740,20 @@ function PolicyDetailModal({
               </button>
             </div>
 
-            {/* Aktif/Pasif toggle */}
-            <button
-              onClick={toggleStatus}
-              disabled={togglingStatus}
-              className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 border ${
-                policy.status === "Aktif"
-                  ? "bg-red-50 text-red-700 border-red-100 hover:bg-red-100"
-                  : "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100"
-              }`}
-            >
-              {togglingStatus ? "İşleniyor..." : policy.status === "Aktif" ? "🔴 Poliçeyi Pasif Yap" : "✅ Poliçeyi Aktif Yap"}
-            </button>
+            {/* Aktif/Pasif toggle — yenilenmiş poliçe geri açılamaz */}
+            {policy.status !== "Yenilendi" && (
+              <button
+                onClick={toggleStatus}
+                disabled={togglingStatus}
+                className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 border ${
+                  policy.status === "Aktif"
+                    ? "bg-red-50 text-red-700 border-red-100 hover:bg-red-100"
+                    : "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100"
+                }`}
+              >
+                {togglingStatus ? "İşleniyor..." : policy.status === "Aktif" ? "🔴 Poliçeyi Pasif Yap" : "✅ Poliçeyi Aktif Yap"}
+              </button>
+            )}
           </div>
         </div>
       </div>
