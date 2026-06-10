@@ -15,6 +15,7 @@ import {
   TrendingUp, CheckCircle2, Activity, Car, Home,
   Heart, Shield, ArrowUpRight, Sparkles, Plus,
   AlertTriangle, CalendarClock, ChevronRight, RefreshCw,
+  MessageCircle, XCircle,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -138,6 +139,28 @@ export default function DashboardPage() {
   const [recentReqs, setRecentReqs] = useState<RecentRequest[]>([]);
   const [loading, setLoading]       = useState(true);
   const [distReady, setDistReady]   = useState(false);
+  const [waStats, setWaStats]       = useState<{ pending: number; sent: number; failed: number } | null>(null);
+
+  // ── WhatsApp kuyruk istatistikleri — bugünün kayıtları (TR günü) ───────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const res  = await fetch("/api/whatsapp/queue?limit=500");
+        const json = await res.json();
+        if (!res.ok) return;
+        const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Istanbul" });
+        type Row = { status: string; created_at: string };
+        const rows = ((json.items ?? []) as Row[]).filter(r => (r.created_at ?? "").slice(0, 10) === today);
+        setWaStats({
+          pending: rows.filter(r => r.status === "pending").length,
+          sent:    rows.filter(r => r.status === "sent" || r.status === "skipped").length,
+          failed:  rows.filter(r => r.status === "failed").length,
+        });
+      } catch {
+        // İstatistik alınamazsa kartlar gizli kalır — dashboard'u bozmaz
+      }
+    })();
+  }, []);
   const [agencyName, setAgencyName]   = useState<string | null>(null);
   const [agencySlug, setAgencySlug]   = useState<string | null>(null);
   const [linkCopied, setLinkCopied]   = useState(false);
@@ -500,6 +523,31 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ══ WHATSAPP OPERASYON KARTLARI ═════════════════════════════════════ */}
+      {waStats && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            { label: "Bugün Gönderilecek WhatsApp", value: waStats.pending, Icon: Clock,        ring: "ring-amber-200",   iconBg: "bg-amber-100 text-amber-600",     accent: "text-amber-700" },
+            { label: "Başarılı Gönderimler",        value: waStats.sent,    Icon: CheckCircle2, ring: "ring-emerald-200", iconBg: "bg-emerald-100 text-emerald-600", accent: "text-emerald-700" },
+            { label: "Başarısız Gönderimler",       value: waStats.failed,  Icon: XCircle,      ring: "ring-rose-200",    iconBg: "bg-rose-100 text-rose-600",       accent: "text-rose-700" },
+          ].map(c => (
+            <Link key={c.label} href="/whatsapp-queue"
+              className={`flex items-center gap-3 bg-white rounded-xl p-3.5 ring-1 ${c.ring} hover:shadow-md hover:-translate-y-0.5 transition-all`}
+            >
+              <div className={`w-9 h-9 rounded-xl ${c.iconBg} flex items-center justify-center flex-shrink-0`}>
+                <c.Icon className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className={`text-xl font-bold leading-none ${c.accent}`}>{c.value}</p>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mt-1 flex items-center gap-1">
+                  <MessageCircle className="w-3 h-3 text-emerald-500" /> {c.label}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* ══ ACİL İŞLER ══════════════════════════════════════════════════════ */}
       {!loading && (urgent.tomorrow > 0 || urgent.thisWeek > 0 || urgent.overdue > 0) && (

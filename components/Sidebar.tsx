@@ -18,6 +18,7 @@ const Icon = {
   agencies:    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>,
   leads:       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth={1.75}/><circle cx="12" cy="12" r="6" strokeWidth={1.75}/><circle cx="12" cy="12" r="2" strokeWidth={1.75}/></svg>,
   team:        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+  whatsapp:    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
   signout:     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
   quoteCenter: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>,
   collapseL:   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>,
@@ -194,6 +195,7 @@ export default function Sidebar() {
         <NavLink href="/policies"     label="Poliçeler"        icon={Icon.policies}   isActive={pathname.startsWith("/policies") && !pathname.startsWith("/policies/issue")} collapsed={collapsed} onClick={closeMobile} />
         <NavLink href="/renewals"     label="Yenilemeler"      icon={Icon.renewals}   isActive={pathname.startsWith("/renewals")} collapsed={collapsed} onClick={closeMobile} />
         <NavLink href="/ai-assistant" label="AI Asistan"       icon={Icon.ai}         isActive={pathname.startsWith("/ai-assistant")} collapsed={collapsed} onClick={closeMobile} />
+        <NavLink href="/whatsapp-queue" label="WhatsApp Kuyruğu" icon={Icon.whatsapp} isActive={pathname.startsWith("/whatsapp-queue")} collapsed={collapsed} onClick={closeMobile} />
 
         {role === "agency_user" && (
           <NavLink href="/team" label="Ekip Üyeleri" icon={Icon.team}
