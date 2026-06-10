@@ -108,6 +108,23 @@ export default function RenewalAutoQuotePage() {
         }
         setPolicy(pol as PolicyDetail);
 
+        // ── 1b. Çift quote koruması ─────────────────────────────────────────
+        // Bu poliçe için iptal edilmemiş bir teklif çalışması zaten varsa
+        // yenisini oluşturma; mevcut çalışmanın detayına yönlendir.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: existingRun } = await (supabase.from("quote_runs") as any)
+          .select("id")
+          .eq("renewal_of_policy_id", policyId)
+          .neq("status", "İptal")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        if (existingRun) {
+          router.replace(`/quote-center/${existingRun.id}`);
+          return;
+        }
+
         // ── 2. Araç/ürün bilgileri: bağlı quote_run'dan çek ─────────────────
         let productData: Record<string, string> = {};
         if (pol.quote_run_id) {

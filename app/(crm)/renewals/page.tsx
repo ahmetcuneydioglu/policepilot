@@ -14,7 +14,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   RefreshCw, Search, CalendarClock, CalendarDays,
   CalendarRange, AlertTriangle, Mail, Zap, Award,
-  TrendingUp, ChevronRight,
+  TrendingUp, ChevronRight, Trash2, FolderOpen,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,6 +34,9 @@ type RenewalPolicy = {
 };
 
 type FilterKey = "Tümü" | "Bugün" | "Bu Hafta" | "30 Gün" | "Geciken";
+
+// Quoted poliçenin aktif teklif çalışması (tek kaynak: quote_runs)
+type ActiveRun = { runId: string; offerCount: number };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function daysLeft(endDate: string): number {
@@ -131,9 +134,15 @@ export default function RenewalsPage() {
   const { role, agencyId } = useAuth();
 
   const [policies, setPolicies] = useState<RenewalPolicy[]>([]);
+  const [runs,     setRuns]     = useState<Record<string, ActiveRun>>({});
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState<FilterKey>("Tümü");
   const [search,   setSearch]   = useState("");
+
+  // İptal onay modalı
+  const [cancelTarget, setCancelTarget] = useState<RenewalPolicy | null>(null);
+  const [cancelling,   setCancelling]   = useState(false);
+  const [cancelError,  setCancelError]  = useState("");
 
   // ── Fetch — agency scoped ──────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -154,7 +163,35 @@ export default function RenewalsPage() {
 
     const { data, error } = await q;
     if (error) console.error("[renewals] fetch error:", error.message);
-    setPolicies((data ?? []) as RenewalPolicy[]);
+    const pols = (data ?? []) as RenewalPolicy[];
+    setPolicies(pols);
+
+    // Quoted poliçelerin aktif teklif çalışmalarını çek — Teklif Merkezi ile
+    // aynı kayıt kullanılır, ayrı state/lifecycle tutulmaz.
+    const quotedIds = pols.filter(p => p.renewal_status === "quoted").map(p => p.id);
+    if (quotedIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: runRows, error: runErr } = await (supabase.from("quote_runs") as any)
+        .select("id, renewal_of_policy_id, created_at, quote_results(id, price)")
+        .in("renewal_of_policy_id", quotedIds)
+        .neq("status", "İptal")
+        .order("created_at", { ascending: false });
+      if (runErr) console.error("[renewals] runs fetch error:", runErr.message);
+
+      const map: Record<string, ActiveRun> = {};
+      for (const r of runRows ?? []) {
+        const pid = r.renewal_of_policy_id as string;
+        if (!map[pid]) {
+          map[pid] = {
+            runId:      r.id,
+            offerCount: (r.quote_results ?? []).filter((x: { price: number | null }) => x.price != null).length,
+          };
+        }
+      }
+      setRuns(map);
+    } else {
+      setRuns({});
+    }
     setLoading(false);
   }, [role, agencyId]);
 
@@ -192,6 +229,48 @@ export default function RenewalsPage() {
   // Tüm bilgiler poliçeden otomatik çekilir; müşteri/ürün/araç adımları atlanır.
   function startQuote(p: RenewalPolicy) {
     router.push(`/renewals/quote/${p.id}`);
+  }
+
+  // ── Teklifi Aç — mevcut çalışmanın detayına git (çift quote oluşmaz) ───────
+  function openQuote(p: RenewalPolicy) {
+    const run = runs[p.id];
+    if (run) router.push(`/quote-center/${run.runId}`);
+  }
+
+  // ── İptal Et — run "İptal" olur, poliçe "pending"e döner ───────────────────
+  async function confirmCancel() {
+    if (!cancelTarget) return;
+    const run = runs[cancelTarget.id];
+    if (!run) { setCancelTarget(null); return; }
+
+    setCancelling(true);
+    setCancelError("");
+    try {
+      const res  = await fetch(`/api/quote-runs/${run.runId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ status: "İptal" }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setCancelError(json.error ?? "İptal işlemi başarısız oldu.");
+        return;
+      }
+      // UI'ı sayfa yenilemeden güncelle
+      setPolicies(prev => prev.map(p =>
+        p.id === cancelTarget.id ? { ...p, renewal_status: "pending" } : p
+      ));
+      setRuns(prev => {
+        const next = { ...prev };
+        delete next[cancelTarget.id];
+        return next;
+      });
+      setCancelTarget(null);
+    } catch {
+      setCancelError("Sunucuya ulaşılamadı. Tekrar deneyin.");
+    } finally {
+      setCancelling(false);
+    }
   }
 
   // ── KPI cards ──────────────────────────────────────────────────────────────
@@ -363,9 +442,13 @@ export default function RenewalsPage() {
                     <div className="col-span-2 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-xs font-semibold text-slate-700">{p.policy_type}</p>
-                        {p.renewal_status === "quoted" && (
+                        {p.renewal_status === "quoted" ? (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[9px] font-bold ring-1 ring-violet-200">
                             <Zap className="w-2.5 h-2.5" /> Teklif Çalışıldı
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold ring-1 ring-slate-200">
+                            Hazır
                           </span>
                         )}
                       </div>
@@ -430,15 +513,36 @@ export default function RenewalsPage() {
                         <Mail className="w-3 h-3" /> Mail
                       </a>
 
-                      {/* Teklif Çalış */}
-                      <button
-                        onClick={() => startQuote(p)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[11px] font-bold hover:from-violet-500 hover:to-indigo-500 transition-all shadow-sm shadow-violet-500/20"
-                        title="Yenileme teklifi çalış"
-                      >
-                        <Zap className="w-3 h-3" /> Teklif Çalış
-                        <ChevronRight className="w-3 h-3 -mr-0.5" />
-                      </button>
+                      {/* Durum bazlı aksiyon: pending → Teklif Çalış · quoted → Teklifi Aç + İptal */}
+                      {p.renewal_status === "quoted" && runs[p.id] ? (
+                        <>
+                          <button
+                            onClick={() => openQuote(p)}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white text-[11px] font-bold hover:from-violet-500 hover:to-purple-500 transition-all shadow-sm shadow-violet-500/20"
+                            title="Hazırlanan teklif çalışmasını aç"
+                          >
+                            <FolderOpen className="w-3 h-3" />
+                            {runs[p.id].offerCount > 0 ? `${runs[p.id].offerCount} Teklifi Aç` : "Teklifi Aç"}
+                            <ChevronRight className="w-3 h-3 -mr-0.5" />
+                          </button>
+                          <button
+                            onClick={() => { setCancelError(""); setCancelTarget(p); }}
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-[11px] font-bold hover:bg-rose-100 transition-colors ring-1 ring-rose-200"
+                            title="Teklif çalışmasını iptal et"
+                          >
+                            <Trash2 className="w-3 h-3" /> İptal
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => startQuote(p)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[11px] font-bold hover:from-violet-500 hover:to-indigo-500 transition-all shadow-sm shadow-violet-500/20"
+                          title="Yenileme teklifi çalış"
+                        >
+                          <Zap className="w-3 h-3" /> Teklif Çalış
+                          <ChevronRight className="w-3 h-3 -mr-0.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -461,6 +565,57 @@ export default function RenewalsPage() {
           </>
         )}
       </div>
+
+      {/* ── İptal onay modalı ── */}
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => !cancelling && setCancelTarget(null)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-fade-in-up">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-rose-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-slate-900 leading-snug">
+                  Teklif çalışmasını iptal etmek istiyor musunuz?
+                </h3>
+                <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
+                  <span className="font-semibold text-slate-700">{cancelTarget.customers?.name ?? "Müşteri"}</span> için
+                  hazırlanan teklif çalışması iptal edilecek. Kayıt yeniden{" "}
+                  <span className="font-semibold">&ldquo;Teklif Çalış&rdquo;</span> durumuna döner; istediğiniz zaman
+                  yeni teklif çalışabilirsiniz.
+                </p>
+              </div>
+            </div>
+
+            {cancelError && (
+              <div className="mt-4 flex items-center gap-2 px-3 py-2.5 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {cancelError}
+              </div>
+            )}
+
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setCancelTarget(null)}
+                disabled={cancelling}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={confirmCancel}
+                disabled={cancelling}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-bold hover:bg-rose-700 transition-colors disabled:opacity-50 shadow-sm shadow-rose-500/20"
+              >
+                {cancelling ? "İptal ediliyor…" : "İptal Et"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -24,7 +24,8 @@ export type QuoteRunStatus =
   | "Teklif Verildi"
   | "Müşteri Düşünüyor"
   | "Kazanıldı"
-  | "Kaybedildi";
+  | "Kaybedildi"
+  | "İptal";
 
 type QuoteRun = {
   id: string;
@@ -47,6 +48,7 @@ const STATUS_CFG: Record<QuoteRunStatus, { label: string; pill: string; dot: str
   "Müşteri Düşünüyor":  { label: "Müşteri Düşünüyor",  pill: "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/20",        dot: "bg-amber-500" },
   "Kazanıldı":          { label: "Kazanıldı",          pill: "bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20",  dot: "bg-emerald-500" },
   "Kaybedildi":         { label: "Kaybedildi",         pill: "bg-rose-500/10 text-rose-600 ring-1 ring-rose-500/20",           dot: "bg-rose-500" },
+  "İptal":              { label: "İptal",              pill: "bg-slate-500/10 text-slate-500 ring-1 ring-slate-500/20",        dot: "bg-slate-400" },
 };
 
 const PRODUCT_ICONS: Record<string, React.ReactNode> = {
@@ -89,6 +91,7 @@ const ALL_TABS = [
   { key: "Müşteri Düşünüyor", label: "Düşünüyor" },
   { key: "Kazanıldı",         label: "Kazanıldı" },
   { key: "Kaybedildi",        label: "Kaybedildi" },
+  { key: "İptal",             label: "İptal" },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

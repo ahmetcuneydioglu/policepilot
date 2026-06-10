@@ -87,6 +87,26 @@ export async function PATCH(
       .eq("id", id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // ── Yenileme akışı: run iptal edildiyse eski poliçeyi "pending"e döndür ──
+    // Acente aynı müşteri için yeniden teklif çalışabilir hale gelir.
+    if (status === "İptal") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: run } = await (admin.from("quote_runs") as any)
+        .select("renewal_of_policy_id")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (run?.renewal_of_policy_id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: polErr } = await (admin.from("policies") as any)
+          .update({ renewal_status: "pending" })
+          .eq("id", run.renewal_of_policy_id)
+          .eq("renewal_status", "quoted"); // completed olanı geri alma
+        if (polErr) console.error("[api/quote-runs/[id]] renewal reset FAILED:", polErr.message);
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
