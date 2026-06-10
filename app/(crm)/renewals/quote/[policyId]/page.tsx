@@ -111,18 +111,22 @@ export default function RenewalAutoQuotePage() {
         // ── 1b. Çift quote koruması ─────────────────────────────────────────
         // Bu poliçe için iptal edilmemiş bir teklif çalışması zaten varsa
         // yenisini oluşturma; mevcut çalışmanın detayına yönlendir.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: existingRun } = await (supabase.from("quote_runs") as any)
-          .select("id")
-          .eq("renewal_of_policy_id", policyId)
-          .neq("status", "İptal")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (cancelled) return;
-        if (existingRun) {
-          router.replace(`/quote-center/${existingRun.id}`);
-          return;
+        // (Teklif Merkezi ile aynı API — service role, RLS'e takılmaz)
+        try {
+          const runRes  = await fetch(`/api/quote-runs?renewal_of_policy_id=${policyId}`);
+          const runJson = await runRes.json();
+          if (cancelled) return;
+          if (runRes.ok) {
+            const existingRun = (runJson.runs ?? []).find(
+              (r: { id: string; status: string }) => r.status !== "İptal"
+            );
+            if (existingRun) {
+              router.replace(`/quote-center/${existingRun.id}`);
+              return;
+            }
+          }
+        } catch {
+          // Kontrol başarısız olursa akışı engelleme; teklif normal devam eder
         }
 
         // ── 2. Araç/ürün bilgileri: bağlı quote_run'dan çek ─────────────────

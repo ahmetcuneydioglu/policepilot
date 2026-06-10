@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
 
     const admin = getSupabaseAdmin();
     const { searchParams } = new URL(request.url);
-    const agency_id = searchParams.get("agency_id");
+    const agency_id            = searchParams.get("agency_id");
+    const renewal_of_policy_id = searchParams.get("renewal_of_policy_id");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (admin.from("quote_runs") as any)
@@ -44,6 +45,9 @@ export async function GET(request: NextRequest) {
 
     if (agency_id) {
       query = query.eq("agency_id", agency_id);
+    }
+    if (renewal_of_policy_id) {
+      query = query.eq("renewal_of_policy_id", renewal_of_policy_id);
     }
 
     const { data, error } = await query;

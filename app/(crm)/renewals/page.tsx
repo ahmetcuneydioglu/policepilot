@@ -167,28 +167,35 @@ export default function RenewalsPage() {
     setPolicies(pols);
 
     // Quoted poliçelerin aktif teklif çalışmalarını çek — Teklif Merkezi ile
-    // aynı kayıt kullanılır, ayrı state/lifecycle tutulmaz.
-    const quotedIds = pols.filter(p => p.renewal_status === "quoted").map(p => p.id);
-    if (quotedIds.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: runRows, error: runErr } = await (supabase.from("quote_runs") as any)
-        .select("id, renewal_of_policy_id, created_at, quote_results(id, price)")
-        .in("renewal_of_policy_id", quotedIds)
-        .neq("status", "İptal")
-        .order("created_at", { ascending: false });
-      if (runErr) console.error("[renewals] runs fetch error:", runErr.message);
+    // aynı API ve aynı kayıt kullanılır, ayrı state/lifecycle tutulmaz.
+    const quotedIds = new Set(pols.filter(p => p.renewal_status === "quoted").map(p => p.id));
+    if (quotedIds.size > 0) {
+      try {
+        const res  = await fetch(`/api/quote-runs${agencyId ? `?agency_id=${agencyId}` : ""}`);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "runs fetch failed");
 
-      const map: Record<string, ActiveRun> = {};
-      for (const r of runRows ?? []) {
-        const pid = r.renewal_of_policy_id as string;
-        if (!map[pid]) {
+        const map: Record<string, ActiveRun> = {};
+        type RunRow = {
+          id: string;
+          renewal_of_policy_id: string | null;
+          status: string;
+          quote_results?: { id: string; price: number | null }[];
+        };
+        // API created_at desc döner → poliçe başına ilk görülen = en güncel run
+        for (const r of (json.runs ?? []) as RunRow[]) {
+          const pid = r.renewal_of_policy_id;
+          if (!pid || !quotedIds.has(pid) || r.status === "İptal" || map[pid]) continue;
           map[pid] = {
             runId:      r.id,
-            offerCount: (r.quote_results ?? []).filter((x: { price: number | null }) => x.price != null).length,
+            offerCount: (r.quote_results ?? []).filter(x => x.price != null).length,
           };
         }
+        setRuns(map);
+      } catch (e) {
+        console.error("[renewals] runs fetch error:", e);
+        setRuns({});
       }
-      setRuns(map);
     } else {
       setRuns({});
     }
