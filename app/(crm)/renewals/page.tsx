@@ -40,12 +40,30 @@ function daysLeft(endDate: string): number {
   return Math.ceil((end.getTime() - Date.now()) / 864e5);
 }
 
-function dayBadge(days: number): { label: string; cls: string; bar: string } {
-  if (days < 0)   return { label: `${Math.abs(days)} gün gecikti`, cls: "bg-red-100 text-red-700 ring-1 ring-red-200",          bar: "bg-red-500" };
-  if (days === 0) return { label: "Bugün",                          cls: "bg-red-100 text-red-700 ring-1 ring-red-200",          bar: "bg-red-500" };
-  if (days <= 15) return { label: `${days} gün`,                    cls: "bg-orange-100 text-orange-700 ring-1 ring-orange-200", bar: "bg-orange-500" };
-  if (days <= 30) return { label: `${days} gün`,                    cls: "bg-amber-100 text-amber-700 ring-1 ring-amber-200",    bar: "bg-amber-400" };
-  return            { label: `${days} gün`,                          cls: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200", bar: "bg-emerald-500" };
+function dayBadge(days: number): { label: string; cls: string; bar: string; glow: string } {
+  // Aciliyet renk sistemi: 0 kırmızı · 1-3 turuncu · 4-7 sarı · 7+ yeşil
+  if (days < 0)   return { label: `${Math.abs(days)} gün gecikti`, cls: "bg-red-100 text-red-700 ring-1 ring-red-200",             bar: "bg-red-500",     glow: "bg-red-50/40 shadow-[inset_3px_0_0_0_#ef4444,0_0_16px_-4px_rgba(239,68,68,0.35)]" };
+  if (days === 0) return { label: "Bugün",                          cls: "bg-red-100 text-red-700 ring-1 ring-red-200",             bar: "bg-red-500",     glow: "bg-red-50/40 shadow-[inset_3px_0_0_0_#ef4444,0_0_16px_-4px_rgba(239,68,68,0.35)]" };
+  if (days <= 3)  return { label: `${days} gün`,                    cls: "bg-orange-100 text-orange-700 ring-1 ring-orange-200",    bar: "bg-orange-500",  glow: "bg-orange-50/40 shadow-[inset_3px_0_0_0_#f97316,0_0_14px_-4px_rgba(249,115,22,0.30)]" };
+  if (days <= 7)  return { label: `${days} gün`,                    cls: "bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200",    bar: "bg-yellow-400",  glow: "bg-yellow-50/40 shadow-[inset_3px_0_0_0_#eab308]" };
+  return            { label: `${days} gün`,                          cls: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200", bar: "bg-emerald-500", glow: "" };
+}
+
+// ─── Demo tasarruf/komisyon hesabı (deterministik, policy id bazlı) ───────────
+function hash32(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; }
+  return Math.abs(h);
+}
+
+function demoEconomics(p: { id: string; premium: number | null }): { savings: number; commission: number; bestQuote: number } | null {
+  if (p.premium == null || p.premium <= 0) return null;
+  const h = hash32(p.id);
+  const savingsRate = 0.10 + (h % 9) / 100;            // %10–%18 arası
+  const savings     = Math.round(p.premium * savingsRate / 10) * 10;
+  const bestQuote   = p.premium - savings;
+  const commission  = Math.round(bestQuote * 0.08 / 10) * 10; // ~%8 komisyon
+  return { savings, commission, bestQuote };
 }
 
 function fmt(n: number | null) {
@@ -168,14 +186,10 @@ export default function RenewalsPage() {
         || (p.policy_no ?? "").toLowerCase().includes(q);
     });
 
-  // ── Teklif Çalış — quote-center/new prefill ────────────────────────────────
+  // ── Teklif Çalış — tek tıkla otomatik teklif akışı ─────────────────────────
+  // Tüm bilgiler poliçeden otomatik çekilir; müşteri/ürün/araç adımları atlanır.
   function startQuote(p: RenewalPolicy) {
-    const params = new URLSearchParams();
-    if (p.customer_id)       params.set("customer_id",    p.customer_id);
-    if (p.customers?.name)   params.set("customer_name",  p.customers.name);
-    if (p.customers?.phone)  params.set("customer_phone", p.customers.phone);
-    if (p.policy_type)       params.set("product",        p.policy_type);
-    router.push(`/quote-center/new?${params.toString()}`);
+    router.push(`/renewals/quote/${p.id}`);
   }
 
   // ── KPI cards ──────────────────────────────────────────────────────────────
@@ -309,10 +323,12 @@ export default function RenewalsPage() {
           <>
             {/* Header */}
             <div className="grid grid-cols-12 gap-2 px-5 py-3 border-b border-slate-100 bg-slate-50/70">
-              <div className="col-span-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Müşteri</div>
+              <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Müşteri</div>
               <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Poliçe</div>
-              <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bitiş / Kalan</div>
-              <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Prim</div>
+              <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kalan</div>
+              <div className="col-span-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Prim</div>
+              <div className="col-span-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tasarruf</div>
+              <div className="col-span-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Komisyon</div>
               <div className="col-span-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Aksiyonlar</div>
             </div>
 
@@ -322,12 +338,13 @@ export default function RenewalsPage() {
                 const badge = dayBadge(d);
                 const phone = p.customers?.phone ?? "";
                 const waMsg = buildRenewalMessage(p);
+                const eco   = demoEconomics(p);
 
                 return (
-                  <div key={p.id} className="grid grid-cols-12 gap-2 px-5 py-4 hover:bg-amber-50/30 transition-all duration-150 group items-center">
+                  <div key={p.id} className={`grid grid-cols-12 gap-2 px-5 py-4 hover:bg-amber-50/30 transition-all duration-150 group items-center ${badge.glow}`}>
 
                     {/* Müşteri */}
-                    <div className="col-span-3 flex items-center gap-3 min-w-0">
+                    <div className="col-span-2 flex items-center gap-2.5 min-w-0">
                       <div className="relative flex-shrink-0">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center text-[11px] font-bold text-white shadow-sm">
                           {initials(p.customers?.name ?? null)}
@@ -346,7 +363,7 @@ export default function RenewalsPage() {
                       <p className="text-[11px] text-slate-400 truncate">{p.insurance_company ?? "—"}</p>
                     </div>
 
-                    {/* Bitiş / Kalan */}
+                    {/* Kalan */}
                     <div className="col-span-2">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${badge.cls}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${badge.bar}`} />
@@ -355,9 +372,26 @@ export default function RenewalsPage() {
                       <p className="text-[11px] text-slate-400 mt-1">{fmtDate(p.end_date)}</p>
                     </div>
 
-                    {/* Prim */}
-                    <div className="col-span-2">
-                      <span className={`text-sm font-bold ${p.premium ? "text-slate-700" : "text-slate-300"}`}>{fmt(p.premium)}</span>
+                    {/* Mevcut Prim */}
+                    <div className="col-span-1">
+                      <span className={`text-xs font-bold ${p.premium ? "text-slate-700" : "text-slate-300"}`}>{fmt(p.premium)}</span>
+                    </div>
+
+                    {/* Potansiyel Tasarruf */}
+                    <div className="col-span-1">
+                      {eco ? (
+                        <div>
+                          <span className="text-xs font-bold text-emerald-600">{fmt(eco.savings)}</span>
+                          <p className="text-[10px] text-slate-400">en düşük {fmt(eco.bestQuote)}</p>
+                        </div>
+                      ) : <span className="text-xs text-slate-300">—</span>}
+                    </div>
+
+                    {/* Tahmini Komisyon */}
+                    <div className="col-span-1">
+                      {eco ? (
+                        <span className="text-xs font-bold text-violet-600">{fmt(eco.commission)}</span>
+                      ) : <span className="text-xs text-slate-300">—</span>}
                     </div>
 
                     {/* Aksiyonlar */}
