@@ -365,6 +365,26 @@ export default function NewQuoteRunPage() {
   const tcTimer    = useRef<ReturnType<typeof setTimeout>|null>(null);
   const plakaTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
 
+  // ── URL prefill (yenilemeden gelen "Teklif Çalış" akışı) ──────────────────
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const name    = sp.get("customer_name");
+    const phone   = sp.get("customer_phone");
+    const custId  = sp.get("customer_id");
+    const product = sp.get("product");
+    if (!name && !custId && !product) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm(prev => ({
+      ...prev,
+      customerMode:  custId ? "existing" : "new",
+      customerId:    custId  ?? prev.customerId,
+      customerName:  name    ?? prev.customerName,
+      customerPhone: phone   ?? prev.customerPhone,
+      productType:   product && PRODUCTS.some(pr => pr.type === product) ? product : prev.productType,
+    }));
+    if (name) setCustSearch(name);
+  }, []);
+
   // ── Customers ─────────────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {

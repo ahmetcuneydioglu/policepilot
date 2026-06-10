@@ -140,6 +140,7 @@ export default function DashboardPage() {
   const [agencyName, setAgencyName]   = useState<string | null>(null);
   const [agencySlug, setAgencySlug]   = useState<string | null>(null);
   const [linkCopied, setLinkCopied]   = useState(false);
+  const [renewalInfo, setRenewalInfo] = useState<{ premium: number; topBranch: string | null }>({ premium: 0, topBranch: null });
   const feedIdxRef                  = useRef(0);
 
   // ── Push a new item to the live feed with fade-in animation ───────────────
@@ -204,6 +205,7 @@ export default function DashboardPage() {
         withAgencyFilter(supabase.from("customers").select("*", { count: "exact", head: true }).gte("created_at", today), role, agencyId),
         withAgencyFilter(supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4), role, agencyId),
         withAgencyFilter(supabase.from("requests").select("id, request_type, status, created_at, customers(name)").order("created_at", { ascending: false }).limit(6), role, agencyId),
+        withAgencyFilter(supabase.from("policies").select("policy_type, premium").eq("status", "Aktif").lte("end_date", in30).gte("end_date", today), role, agencyId),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ]) as any[];
 
@@ -214,7 +216,17 @@ export default function DashboardPage() {
         { count: todayCount },
         { data: recentCustomers },
         { data: recentRequests },
+        { data: renewalPolicies },
       ] = results;
+
+      // Yenileme detayları: tahmini prim + en çok yenilenecek branş
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rp = (renewalPolicies ?? []) as { policy_type: string; premium: number | null }[];
+      const renewalPremium = rp.reduce((s, p) => s + (p.premium ?? 0), 0);
+      const branchCounts: Record<string, number> = {};
+      rp.forEach(p => { branchCounts[p.policy_type] = (branchCounts[p.policy_type] ?? 0) + 1; });
+      const topBranch = Object.entries(branchCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+      setRenewalInfo({ premium: renewalPremium, topBranch });
 
       setStats({
         customers:  totalCustomers      ?? 0,
@@ -307,9 +319,14 @@ export default function DashboardPage() {
           ? `${stats.requests} açık teklif aksiyon bekliyor`
           : "Tüm teklifler tamamlandı veya bekleyen talep yok",
         stats.renewals > 0
-          ? `${stats.renewals} poliçe 30 gün içinde yenilenecek`
+          ? `${stats.renewals} poliçe 30 gün içinde yenilenecek — Yenilemeler sayfasından takip edin`
           : "30 gün içinde yenilenecek poliçe bulunmuyor",
-        `Trafik sigortası bu hafta en fazla talep gören ürün`,
+        renewalInfo.premium > 0
+          ? `Tahmini yenileme primi: ${renewalInfo.premium.toLocaleString("tr-TR")} ₺ (30 gün)`
+          : "Yaklaşan yenilemelerden prim beklentisi henüz oluşmadı",
+        renewalInfo.topBranch
+          ? `En çok yenilenecek branş: ${renewalInfo.topBranch}`
+          : "Trafik sigortası bu hafta en fazla talep gören ürün",
         stats.today > 0
           ? `${stats.today} müşteri bugün sisteme katıldı`
           : "Bugün henüz yeni müşteri eklenmedi",
