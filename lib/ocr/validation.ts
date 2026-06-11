@@ -66,9 +66,15 @@ function validateSingle(key: PolicyOcrFieldKey, value: string | null): string | 
         : "Türkiye plaka formatı bekleniyor";
     case "start_date":
     case "end_date":
+    case "birth_date":
       return validDate(v) ? null : "Geçerli tarih olmalı";
     case "premium":
       return Number.isFinite(Number(v.replace(",", "."))) ? null : "Prim sayısal olmalı";
+    case "vehicle_value":
+      return Number.isFinite(Number(v.replace(/\./g, "").replace(",", "."))) ? null : "Araç bedeli sayısal olmalı";
+    case "building_age":
+    case "area_m2":
+      return /^\d+$/.test(v) ? null : "Sayısal olmalı";
     case "policy_type":
       return KNOWN_POLICY_TYPES.includes(v) ? null : "Bilinen poliçe türlerinden biri olmalı";
     default:

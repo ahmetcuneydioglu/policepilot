@@ -101,6 +101,10 @@ export class OpenAiVisionOcrProvider implements OcrProvider {
                 "Alanlari yalniz belgede gorunen bilgiye gore cikar. Tahmin etme. " +
                 "Tarihleri YYYY-MM-DD formatinda ver. Prim sadece sayisal string olsun. " +
                 "policy_type su degerlerden biri olmali: Trafik, Kasko, IMM, Yesil Kart, Saglik, Tamamlayici, DASK, Konut, Seyahat, Ferdi Kaza, Cep Telefonu, Evcil Hayvan, Diger. " +
+                "Urune ozel alanlar: arac policelerinde plate/vehicle_*/engine_no/chassis_no; Kasko'da vehicle_value (arac bedeli); " +
+                "DASK/Konut'ta city (il), district (ilce), address, building_age (bina yasi), area_m2 (metrekare), building_type (yapi tarzi), housing_type (konut tipi); " +
+                "saglik policelerinde birth_date (dogum tarihi YYYY-MM-DD), gender (Erkek|Kadin), city; seyahatte destination_country (gidilecek ulke). " +
+                "Belgede olmayan urune ozel alanlari null birak (ornegin DASK'ta plaka olmaz). " +
                 "Her alan icin 0-1 arasi confidence ver; emin degilsen degeri null veya dusuk confidence ver.",
             },
           ],

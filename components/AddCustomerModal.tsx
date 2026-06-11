@@ -60,6 +60,16 @@ const OCR_REVIEW_FIELDS = [
   { key: "vehicle_year", label: "Model Yılı" },
   { key: "engine_no", label: "Motor No" },
   { key: "chassis_no", label: "Şasi No" },
+  { key: "vehicle_value", label: "Araç Bedeli (₺)" },
+  { key: "city", label: "İl" },
+  { key: "district", label: "İlçe" },
+  { key: "building_age", label: "Bina Yaşı" },
+  { key: "area_m2", label: "Metrekare" },
+  { key: "building_type", label: "Yapı Tarzı" },
+  { key: "housing_type", label: "Konut Tipi" },
+  { key: "birth_date", label: "Doğum Tarihi" },
+  { key: "gender", label: "Cinsiyet" },
+  { key: "destination_country", label: "Gidilecek Ülke" },
   { key: "policy_type", label: "Poliçe Türü" },
   { key: "policy_no", label: "Poliçe No" },
   { key: "insurance_company", label: "Sigorta Şirketi" },
@@ -67,6 +77,35 @@ const OCR_REVIEW_FIELDS = [
   { key: "end_date", label: "Bitiş Tarihi" },
   { key: "premium", label: "Prim" },
 ];
+
+// ─── Poliçe türüne göre gösterilecek inceleme alanları ─────────────────────────
+// Her ürünün alanları farklıdır: DASK'ta plaka olmaz, sağlıkta motor no olmaz.
+// policy_type bu listelerde yer almaz — tür, ayrı seçim adımında yönetilir.
+const ID_FIELDS     = ["customer_name", "phone", "tc_identity_no", "tax_no"];
+const ID_TC_ONLY    = ["customer_name", "phone", "tc_identity_no"];
+const POLICY_COMMON = ["insurance_company", "policy_no", "start_date", "end_date", "premium"];
+
+const TRAFIK_FIELDS = [...ID_FIELDS, "plate", "license_serial", "vehicle_brand", "vehicle_model", "vehicle_year", "engine_no", "chassis_no", ...POLICY_COMMON];
+
+const TYPE_REVIEW_FIELDS: Record<string, string[]> = {
+  "Trafik":       TRAFIK_FIELDS,
+  "İMM":          TRAFIK_FIELDS,
+  "Yeşil Kart":   TRAFIK_FIELDS,
+  "Kasko":        [...ID_FIELDS, "plate", "vehicle_brand", "vehicle_model", "vehicle_year", "engine_no", "chassis_no", "vehicle_value", ...POLICY_COMMON],
+  "DASK":         [...ID_FIELDS, "city", "district", "address", "building_age", "area_m2", "building_type", ...POLICY_COMMON],
+  "Konut":        [...ID_FIELDS, "city", "district", "address", "building_age", "area_m2", "housing_type", ...POLICY_COMMON],
+  "Sağlık":       [...ID_TC_ONLY, "birth_date", "gender", "city", ...POLICY_COMMON],
+  "Tamamlayıcı":  [...ID_TC_ONLY, "birth_date", "gender", "city", ...POLICY_COMMON],
+  "Seyahat":      [...ID_TC_ONLY, "birth_date", "destination_country", ...POLICY_COMMON],
+  "Ferdi Kaza":   [...ID_TC_ONLY, "birth_date", "gender", ...POLICY_COMMON],
+  "Cep Telefonu": [...ID_FIELDS, ...POLICY_COMMON],
+  "Evcil Hayvan": [...ID_FIELDS, ...POLICY_COMMON],
+  "Diğer":        [...ID_FIELDS, "address", ...POLICY_COMMON],
+};
+
+function visibleReviewKeys(policyType: string): string[] | null {
+  return TYPE_REVIEW_FIELDS[policyType] ?? null;
+}
 
 function reviewValue(items: OcrReviewItem[], key: string): string {
   return items.find((item) => item.key === key)?.value.trim() ?? "";
@@ -324,6 +363,16 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
 
   const group = INSURANCE_TYPES.find((t) => t.value === insuranceType)?.group ?? "";
 
+  // OCR inceleme ekranı: tespit edilen poliçe türü ve o türe ait görünür alanlar
+  const reviewType = reviewValue(ocrReviewItems, "policy_type");
+  const reviewKeys = visibleReviewKeys(reviewType);
+  const visibleReviewItems = reviewKeys
+    ? (reviewKeys
+        .map((k) => ocrReviewItems.find((item) => item.key === k))
+        .filter(Boolean) as OcrReviewItem[])
+    : [];
+  const typeDetectedByOcr = Boolean(reviewKeys) && !ocrReviewItems.find((i) => i.key === "policy_type")?.userEdited;
+
   function updateReviewValue(key: string, value: string) {
     setOcrReviewItems((prev) => {
       const next = prev.map((item) => {
@@ -378,32 +427,52 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
     setOcrError("");
 
     const policyType = reviewValue(ocrReviewItems, "policy_type");
-    const vehicleBrand = reviewValue(ocrReviewItems, "vehicle_brand");
-    const vehicleModel = reviewValue(ocrReviewItems, "vehicle_model");
-    const brandModelValue = [vehicleBrand, vehicleModel].filter(Boolean).join(" ");
+
+    // Yalnız seçili ürünün alanları gönderilir — DASK'ta yanlışlıkla okunan
+    // plaka gibi görünmeyen alanlar kayda sızmaz.
+    const keys = visibleReviewKeys(policyType);
+    if (!keys) {
+      setOcrError("Lütfen önce poliçe türünü seçin.");
+      setLoading(false);
+      return;
+    }
+    const vis  = new Set(keys);
+    const vval = (key: string) => (vis.has(key) ? reviewValue(ocrReviewItems, key) : "");
+
+    const brandModelValue = [vval("vehicle_brand"), vval("vehicle_model")].filter(Boolean).join(" ");
 
     const fd = new FormData();
     fd.append("file", docFile);
-    fd.append("name", reviewValue(ocrReviewItems, "customer_name"));
-    fd.append("phone", reviewValue(ocrReviewItems, "phone"));
+    fd.append("name", vval("customer_name"));
+    fd.append("phone", vval("phone"));
     fd.append("email", email.trim());
     fd.append("insurance_type", policyType);
     fd.append("note", note.trim());
-    fd.append("tc_identity_no", reviewValue(ocrReviewItems, "tc_identity_no"));
-    fd.append("tax_no", reviewValue(ocrReviewItems, "tax_no"));
-    fd.append("identity_no", reviewValue(ocrReviewItems, "tc_identity_no") || reviewValue(ocrReviewItems, "tax_no"));
-    fd.append("address", reviewValue(ocrReviewItems, "address"));
-    fd.append("vehicle_plate", reviewValue(ocrReviewItems, "plate").toUpperCase());
-    fd.append("license_serial", reviewValue(ocrReviewItems, "license_serial"));
+    fd.append("tc_identity_no", vval("tc_identity_no"));
+    fd.append("tax_no", vval("tax_no"));
+    fd.append("identity_no", vval("tc_identity_no") || vval("tax_no"));
+    fd.append("address", vval("address"));
+    fd.append("vehicle_plate", vval("plate").toUpperCase());
+    fd.append("license_serial", vval("license_serial"));
     fd.append("brand_model", brandModelValue);
-    fd.append("vehicle_year", reviewValue(ocrReviewItems, "vehicle_year"));
-    fd.append("engine_no", reviewValue(ocrReviewItems, "engine_no"));
-    fd.append("chassis_no", reviewValue(ocrReviewItems, "chassis_no"));
-    fd.append("policy_no", reviewValue(ocrReviewItems, "policy_no"));
-    fd.append("insurance_company", reviewValue(ocrReviewItems, "insurance_company"));
-    fd.append("premium", reviewValue(ocrReviewItems, "premium").replace(",", "."));
-    fd.append("policy_start_date", reviewValue(ocrReviewItems, "start_date"));
-    fd.append("policy_end_date", reviewValue(ocrReviewItems, "end_date"));
+    fd.append("vehicle_year", vval("vehicle_year"));
+    fd.append("engine_no", vval("engine_no"));
+    fd.append("chassis_no", vval("chassis_no"));
+    fd.append("vehicle_value", vval("vehicle_value").replace(",", "."));
+    fd.append("city", vval("city"));
+    fd.append("district", vval("district"));
+    fd.append("building_age", vval("building_age"));
+    fd.append("area_m2", vval("area_m2"));
+    fd.append("building_type", vval("building_type"));
+    fd.append("housing_type", vval("housing_type"));
+    fd.append("birth_date", vval("birth_date"));
+    fd.append("gender", vval("gender"));
+    fd.append("destination_country", vval("destination_country"));
+    fd.append("policy_no", vval("policy_no"));
+    fd.append("insurance_company", vval("insurance_company"));
+    fd.append("premium", vval("premium").replace(",", "."));
+    fd.append("policy_start_date", vval("start_date"));
+    fd.append("policy_end_date", vval("end_date"));
     fd.append("ocr_provider", ocrProviderLabel);
     fd.append("ocr_mode", ocrMode ?? "");
     fd.append("ocr_raw_response", ocrRawResponse);
@@ -728,6 +797,44 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                   </button>
                 </div>
 
+                {/* ── Poliçe Türü: OCR tespit ettiyse göster, edemediyse seçtir ── */}
+                <div className={`rounded-2xl border p-4 ${reviewKeys ? "border-gray-200 bg-white" : "border-amber-300 bg-amber-50/60"}`}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                    {reviewKeys ? (
+                      <>
+                        <span className="text-gray-400">Poliçe Türü</span>
+                        {typeDetectedByOcr && (
+                          <span className="px-1.5 py-px rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200 text-[9px] font-bold normal-case">✓ OCR ile bulundu</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-amber-700 text-xs normal-case font-bold">⚠️ Poliçe türü tespit edilemedi — lütfen seçiniz</span>
+                    )}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {INSURANCE_TYPES.map((t) => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => updateReviewValue("policy_type", t.value)}
+                        className={`px-3 py-2 rounded-xl border text-xs font-semibold text-left transition-all ${
+                          reviewType === t.value
+                            ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                            : "bg-white text-slate-600 border-gray-200 hover:border-blue-200 hover:text-blue-600"
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  {reviewKeys && (
+                    <p className="mt-2.5 text-[11px] text-gray-400">
+                      Aşağıda yalnız <b className="text-slate-600">{reviewType}</b> ürününe ait alanlar gösteriliyor.
+                    </p>
+                  )}
+                </div>
+
+                {reviewKeys && (
                 <div className="rounded-2xl border border-gray-200 overflow-hidden bg-white">
                   <div className="grid grid-cols-[1fr_1fr_90px] gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                     <span>Bulunan Alan</span>
@@ -735,7 +842,7 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                     <span>Güven</span>
                   </div>
                   <div className="divide-y divide-gray-100 max-h-[360px] overflow-y-auto">
-                    {ocrReviewItems.map((item) => {
+                    {visibleReviewItems.map((item) => {
                       const blocking = isBlockingReviewIssue(item, ocrReviewItems);
                       const optionalMissing = item.needsReview && !blocking;
                       return (
@@ -777,6 +884,7 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                     })}
                   </div>
                 </div>
+                )}
 
                 {ocrError && (
                   <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ {ocrError}</p>
@@ -789,7 +897,8 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                   <button
                     type="button"
                     onClick={saveOcrReview}
-                    disabled={loading}
+                    disabled={loading || !reviewKeys}
+                    title={!reviewKeys ? "Önce poliçe türünü seçin" : undefined}
                     className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60"
                   >
                     {loading ? "Kaydediliyor..." : "Onayla ve Kaydet"}

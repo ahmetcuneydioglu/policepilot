@@ -39,6 +39,17 @@ export const POLICY_OCR_FIELD_KEYS = [
   "start_date",
   "end_date",
   "premium",
+  // Ürüne özel alanlar — poliçe türüne göre formda gösterilir
+  "vehicle_value",        // Kasko: araç bedeli
+  "city",                 // DASK/Konut/Sağlık: il
+  "district",             // DASK/Konut: ilçe
+  "building_age",         // DASK/Konut: bina yaşı
+  "area_m2",              // DASK/Konut: metrekare
+  "building_type",        // DASK: yapı tarzı (betonarme/çelik/yığma…)
+  "housing_type",         // Konut: konut tipi (daire/müstakil…)
+  "birth_date",           // Sağlık/Seyahat/Ferdi Kaza: doğum tarihi
+  "gender",               // Sağlık: cinsiyet
+  "destination_country",  // Seyahat: gidilecek ülke
 ] as const;
 
 export type PolicyOcrFieldKey = typeof POLICY_OCR_FIELD_KEYS[number];

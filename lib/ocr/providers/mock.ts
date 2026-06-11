@@ -39,6 +39,17 @@ export class MockOcrProvider implements OcrProvider {
       start_date: field(`${thisYear}-06-15`, 0.92),
       end_date: field(`${thisYear + 1}-06-15`, 0.92),
       premium: field("10153.10", 0.91),
+      // Ürüne özel alanlar — demo poliçe Trafik olduğu için boş
+      vehicle_value: field(null, 0),
+      city: field(null, 0),
+      district: field(null, 0),
+      building_age: field(null, 0),
+      area_m2: field(null, 0),
+      building_type: field(null, 0),
+      housing_type: field(null, 0),
+      birth_date: field(null, 0),
+      gender: field(null, 0),
+      destination_country: field(null, 0),
     });
 
     return {

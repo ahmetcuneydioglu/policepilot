@@ -206,6 +206,17 @@ export async function POST(request: NextRequest) {
       vehicle_year: optionalText(form, "vehicle_year"),
       engine_no: optionalText(form, "engine_no"),
       chassis_no: optionalText(form, "chassis_no"),
+      // Ürüne özel alanlar (poliçe türüne göre yalnız ilgili olanlar dolu gelir)
+      vehicle_value: optionalText(form, "vehicle_value"),
+      city: optionalText(form, "city"),
+      district: optionalText(form, "district"),
+      building_age: optionalText(form, "building_age"),
+      area_m2: optionalText(form, "area_m2"),
+      building_type: optionalText(form, "building_type"),
+      housing_type: optionalText(form, "housing_type"),
+      birth_date: optionalText(form, "birth_date"),
+      gender: optionalText(form, "gender"),
+      destination_country: optionalText(form, "destination_country"),
       source: "ocr_upload",
     };
     const rawResponseText = text(form, "ocr_raw_response");
