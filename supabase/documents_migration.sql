@@ -1,44 +1,55 @@
 -- ============================================================
--- PolicePilot — Documents (Evrak) Tablosu Migration
+-- PolicePilot — Documents Tablosu Uyum Migration'ı
 -- Supabase SQL Editor'da çalıştırın (idempotent)
 --
--- Yüklenen tüm evrakların merkezi kaydı. İlk kullanım: poliçe PDF'leri.
--- İleride: ruhsat, kimlik, hasar evrakı vb. aynı tabloya girer.
--- Dosyanın kendisi Storage'da (policy-documents bucket), bu tablo metadata.
+-- Kanonik şema: schema.sql'deki public.documents
+-- (file_name, file_path, file_type, file_size, bucket, uploaded_by).
+-- Bu migration tablo yoksa kanonik şekliyle oluşturur; varsa API'nin
+-- kullandığı kolonların mevcut olduğunu garanti eder.
+--
+-- Not: Geçmişte farklı kolon adlarıyla (doc_type/mime_type/size_bytes)
+-- ikinci bir şema denenmişti — "Could not find the 'doc_type' column"
+-- hatasının kaynağı buydu. Kod artık yalnız kanonik kolonları kullanır:
+-- app/api/policy-documents/route.ts → insertDocumentMetadata
 -- ============================================================
 
 create table if not exists public.documents (
-  id          uuid primary key default gen_random_uuid(),
-  agency_id   uuid,
-  customer_id uuid,
-  policy_id   uuid,
-  doc_type    text not null default 'policy',
-  -- policy | license | identity | claim | other
-  file_path   text not null,
-  -- Storage yolu (policy-documents bucket)
-  file_name   text not null,
-  mime_type   text,
-  size_bytes  bigint,
-  source      text not null default 'upload',
-  -- upload | ocr_upload (OCR ile okunarak yüklendi)
-  created_at  timestamptz not null default now()
+  id           uuid primary key default gen_random_uuid(),
+  agency_id    uuid,
+  customer_id  uuid references public.customers(id) on delete cascade,
+  request_id   uuid references public.requests(id)  on delete cascade,
+  policy_id    uuid references public.policies(id)  on delete cascade,
+  file_name    text not null,
+  file_path    text not null,
+  file_type    text not null,
+  file_size    bigint,
+  bucket       text not null default 'documents',
+  uploaded_by  uuid,
+  created_at   timestamptz not null default now()
 );
+
+-- Tablo eski/farklı bir şemayla oluşmuşsa API'nin yazdığı kolonları tamamla
+alter table public.documents
+  add column if not exists file_type   text,
+  add column if not exists file_size   bigint,
+  add column if not exists bucket      text default 'documents',
+  add column if not exists uploaded_by uuid,
+  add column if not exists request_id  uuid;
 
 create index if not exists idx_documents_agency   on public.documents(agency_id);
 create index if not exists idx_documents_customer on public.documents(customer_id);
 create index if not exists idx_documents_policy   on public.documents(policy_id);
 
-comment on table public.documents is 'Evrak metadata kaydı — dosyalar Storage''da, kayıtlar burada';
-
--- ─── RLS ─────────────────────────────────────────────────────
 alter table public.documents enable row level security;
 
 do $$ begin
-  create policy "documents_select_own_agency" on public.documents
-    for select using (
-      agency_id = (auth.jwt() -> 'app_metadata' ->> 'agency_id')::uuid
-      or (auth.jwt() -> 'app_metadata' ->> 'role') = 'super_admin'
-    );
+  create policy "auth read documents"
+    on public.documents for select
+    using (auth.uid() is not null);
 exception when duplicate_object then null; end $$;
 
--- Yazma yalnız service role (API) üzerinden — insert/update policy yok.
+do $$ begin
+  create policy "auth insert documents"
+    on public.documents for insert
+    with check (auth.uid() is not null);
+exception when duplicate_object then null; end $$;
