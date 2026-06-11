@@ -39,39 +39,25 @@ function validIsoDate(value: string): boolean {
 
 function validateCriticalFields(input: {
   tcIdentityNo: string | null;
-  taxNo: string | null;
-  plate: string | null;
+  phone: string | null;
   policyType: string;
-  startDate: string | null;
-  endDate: string;
-  premium: string | null;
 }): string[] {
   const errors: string[] = [];
-  if (input.tcIdentityNo && !/^\d{11}$/.test(input.tcIdentityNo.replace(/\D/g, ""))) {
-    errors.push("TC Kimlik 11 haneli olmalı.");
-  }
-  if (input.taxNo && !/^\d{10}$/.test(input.taxNo.replace(/\D/g, ""))) {
-    errors.push("VKN 10 haneli olmalı.");
-  }
-  if (input.plate && !/^(0[1-9]|[1-7][0-9]|8[01])\s?[A-ZÇĞİÖŞÜ]{1,3}\s?\d{2,4}$/i.test(input.plate)) {
-    errors.push("Plaka Türkiye formatına uygun olmalı.");
+  const hasPhone = Boolean(input.phone?.trim());
+  const hasValidTc = Boolean(input.tcIdentityNo && /^\d{11}$/.test(input.tcIdentityNo.replace(/\D/g, "")));
+  if (!hasPhone && !hasValidTc) {
+    errors.push("Ad Soyad ve Sigorta Türü yanında TC veya Telefon alanlarından biri gerekli.");
   }
   if (!KNOWN_POLICY_TYPES.includes(input.policyType)) {
     errors.push("Poliçe türü bilinen türlerden biri olmalı.");
   }
-  if (input.startDate && !validIsoDate(input.startDate)) {
-    errors.push("Başlangıç tarihi geçerli tarih olmalı.");
-  }
-  if (!validIsoDate(input.endDate)) {
-    errors.push("Bitiş tarihi geçerli tarih olmalı.");
-  }
-  if (input.startDate && validIsoDate(input.startDate) && validIsoDate(input.endDate) && new Date(input.endDate) <= new Date(input.startDate)) {
-    errors.push("Bitiş tarihi başlangıç tarihinden sonra olmalı.");
-  }
-  if (input.premium && !Number.isFinite(Number(input.premium.replace(",", ".")))) {
-    errors.push("Prim sayısal olmalı.");
-  }
   return errors;
+}
+
+function addOneYear(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 async function insertDocumentMetadata(input: {
@@ -163,13 +149,9 @@ export async function POST(request: NextRequest) {
     const name = text(form, "name");
     const phone = text(form, "phone");
     const insuranceType = text(form, "insurance_type");
-    const policyEndDate = text(form, "policy_end_date");
 
-    if (!name || !phone || !insuranceType) {
-      return NextResponse.json({ error: "Ad, telefon ve sigorta türü zorunludur." }, { status: 400 });
-    }
-    if (!policyEndDate) {
-      return NextResponse.json({ error: "Poliçe bitiş tarihi zorunludur." }, { status: 400 });
+    if (!name || !insuranceType) {
+      return NextResponse.json({ error: "Ad Soyad ve Sigorta Türü zorunludur." }, { status: 400 });
     }
 
     const requestedAgencyId = optionalText(form, "agency_id");
@@ -208,19 +190,23 @@ export async function POST(request: NextRequest) {
 
     const tcIdentityNo = optionalText(form, "tc_identity_no");
     const taxNo = optionalText(form, "tax_no");
-    const identityNo = tcIdentityNo || taxNo || optionalText(form, "identity_no");
+    const validTc = tcIdentityNo && /^\d{11}$/.test(tcIdentityNo.replace(/\D/g, "")) ? tcIdentityNo : null;
+    const validTaxNo = taxNo && /^\d{10}$/.test(taxNo.replace(/\D/g, "")) ? taxNo : null;
+    const identityNo = validTc || validTaxNo || optionalText(form, "identity_no");
     const vehiclePlate = optionalText(form, "vehicle_plate")?.toUpperCase() ?? null;
-    const policyStartDate = optionalText(form, "policy_start_date");
+    const requestedStartDate = optionalText(form, "policy_start_date");
+    const requestedEndDate = optionalText(form, "policy_end_date");
+    const policyStartDate = requestedStartDate && validIsoDate(requestedStartDate) ? requestedStartDate : todayIso();
+    const policyEndDate = requestedEndDate && validIsoDate(requestedEndDate) && new Date(requestedEndDate) > new Date(policyStartDate)
+      ? requestedEndDate
+      : addOneYear(policyStartDate);
     const premium = optionalText(form, "premium");
+    const premiumNumber = premium && Number.isFinite(Number(premium.replace(",", "."))) ? Number(premium.replace(",", ".")) : null;
 
     const validationErrors = validateCriticalFields({
       tcIdentityNo,
-      taxNo,
-      plate: vehiclePlate,
+      phone,
       policyType: insuranceType,
-      startDate: policyStartDate,
-      endDate: policyEndDate,
-      premium,
     });
     if (validationErrors.length > 0) {
       return NextResponse.json({ error: validationErrors.join(" "), code: "validation_error" }, { status: 400 });
@@ -281,7 +267,7 @@ export async function POST(request: NextRequest) {
         status: "Aktif",
         policy_no: optionalText(form, "policy_no"),
         insurance_company: optionalText(form, "insurance_company"),
-        premium: premium ? Number(premium.replace(",", ".")) : null,
+        premium: premiumNumber,
         source: "ocr_upload",
       })
       .select("id")

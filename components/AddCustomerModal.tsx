@@ -80,9 +80,7 @@ function validIsoDate(value: string): boolean {
 
 function validateReviewItem(key: string, value: string): string | null {
   const v = value.trim();
-  if (!v && ["customer_name", "phone", "policy_type", "start_date", "end_date", "premium"].includes(key)) {
-    return "Zorunlu alan";
-  }
+  if (!v && ["customer_name", "policy_type"].includes(key)) return "Kritik alan eksik";
   if (!v) return null;
   if (key === "tc_identity_no" && !/^\d{11}$/.test(v.replace(/\D/g, ""))) return "11 hane olmalı";
   if (key === "tax_no" && !/^\d{10}$/.test(v.replace(/\D/g, ""))) return "10 hane olmalı";
@@ -91,6 +89,23 @@ function validateReviewItem(key: string, value: string): string | null {
   if (key === "premium" && !Number.isFinite(Number(v.replace(",", ".")))) return "Prim sayısal olmalı";
   if (key === "policy_type" && !KNOWN_POLICY_TYPES.includes(v)) return "Bilinmeyen poliçe türü";
   return null;
+}
+
+function isBlockingReviewIssue(item: OcrReviewItem, allItems: OcrReviewItem[]): boolean {
+  if (item.key === "customer_name" || item.key === "policy_type") {
+    return Boolean(item.validationMessage);
+  }
+  if (item.key === "phone" || item.key === "tc_identity_no") {
+    const hasPhone = Boolean(reviewValue(allItems, "phone"));
+    const tc = reviewValue(allItems, "tc_identity_no").replace(/\D/g, "");
+    const hasValidTc = /^\d{11}$/.test(tc);
+    return !hasPhone && !hasValidTc;
+  }
+  return false;
+}
+
+function hasBlockingReviewIssues(items: OcrReviewItem[]): boolean {
+  return items.some((item) => isBlockingReviewIssue(item, items));
 }
 
 function StatusBadge({ status }: { status?: FieldStatus }) {
@@ -340,22 +355,22 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
       return;
     }
 
-    const errors = ocrReviewItems
-      .map((item) => ({ ...item, validationMessage: validateReviewItem(item.key, item.value) ?? item.validationMessage ?? null }))
-      .filter((item) => Boolean(item.validationMessage));
+    const nextItems = ocrReviewItems.map((item) => ({
+      ...item,
+      validationMessage: validateReviewItem(item.key, item.value) ?? item.validationMessage ?? null,
+    }));
 
-    const startDate = reviewValue(ocrReviewItems, "start_date");
-    const endDate = reviewValue(ocrReviewItems, "end_date");
-    if (startDate && endDate && validIsoDate(startDate) && validIsoDate(endDate) && new Date(endDate) <= new Date(startDate)) {
-      errors.push({ ...ocrReviewItems.find((item) => item.key === "end_date")!, validationMessage: "Bitiş tarihi başlangıçtan sonra olmalı" });
-    }
+    const hasIdentity = Boolean(reviewValue(nextItems, "phone")) || /^\d{11}$/.test(reviewValue(nextItems, "tc_identity_no").replace(/\D/g, ""));
+    const finalItems = nextItems.map((item) => {
+      if (!hasIdentity && (item.key === "phone" || item.key === "tc_identity_no")) {
+        return { ...item, needsReview: true, validationMessage: "TC veya telefon gerekli" };
+      }
+      return item;
+    });
 
-    if (errors.length > 0) {
-      setOcrError("Kontrol gerekli alanları düzeltmeden kayıt yapılamaz.");
-      setOcrReviewItems((prev) => prev.map((item) => {
-        const err = errors.find((e) => e.key === item.key);
-        return err ? { ...item, needsReview: true, validationMessage: err.validationMessage } : item;
-      }));
+    if (hasBlockingReviewIssues(finalItems)) {
+      setOcrError("Kayıt için Ad Soyad, Sigorta Türü ve TC veya Telefon alanlarından biri gerekli.");
+      setOcrReviewItems(finalItems);
       return;
     }
 
@@ -720,37 +735,46 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                     <span>Güven</span>
                   </div>
                   <div className="divide-y divide-gray-100 max-h-[360px] overflow-y-auto">
-                    {ocrReviewItems.map((item) => (
-                      <div key={item.key} className="grid grid-cols-[1fr_1fr_90px] gap-2 px-3 py-2.5 items-start">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-700">{item.label}</p>
-                          {item.needsReview && (
-                            <span className="inline-flex mt-1 px-1.5 py-px rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 text-[9px] font-bold">
-                              Kontrol Gerekli
-                            </span>
-                          )}
-                          {item.validationMessage && (
-                            <p className="mt-1 text-[10px] text-red-600">{item.validationMessage}</p>
-                          )}
+                    {ocrReviewItems.map((item) => {
+                      const blocking = isBlockingReviewIssue(item, ocrReviewItems);
+                      const optionalMissing = item.needsReview && !blocking;
+                      return (
+                        <div key={item.key} className="grid grid-cols-[1fr_1fr_90px] gap-2 px-3 py-2.5 items-start">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-700">{item.label}</p>
+                            {blocking && (
+                              <span className="inline-flex mt-1 px-1.5 py-px rounded-full bg-red-50 text-red-700 ring-1 ring-red-200 text-[9px] font-bold">
+                                Kritik eksik
+                              </span>
+                            )}
+                            {optionalMissing && (
+                              <span className="inline-flex mt-1 px-1.5 py-px rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 text-[9px] font-bold">
+                                Eksik bilgi (opsiyonel)
+                              </span>
+                            )}
+                            {item.validationMessage && (
+                              <p className={`mt-1 text-[10px] ${blocking ? "text-red-600" : "text-amber-600"}`}>{item.validationMessage}</p>
+                            )}
+                          </div>
+                          <input
+                            value={item.value}
+                            onChange={(e) => updateReviewValue(item.key, e.target.value)}
+                            placeholder="Bulunamadı"
+                            className={`w-full px-2.5 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                              blocking ? "border-red-200 bg-red-50/40" : optionalMissing ? "border-amber-200 bg-amber-50/30" : "border-gray-200"
+                            }`}
+                          />
+                          <div className="text-right">
+                            <p className={`text-xs font-extrabold ${
+                              item.confidence >= 0.85 ? "text-emerald-600" : item.confidence >= 0.65 ? "text-amber-600" : "text-red-500"
+                            }`}>
+                              %{Math.round(item.confidence * 100)}
+                            </p>
+                            {item.userEdited && <p className="text-[9px] text-amber-600 font-bold mt-1">Düzenlendi</p>}
+                          </div>
                         </div>
-                        <input
-                          value={item.value}
-                          onChange={(e) => updateReviewValue(item.key, e.target.value)}
-                          placeholder="Bulunamadı"
-                          className={`w-full px-2.5 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            item.validationMessage ? "border-red-200 bg-red-50/40" : item.needsReview ? "border-amber-200 bg-amber-50/30" : "border-gray-200"
-                          }`}
-                        />
-                        <div className="text-right">
-                          <p className={`text-xs font-extrabold ${
-                            item.confidence >= 0.85 ? "text-emerald-600" : item.confidence >= 0.65 ? "text-amber-600" : "text-red-500"
-                          }`}>
-                            %{Math.round(item.confidence * 100)}
-                          </p>
-                          {item.userEdited && <p className="text-[9px] text-amber-600 font-bold mt-1">Düzenlendi</p>}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 

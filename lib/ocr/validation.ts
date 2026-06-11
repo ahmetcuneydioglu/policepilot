@@ -21,15 +21,6 @@ export const KNOWN_POLICY_TYPES = [
   "Diğer",
 ];
 
-const CRITICAL_FIELDS = new Set<PolicyOcrFieldKey>([
-  "customer_name",
-  "phone",
-  "policy_type",
-  "start_date",
-  "end_date",
-  "premium",
-]);
-
 const LOW_CONFIDENCE = 0.78;
 
 export function emptyPolicyOcrFields(): PolicyOcrFields {
@@ -58,7 +49,7 @@ function validDate(value: string): boolean {
 
 function validateSingle(key: PolicyOcrFieldKey, value: string | null): string | null {
   const v = value?.trim() ?? "";
-  if (!v) return CRITICAL_FIELDS.has(key) ? "Zorunlu alan bulunamadı" : null;
+  if (!v) return null;
 
   switch (key) {
     case "tc_identity_no":
