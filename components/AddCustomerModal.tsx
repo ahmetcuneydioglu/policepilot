@@ -55,6 +55,8 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
   const [licenseSerial,setLicenseSerial]= useState("");
   const [brandModel,   setBrandModel]   = useState("");
   const [vehicleYear,  setVehicleYear]  = useState("");
+  const [engineNo,     setEngineNo]     = useState("");
+  const [chassisNo,    setChassisNo]    = useState("");
 
   // Health fields
   const [birthDate,    setBirthDate]    = useState("");
@@ -72,12 +74,43 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
   // Other
   const [description,  setDescription]  = useState("");
 
-  // Shared
-  const [policyEndDate,setPolicyEndDate]= useState("");
+  // Poliçe bilgileri (gerçek poliçeden — hepsi isteğe bağlı)
+  const [policyNo,        setPolicyNo]        = useState("");
+  const [insuranceCompany,setInsuranceCompany]= useState("");
+  const [premium,         setPremium]         = useState("");
+  const [policyStartDate, setPolicyStartDate] = useState("");
+  const [policyEndDate,   setPolicyEndDate]   = useState("");
+
+  // Poliçe dosyası (PDF/JPG/PNG)
+  const [docFile,    setDocFile]    = useState<File | null>(null);
+  const [docWarning, setDocWarning] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
   const [done,    setDone]    = useState(false);
+  const [docUploaded, setDocUploaded] = useState(false);
+
+  // Başlangıç seçilince bitişi otomatik +365 gün öner (gerçek poliçe süresi)
+  function handleStartDate(v: string) {
+    setPolicyStartDate(v);
+    if (v && !policyEndDate) {
+      const d = new Date(`${v}T00:00:00`);
+      d.setDate(d.getDate() + 365);
+      setPolicyEndDate(d.toISOString().slice(0, 10));
+    }
+  }
+
+  function handleFilePick(f: File | null) {
+    setDocWarning("");
+    if (!f) { setDocFile(null); return; }
+    if (!["application/pdf", "image/jpeg", "image/png"].includes(f.type)) {
+      setDocWarning("Yalnız PDF, JPG veya PNG yüklenebilir."); return;
+    }
+    if (f.size > 8 * 1024 * 1024) {
+      setDocWarning("Dosya 8MB'dan büyük olamaz."); return;
+    }
+    setDocFile(f);
+  }
 
   // ── Check customer limit on mount ─────────────────────────────────────────
   useEffect(() => {
@@ -103,6 +136,13 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
     setLoading(true);
     setError("");
 
+    // Poliçe dosyası seçildiyse poliçe kaydı şart — bitiş tarihi olmadan
+    // poliçe oluşmaz, dosyanın bağlanacağı kayıt kalmaz.
+    if (docFile && !policyEndDate) {
+      setError("Poliçe dosyası yüklemek için Poliçe Bitiş Tarihi girin (poliçe kaydı oluşturulması gerekir).");
+      return;
+    }
+
     // Build extra_data from dynamic fields
     const extra: Record<string, string> = {};
     if (group === "vehicle") {
@@ -110,6 +150,8 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
       if (licenseSerial) extra.license_serial  = licenseSerial;
       if (brandModel)    extra.brand_model     = brandModel;
       if (vehicleYear)   extra.vehicle_year    = vehicleYear;
+      if (engineNo)      extra.engine_no       = engineNo;
+      if (chassisNo)     extra.chassis_no      = chassisNo;
     } else if (group === "health") {
       if (birthDate)  extra.birth_date    = birthDate;
       if (gender)     extra.gender        = gender;
@@ -139,13 +181,18 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
         policy_end_date:policyEndDate || null,
         extra_data:     extra,
         agency_id:      agencyId ?? null,
+        // Poliçe bilgileri
+        policy_no:         policyNo.trim() || null,
+        insurance_company: insuranceCompany.trim() || null,
+        premium:           premium || null,
+        policy_start_date: policyStartDate || null,
       }),
     });
 
     const json = await res.json();
-    setLoading(false);
 
     if (!res.ok) {
+      setLoading(false);
       if (json.code === "limit_exceeded" || json.code === "inactive") {
         setLimitOk(false);
         setLimitMsg(json.error);
@@ -155,6 +202,26 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
       return;
     }
 
+    // ── Poliçe dosyasını yükle (müşteri + poliçe oluştuktan sonra) ──────────
+    let uploaded = false;
+    if (docFile && json.policyId) {
+      try {
+        const fd = new FormData();
+        fd.append("policy_id", json.policyId);
+        fd.append("file", docFile);
+        const upRes = await fetch("/api/policy-documents", { method: "POST", body: fd });
+        uploaded = upRes.ok;
+        if (!upRes.ok) {
+          const upJson = await upRes.json();
+          setDocWarning(`Müşteri kaydedildi ancak dosya yüklenemedi: ${upJson.error ?? "bilinmeyen hata"}`);
+        }
+      } catch {
+        setDocWarning("Müşteri kaydedildi ancak dosya yüklenemedi (bağlantı hatası).");
+      }
+    }
+
+    setLoading(false);
+    setDocUploaded(uploaded);
     setDone(true);
   }
 
@@ -184,12 +251,16 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
             <p className="text-sm text-gray-500 mb-4">
               {name} başarıyla sisteme kaydedildi.
               {policyEndDate && " Poliçe kaydı da oluşturuldu."}
+              {docUploaded && " Poliçe dosyası yüklendi. 📄"}
             </p>
+            {docWarning && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">⚠️ {docWarning}</p>
+            )}
             <div className="flex gap-2 justify-center">
               <button onClick={onClose} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
                 Kapat
               </button>
-              <button onClick={() => { setDone(false); setName(""); setPhone(""); setEmail(""); setIdentityNo(""); setNote(""); setInsuranceType(""); setPlate(""); setLicenseSerial(""); setBrandModel(""); setVehicleYear(""); setBirthDate(""); setGender(""); setCity(""); setHealthNote(""); setPropCity(""); setPropDistrict(""); setAddress(""); setBuildingAge(""); setAreaM2(""); setDescription(""); setPolicyEndDate(""); }}
+              <button onClick={() => { setDone(false); setName(""); setPhone(""); setEmail(""); setIdentityNo(""); setNote(""); setInsuranceType(""); setPlate(""); setLicenseSerial(""); setBrandModel(""); setVehicleYear(""); setEngineNo(""); setChassisNo(""); setBirthDate(""); setGender(""); setCity(""); setHealthNote(""); setPropCity(""); setPropDistrict(""); setAddress(""); setBuildingAge(""); setAreaM2(""); setDescription(""); setPolicyNo(""); setInsuranceCompany(""); setPremium(""); setPolicyStartDate(""); setPolicyEndDate(""); setDocFile(null); setDocWarning(""); setDocUploaded(false); }}
                 className="px-5 py-2 rounded-xl border border-gray-200 text-slate-700 text-sm font-semibold hover:bg-gray-50 transition-colors">
                 Yeni Müşteri
               </button>
@@ -279,10 +350,18 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Araç Marka / Model" optional>
-                          <input value={brandModel} onChange={(e) => setBrandModel(e.target.value)} placeholder="Toyota Corolla" className={INPUT} />
+                          <input value={brandModel} onChange={(e) => setBrandModel(e.target.value)} placeholder="Hyundai Getz 1.4" className={INPUT} />
                         </Field>
                         <Field label="Araç Yılı" optional>
                           <input type="number" value={vehicleYear} onChange={(e) => setVehicleYear(e.target.value)} placeholder="2020" min="1990" max="2030" className={INPUT} />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Motor No" optional>
+                          <input value={engineNo} onChange={(e) => setEngineNo(e.target.value)} placeholder="G4EE6359743" className={INPUT} />
+                        </Field>
+                        <Field label="Şasi No" optional>
+                          <input value={chassisNo} onChange={(e) => setChassisNo(e.target.value)} placeholder="KMHBU51DP6U513670" className={INPUT} />
                         </Field>
                       </div>
                     </>
@@ -341,14 +420,79 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
                     </Field>
                   )}
 
-                  {/* Policy end date always shown */}
-                  <Field label="Poliçe Bitiş Tarihi" optional>
-                    <input type="date" value={policyEndDate} onChange={(e) => setPolicyEndDate(e.target.value)} className={INPUT} />
+                </div>
+              </div>
+            )}
+
+            {/* ── Poliçe Bilgileri (gerçek poliçeden) ───────────────────── */}
+            {insuranceType && (
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Poliçe Bilgileri</p>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Poliçe No" optional>
+                      <input value={policyNo} onChange={(e) => setPolicyNo(e.target.value)} placeholder="74798326" className={INPUT} />
+                    </Field>
+                    <Field label="Sigorta Şirketi" optional>
+                      <input value={insuranceCompany} onChange={(e) => setInsuranceCompany(e.target.value)} placeholder="Ethica Sigorta" className={INPUT} />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Başlangıç Tarihi" optional>
+                      <input type="date" value={policyStartDate} onChange={(e) => handleStartDate(e.target.value)} className={INPUT} />
+                    </Field>
+                    <Field label="Poliçe Bitiş Tarihi" optional>
+                      <input type="date" value={policyEndDate} onChange={(e) => setPolicyEndDate(e.target.value)} className={INPUT} />
+                    </Field>
+                  </div>
+                  <Field label="Ödenecek Prim (₺)" optional>
+                    <input type="number" step="0.01" min="0" value={premium} onChange={(e) => setPremium(e.target.value)} placeholder="10153.10" className={INPUT} />
                   </Field>
                   {policyEndDate && (
                     <p className="text-[11px] text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
                       ✓ Poliçe kaydı da otomatik oluşturulacak.
                     </p>
+                  )}
+
+                  {/* ── Poliçe Dosyası Yükleme ─────────────────────────── */}
+                  <Field label="Poliçe Dosyası" optional>
+                    <label className={`flex items-center gap-3 px-3 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+                      docFile ? "border-emerald-300 bg-emerald-50/60" : "border-gray-200 hover:border-blue-300 bg-gray-50/60"
+                    }`}>
+                      <input
+                        type="file"
+                        accept="application/pdf,image/jpeg,image/png"
+                        className="hidden"
+                        onChange={(e) => handleFilePick(e.target.files?.[0] ?? null)}
+                      />
+                      {docFile ? (
+                        <>
+                          <span className="text-lg">📄</span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-xs font-semibold text-emerald-700 truncate">{docFile.name}</span>
+                            <span className="block text-[10px] text-emerald-600">{(docFile.size / 1024 / 1024).toFixed(2)} MB — değiştirmek için tıklayın</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); setDocFile(null); }}
+                            className="text-gray-400 hover:text-red-500 text-sm px-1"
+                            title="Dosyayı kaldır"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-lg">📎</span>
+                          <span className="text-xs text-gray-500">
+                            <span className="font-semibold text-blue-600">PDF poliçeyi yükleyin</span> — PDF, JPG veya PNG (max 8MB)
+                          </span>
+                        </>
+                      )}
+                    </label>
+                  </Field>
+                  {docWarning && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠️ {docWarning}</p>
                   )}
                 </div>
               </div>

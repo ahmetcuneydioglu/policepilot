@@ -46,5 +46,8 @@ export type Policy = {
   renewal_status?: string | null;          // pending | quoted | completed
   renewed_from_policy_id?: string | null;  // bu poliçe hangi eski poliçenin yenilemesi
   renewed_at?: string | null;              // eski poliçenin yenilenme tarihi
+  // Poliçe dokümanı (Supabase Storage: policy-documents bucket)
+  document_path?: string | null;
+  document_name?: string | null;
   customers?: { name: string; phone: string } | null;
 };

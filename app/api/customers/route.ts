@@ -17,13 +17,12 @@ export async function POST(request: NextRequest) {
       name, phone, email, insurance_type, note,
       identity_no, vehicle_plate, policy_end_date,
       extra_data, agency_id,
+      // Poliçe bilgileri (gerçek poliçeden)
+      policy_no, insurance_company, premium, policy_start_date,
     } = body;
 
     if (!name?.trim() || !phone?.trim() || !insurance_type) {
       return NextResponse.json({ error: "Ad, telefon ve sigorta türü zorunludur." }, { status: 400 });
-    }
-    if (!agency_id) {
-      return NextResponse.json({ error: "agency_id gerekli." }, { status: 400 });
     }
 
     // ── Verify caller session ─────────────────────────────────────────────
@@ -47,9 +46,28 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabaseSession.auth.getUser();
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
-    // ── Admin client for authoritative limit check ─────────────────────────
+    // ── Admin client ───────────────────────────────────────────────────────
     const admin = getSupabaseAdmin();
-    const limitCheck = await canAddCustomer(admin, agency_id);
+
+    // ── Agency: client göndermediyse profilden çöz ─────────────────────────
+    // (AuthContext profili geç yüklenirse client null gönderebiliyor)
+    let resolvedAgencyId: string | null = agency_id ?? null;
+    if (!resolvedAgencyId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: prof } = await (admin.from("profiles") as any)
+        .select("agency_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      resolvedAgencyId = prof?.agency_id ?? null;
+    }
+    if (!resolvedAgencyId) {
+      return NextResponse.json(
+        { error: "Acente bilgisi bulunamadı. Lütfen sayfayı yenileyip tekrar deneyin." },
+        { status: 400 }
+      );
+    }
+
+    const limitCheck = await canAddCustomer(admin, resolvedAgencyId);
 
     if (!limitCheck.isActive) {
       return NextResponse.json({ error: INACTIVE_MESSAGE, code: "inactive" }, { status: 403 });
@@ -74,7 +92,7 @@ export async function POST(request: NextRequest) {
       vehicle_plate:  vehicle_plate?.trim()?.toUpperCase() || null,
       policy_end_date:policy_end_date || null,
       extra_data:     extra_data ?? {},
-      agency_id,
+      agency_id:      resolvedAgencyId,
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,17 +105,23 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Optionally create policy record ───────────────────────────────────
+    // Gerçek poliçeden gelen alanlar da kaydedilir (poliçe no, şirket, prim).
     let policyId: string | null = null;
     if (policy_end_date && customer?.id) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: pol } = await (admin.from("policies") as any).insert({
-        customer_id:  customer.id,
-        agency_id,
-        policy_type:  insurance_type,
-        start_date:   new Date().toISOString().split("T")[0],
-        end_date:     policy_end_date,
-        status:       "Aktif",
+      const { data: pol, error: polErr } = await (admin.from("policies") as any).insert({
+        customer_id:       customer.id,
+        agency_id:         resolvedAgencyId,
+        policy_type:       insurance_type,
+        start_date:        policy_start_date || new Date().toISOString().split("T")[0],
+        end_date:          policy_end_date,
+        status:            "Aktif",
+        policy_no:         policy_no?.trim() || null,
+        insurance_company: insurance_company?.trim() || null,
+        premium:           premium != null && premium !== "" ? Number(premium) : null,
+        source:            "manual",
       }).select("id").single();
+      if (polErr) console.error("[API /api/customers] policy insert error:", polErr.message);
       policyId = pol?.id ?? null;
     }
 

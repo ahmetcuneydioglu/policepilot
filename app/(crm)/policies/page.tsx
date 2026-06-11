@@ -830,6 +830,20 @@ function PolicyDetailModal({
               WhatsApp Hatırlatma Oluştur
             </button>
 
+            {/* Poliçe dosyası */}
+            {policy.document_path && (
+              <button
+                onClick={async () => {
+                  const res  = await fetch(`/api/policy-documents?policy_id=${policy.id}`);
+                  const json = await res.json();
+                  if (res.ok && json.url) window.open(json.url, "_blank");
+                }}
+                className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 border border-blue-100 transition-all"
+              >
+                📄 Poliçe Dosyasını Görüntüle{policy.document_name ? ` (${policy.document_name})` : ""}
+              </button>
+            )}
+
             {/* Yazdır + Düzenle */}
             <div className="flex gap-2">
               <button
