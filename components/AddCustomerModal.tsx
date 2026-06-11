@@ -252,6 +252,8 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
   const [ocrProviderLabel, setOcrProviderLabel] = useState("");
   const [ocrRawResponse, setOcrRawResponse] = useState("");
   const [ocrReviewItems, setOcrReviewItems] = useState<OcrReviewItem[]>([]);
+  // Tür tespit edildiyse tüm chip'ler gizlenir; "Değiştir" ile açılır
+  const [typeChipsOpen, setTypeChipsOpen] = useState(false);
 
   // Alan kaynağı rozetleri: OCR ile bulundu / sonradan düzenlendi
   const [fieldStatus, setFieldStatus] = useState<Record<string, FieldStatus>>({});
@@ -790,47 +792,63 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                   </span>
                   <button
                     type="button"
-                    onClick={() => { setOcrDone(false); setDocFile(null); setFieldStatus({}); setOcrReviewItems([]); setOcrRawResponse(""); setOcrMode(null); }}
+                    onClick={() => { setOcrDone(false); setDocFile(null); setFieldStatus({}); setOcrReviewItems([]); setOcrRawResponse(""); setOcrMode(null); setTypeChipsOpen(false); }}
                     className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 whitespace-nowrap"
                   >
                     Yeni dosya
                   </button>
                 </div>
 
-                {/* ── Poliçe Türü: OCR tespit ettiyse göster, edemediyse seçtir ── */}
+                {/* ── Poliçe Türü: tespit edildiyse yalnız o tür, edilemediyse seçim ── */}
                 <div className={`rounded-2xl border p-4 ${reviewKeys ? "border-gray-200 bg-white" : "border-amber-300 bg-amber-50/60"}`}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                    {reviewKeys ? (
-                      <>
-                        <span className="text-gray-400">Poliçe Türü</span>
-                        {typeDetectedByOcr && (
-                          <span className="px-1.5 py-px rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200 text-[9px] font-bold normal-case">✓ OCR ile bulundu</span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-amber-700 text-xs normal-case font-bold">⚠️ Poliçe türü tespit edilemedi — lütfen seçiniz</span>
-                    )}
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {INSURANCE_TYPES.map((t) => (
+                  {reviewKeys && !typeChipsOpen ? (
+                    /* Tespit edilen tür — tek satır, diğer türler gösterilmez */
+                    <div className="flex items-center gap-2.5">
+                      <span className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold shadow-sm">
+                        {INSURANCE_TYPES.find((t) => t.value === reviewType)?.label ?? reviewType}
+                      </span>
+                      {typeDetectedByOcr && (
+                        <span className="px-1.5 py-px rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200 text-[9px] font-bold">✓ OCR ile bulundu</span>
+                      )}
+                      <span className="flex-1 text-[11px] text-gray-400">
+                        Yalnız <b className="text-slate-600">{reviewType}</b> alanları gösteriliyor.
+                      </span>
                       <button
-                        key={t.value}
                         type="button"
-                        onClick={() => updateReviewValue("policy_type", t.value)}
-                        className={`px-3 py-2 rounded-xl border text-xs font-semibold text-left transition-all ${
-                          reviewType === t.value
-                            ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                            : "bg-white text-slate-600 border-gray-200 hover:border-blue-200 hover:text-blue-600"
-                        }`}
+                        onClick={() => setTypeChipsOpen(true)}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                        title="OCR türü yanlış okuduysa düzeltin"
                       >
-                        {t.label}
+                        Değiştir
                       </button>
-                    ))}
-                  </div>
-                  {reviewKeys && (
-                    <p className="mt-2.5 text-[11px] text-gray-400">
-                      Aşağıda yalnız <b className="text-slate-600">{reviewType}</b> ürününe ait alanlar gösteriliyor.
-                    </p>
+                    </div>
+                  ) : (
+                    /* Tür seçimi — tespit edilemedi veya kullanıcı değiştirmek istedi */
+                    <>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-2.5">
+                        {reviewKeys ? (
+                          <span className="text-gray-400">Poliçe Türünü Seçiniz</span>
+                        ) : (
+                          <span className="text-amber-700 text-xs normal-case font-bold">⚠️ Poliçe türü tespit edilemedi — lütfen seçiniz</span>
+                        )}
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {INSURANCE_TYPES.map((t) => (
+                          <button
+                            key={t.value}
+                            type="button"
+                            onClick={() => { updateReviewValue("policy_type", t.value); setTypeChipsOpen(false); }}
+                            className={`px-3 py-2 rounded-xl border text-xs font-semibold text-left transition-all ${
+                              reviewType === t.value
+                                ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                : "bg-white text-slate-600 border-gray-200 hover:border-blue-200 hover:text-blue-600"
+                            }`}
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
 
