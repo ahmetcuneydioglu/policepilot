@@ -27,10 +27,29 @@ type Props = { onClose: () => void; agencyId?: string | null; role?: string | nu
 const INPUT = "w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition placeholder:text-gray-300";
 const LABEL = "block text-xs font-semibold text-slate-600 mb-1.5";
 
-function Field({ label, children, optional }: { label: string; children: React.ReactNode; optional?: boolean }) {
+type FieldStatus = "ocr" | "edited";
+
+function StatusBadge({ status }: { status?: FieldStatus }) {
+  if (!status) return null;
+  return status === "ocr" ? (
+    <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-px rounded-full bg-emerald-50 text-emerald-600 text-[9px] font-bold ring-1 ring-emerald-200 align-middle">
+      ✓ OCR ile bulundu
+    </span>
+  ) : (
+    <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-px rounded-full bg-amber-50 text-amber-600 text-[9px] font-bold ring-1 ring-amber-200 align-middle">
+      ✏️ Manuel Düzenlendi
+    </span>
+  );
+}
+
+function Field({ label, children, optional, status }: { label: string; children: React.ReactNode; optional?: boolean; status?: FieldStatus }) {
   return (
     <div>
-      <label className={LABEL}>{label}{optional && <span className="ml-1 text-gray-400 font-normal">(isteğe bağlı)</span>}</label>
+      <label className={LABEL}>
+        {label}
+        {optional && <span className="ml-1 text-gray-400 font-normal">(isteğe bağlı)</span>}
+        <StatusBadge status={status} />
+      </label>
       {children}
     </div>
   );
@@ -66,7 +85,8 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
   const [name,         setName]         = useState("");
   const [phone,        setPhone]        = useState("");
   const [email,        setEmail]        = useState("");
-  const [identityNo,   setIdentityNo]   = useState("");
+  const [tcIdentityNo, setTcIdentityNo] = useState("");
+  const [taxNo,        setTaxNo]        = useState("");
   const [note,         setNote]         = useState("");
   const [insuranceType,setInsuranceType]= useState("");
 
@@ -105,6 +125,18 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
   const [docFile,    setDocFile]    = useState<File | null>(null);
   const [docWarning, setDocWarning] = useState("");
 
+  // Giriş modu: poliçeden otomatik (varsayılan) veya manuel
+  const [entryMode,  setEntryMode]  = useState<"policy" | "manual">("policy");
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrDone,    setOcrDone]    = useState(false);
+  const [ocrError,   setOcrError]   = useState("");
+
+  // Alan kaynağı rozetleri: OCR ile bulundu / sonradan düzenlendi
+  const [fieldStatus, setFieldStatus] = useState<Record<string, FieldStatus>>({});
+  function touch(key: string) {
+    setFieldStatus(s => (s[key] === "ocr" ? { ...s, [key]: "edited" } : s));
+  }
+
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
   const [done,    setDone]    = useState(false);
@@ -132,9 +164,73 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
     setDocFile(f);
   }
 
+  // ── Poliçeden otomatik doldurma: OCR çalıştır, alanları doldur ────────────
+  async function runOcr(f: File | null) {
+    if (!f) return;
+    setOcrError("");
+    if (!["application/pdf", "image/jpeg", "image/png"].includes(f.type)) {
+      setOcrError("Yalnız PDF, JPG veya PNG yüklenebilir."); return;
+    }
+    if (f.size > 8 * 1024 * 1024) {
+      setOcrError("Dosya 8MB'dan büyük olamaz."); return;
+    }
+
+    setDocFile(f);          // Aynı dosya kayıtta evrak olarak da yüklenecek
+    setOcrLoading(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const res  = await fetch("/api/ocr/policy", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Poliçe okunamadı.");
+
+      const x = json.fields as Record<string, string | null>;
+      const found: Record<string, FieldStatus> = {};
+      const apply = (key: string, value: string | null, setter: (v: string) => void) => {
+        if (value != null && value !== "") { setter(value); found[key] = "ocr"; }
+      };
+
+      apply("name",              x.customer_name,     setName);
+      apply("phone",             x.phone,             setPhone);
+      apply("tc_identity_no",    x.tc_identity_no ?? x.identity_no, setTcIdentityNo);
+      apply("tax_no",            x.tax_no,            setTaxNo);
+      apply("address",           x.address,           setAddress);
+      apply("plate",             x.plate,             setPlate);
+      apply("license_serial",    x.license_serial,    setLicenseSerial);
+      apply("vehicle_year",      x.vehicle_year,      setVehicleYear);
+      apply("engine_no",         x.engine_no,         setEngineNo);
+      apply("chassis_no",        x.chassis_no,        setChassisNo);
+      apply("insurance_company", x.insurance_company, setInsuranceCompany);
+      apply("policy_no",         x.policy_no,         setPolicyNo);
+      apply("premium",           x.premium,           setPremium);
+      apply("start_date",        x.start_date,        setPolicyStartDate);
+      apply("end_date",          x.end_date,          setPolicyEndDate);
+
+      const brandModelVal = [x.vehicle_brand, x.vehicle_model].filter(Boolean).join(" ");
+      if (brandModelVal) { setBrandModel(brandModelVal); found["brand_model"] = "ocr"; }
+
+      if (x.policy_type && INSURANCE_TYPES.some(t => t.value === x.policy_type)) {
+        setInsuranceType(x.policy_type);
+        found["insurance_type"] = "ocr";
+      }
+
+      setFieldStatus(found);
+      setOcrDone(true);
+    } catch (err) {
+      setOcrError(err instanceof Error ? err.message : "Poliçe okunamadı.");
+      setDocFile(null);
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
   // ── Check customer limit on mount ─────────────────────────────────────────
   useEffect(() => {
-    if (!agencyId) { setLimitChecked(true); return; }
+    if (!agencyId) {
+      queueMicrotask(() => setLimitChecked(true));
+      return;
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     canAddCustomer(supabase as any, agencyId).then((res) => {
       setLimitOk(res.ok && res.isActive);
@@ -164,6 +260,7 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
     // poliçe oluşmaz, dosyanın bağlanacağı kayıt kalmaz.
     if (docFile && !policyEndDate) {
       setError("Poliçe dosyası yüklemek için Poliçe Bitiş Tarihi girin (poliçe kaydı oluşturulması gerekir).");
+      setLoading(false);
       return;
     }
 
@@ -176,6 +273,7 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
       if (vehicleYear)   extra.vehicle_year    = vehicleYear;
       if (engineNo)      extra.engine_no       = engineNo;
       if (chassisNo)     extra.chassis_no      = chassisNo;
+      if (address)       extra.address         = address;
     } else if (group === "health") {
       if (birthDate)  extra.birth_date    = birthDate;
       if (gender)     extra.gender        = gender;
@@ -191,6 +289,53 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
       if (description) extra.description = description;
     }
 
+    const identityNo = tcIdentityNo.trim() || taxNo.trim();
+
+    if (entryMode === "policy" && docFile) {
+      const fd = new FormData();
+      fd.append("file", docFile);
+      fd.append("name", name.trim());
+      fd.append("phone", phone.trim());
+      fd.append("email", email.trim());
+      fd.append("insurance_type", insuranceType);
+      fd.append("note", note.trim());
+      fd.append("tc_identity_no", tcIdentityNo.trim());
+      fd.append("tax_no", taxNo.trim());
+      fd.append("identity_no", identityNo);
+      fd.append("address", address.trim());
+      fd.append("vehicle_plate", group === "vehicle" ? plate.trim().toUpperCase() : "");
+      fd.append("license_serial", licenseSerial.trim());
+      fd.append("brand_model", brandModel.trim());
+      fd.append("vehicle_year", vehicleYear.trim());
+      fd.append("engine_no", engineNo.trim());
+      fd.append("chassis_no", chassisNo.trim());
+      fd.append("policy_no", policyNo.trim());
+      fd.append("insurance_company", insuranceCompany.trim());
+      fd.append("premium", premium);
+      fd.append("policy_start_date", policyStartDate);
+      fd.append("policy_end_date", policyEndDate);
+      if (effectiveAgencyId) fd.append("agency_id", effectiveAgencyId);
+
+      const res = await fetch("/api/customers/from-policy", { method: "POST", body: fd });
+      const json = await res.json();
+
+      setLoading(false);
+
+      if (!res.ok) {
+        if (json.code === "limit_exceeded" || json.code === "policy_limit_exceeded" || json.code === "inactive") {
+          setLimitOk(false);
+          setLimitMsg(json.error);
+        } else {
+          setError(json.error ?? "Kayıt sırasında bir hata oluştu.");
+        }
+        return;
+      }
+
+      setDocUploaded(Boolean(json.documentPath));
+      setDone(true);
+      return;
+    }
+
     const res = await fetch("/api/customers", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
@@ -200,7 +345,7 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
         email:          email.trim() || null,
         insurance_type: insuranceType,
         note:           note.trim() || null,
-        identity_no:    identityNo.trim() || null,
+        identity_no:    identityNo || null,
         vehicle_plate:  (group === "vehicle" ? plate.trim().toUpperCase() : null) || null,
         policy_end_date:policyEndDate || null,
         extra_data:     extra,
@@ -284,7 +429,7 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
               <button onClick={onClose} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
                 Kapat
               </button>
-              <button onClick={() => { setDone(false); setName(""); setPhone(""); setEmail(""); setIdentityNo(""); setNote(""); setInsuranceType(""); setPlate(""); setLicenseSerial(""); setBrandModel(""); setVehicleYear(""); setEngineNo(""); setChassisNo(""); setBirthDate(""); setGender(""); setCity(""); setHealthNote(""); setPropCity(""); setPropDistrict(""); setAddress(""); setBuildingAge(""); setAreaM2(""); setDescription(""); setPolicyNo(""); setInsuranceCompany(""); setPremium(""); setPolicyStartDate(""); setPolicyEndDate(""); setDocFile(null); setDocWarning(""); setDocUploaded(false); }}
+              <button onClick={() => { setDone(false); setName(""); setPhone(""); setEmail(""); setTcIdentityNo(""); setTaxNo(""); setNote(""); setInsuranceType(""); setPlate(""); setLicenseSerial(""); setBrandModel(""); setVehicleYear(""); setEngineNo(""); setChassisNo(""); setBirthDate(""); setGender(""); setCity(""); setHealthNote(""); setPropCity(""); setPropDistrict(""); setAddress(""); setBuildingAge(""); setAreaM2(""); setDescription(""); setPolicyNo(""); setInsuranceCompany(""); setPremium(""); setPolicyStartDate(""); setPolicyEndDate(""); setDocFile(null); setDocWarning(""); setDocUploaded(false); setOcrDone(false); setOcrError(""); setFieldStatus({}); setEntryMode("policy"); }}
                 className="px-5 py-2 rounded-xl border border-gray-200 text-slate-700 text-sm font-semibold hover:bg-gray-50 transition-colors">
                 Yeni Müşteri
               </button>
@@ -308,6 +453,91 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
           </div>
         ) : (
           <form onSubmit={submit} className="p-6 space-y-5">
+
+            {/* ── Giriş yöntemi seçimi ───────────────────────────────────── */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setEntryMode("manual")}
+                className={`text-left p-3.5 rounded-xl border-2 transition-all ${
+                  entryMode === "manual"
+                    ? "border-blue-500 bg-blue-50/70 shadow-sm"
+                    : "border-gray-200 bg-white hover:border-blue-200"
+                }`}
+              >
+                <span className="text-lg block mb-1">👤</span>
+                <span className="block text-sm font-bold text-slate-800">Manuel Giriş</span>
+                <span className="block text-[11px] text-gray-400 mt-0.5">Tüm bilgileri elle gir</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryMode("policy")}
+                className={`text-left p-3.5 rounded-xl border-2 transition-all ${
+                  entryMode === "policy"
+                    ? "border-blue-500 bg-blue-50/70 shadow-sm"
+                    : "border-gray-200 bg-white hover:border-blue-200"
+                }`}
+              >
+                <span className="text-lg block mb-1">📄</span>
+                <span className="block text-sm font-bold text-slate-800">Poliçe Yükle</span>
+                <span className="block text-[11px] text-gray-400 mt-0.5">PDF veya fotoğraftan bilgileri otomatik al</span>
+              </button>
+            </div>
+
+            {/* ── OCR dropzone / loading (Poliçe Yükle modu) ────────────── */}
+            {entryMode === "policy" && !ocrDone && (
+              <div>
+                {ocrLoading ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/40">
+                    <div className="w-8 h-8 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                    <p className="text-sm font-semibold text-blue-700">Poliçe okunuyor…</p>
+                    <p className="text-[11px] text-blue-400">Bilgiler otomatik olarak forma aktarılacak</p>
+                  </div>
+                ) : (
+                  <label
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+                    onDrop={(e) => { e.preventDefault(); runOcr(e.dataTransfer.files?.[0] ?? null); }}
+                    className="flex flex-col items-center justify-center gap-2 py-10 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/60 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
+                  >
+                    <input
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png"
+                      className="hidden"
+                      onChange={(e) => runOcr(e.target.files?.[0] ?? null)}
+                    />
+                    <span className="text-3xl">📄</span>
+                    <span className="text-sm font-bold text-blue-600">Poliçeyi sürükleyip bırakın</span>
+                    <span className="px-3 py-1.5 rounded-lg bg-white border border-blue-100 text-xs font-bold text-blue-600 shadow-sm">
+                      Dosya Seç
+                    </span>
+                    <span className="text-[11px] text-gray-400">PDF, JPG veya PNG — max 8MB</span>
+                  </label>
+                )}
+                {ocrError && (
+                  <p className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ {ocrError}</p>
+                )}
+              </div>
+            )}
+
+            {/* ── OCR tamamlandı bildirimi ───────────────────────────────── */}
+            {entryMode === "policy" && ocrDone && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                <span className="text-base">✅</span>
+                <p className="text-xs text-emerald-700 font-medium flex-1">
+                  Poliçe okundu, alanlar otomatik dolduruldu. Kontrol edip gerekirse düzenleyin.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setOcrDone(false); setDocFile(null); setFieldStatus({}); }}
+                  className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 whitespace-nowrap"
+                >
+                  Yeni dosya
+                </button>
+              </div>
+            )}
+
+            {/* ── Form alanları: manuel modda hemen, poliçe modunda OCR sonrası ── */}
+            <div className={entryMode === "policy" && !ocrDone ? "hidden" : "space-y-5"}>
 
             {/* ── Acente seçimi (yalnız super_admin) ─────────────────────── */}
             {isSuperAdmin && (
@@ -338,15 +568,23 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Temel Bilgiler</p>
               <div className="space-y-3">
-                <Field label="Ad Soyad *">
-                  <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ahmet Yılmaz" className={INPUT} />
+                <Field label="Ad Soyad *" status={fieldStatus.name}>
+                  <input value={name} onChange={(e) => { setName(e.target.value); touch("name"); }} required placeholder="Ahmet Yılmaz" className={INPUT} />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Telefon *">
-                    <input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="0532 123 45 67" className={INPUT} />
+                  <Field label="Telefon *" status={fieldStatus.phone}>
+                    <input value={phone} onChange={(e) => { setPhone(e.target.value); touch("phone"); }} required placeholder="0532 123 45 67" className={INPUT} />
                   </Field>
-                  <Field label="TC / VKN" optional>
-                    <input value={identityNo} onChange={(e) => setIdentityNo(e.target.value)} placeholder="12345678901" className={INPUT} />
+                  <Field label="TC Kimlik" optional status={fieldStatus.tc_identity_no}>
+                    <input value={tcIdentityNo} onChange={(e) => { setTcIdentityNo(e.target.value); touch("tc_identity_no"); }} placeholder="12345678901" className={INPUT} />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="VKN" optional status={fieldStatus.tax_no}>
+                    <input value={taxNo} onChange={(e) => { setTaxNo(e.target.value); touch("tax_no"); }} placeholder="1234567890" className={INPUT} />
+                  </Field>
+                  <Field label="Adres" optional status={fieldStatus.address}>
+                    <input value={address} onChange={(e) => { setAddress(e.target.value); touch("address"); }} placeholder="Poliçedeki adres" className={INPUT} />
                   </Field>
                 </div>
                 <Field label="E-posta" optional>
@@ -360,13 +598,16 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
 
             {/* ── Sigorta Türü ───────────────────────────────────────────── */}
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Sigorta Türü</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                Sigorta Türü
+                <StatusBadge status={fieldStatus.insurance_type} />
+              </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {INSURANCE_TYPES.map((t) => (
                   <button
                     key={t.value}
                     type="button"
-                    onClick={() => setInsuranceType(t.value)}
+                    onClick={() => { setInsuranceType(t.value); touch("insurance_type"); }}
                     className={`px-3 py-2 rounded-xl border text-xs font-semibold text-left transition-all ${
                       insuranceType === t.value
                         ? "bg-blue-600 text-white border-blue-600 shadow-sm"
@@ -390,27 +631,27 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                   {group === "vehicle" && (
                     <>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="Plaka" optional>
-                          <input value={plate} onChange={(e) => setPlate(e.target.value.toUpperCase())} placeholder="34ABC123" className={INPUT} />
+                        <Field label="Plaka" optional status={fieldStatus.plate}>
+                          <input value={plate} onChange={(e) => { setPlate(e.target.value.toUpperCase()); touch("plate"); }} placeholder="34ABC123" className={INPUT} />
                         </Field>
-                        <Field label="Ruhsat Seri No" optional>
-                          <input value={licenseSerial} onChange={(e) => setLicenseSerial(e.target.value)} placeholder="AA 00000" className={INPUT} />
-                        </Field>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Araç Marka / Model" optional>
-                          <input value={brandModel} onChange={(e) => setBrandModel(e.target.value)} placeholder="Hyundai Getz 1.4" className={INPUT} />
-                        </Field>
-                        <Field label="Araç Yılı" optional>
-                          <input type="number" value={vehicleYear} onChange={(e) => setVehicleYear(e.target.value)} placeholder="2020" min="1990" max="2030" className={INPUT} />
+                        <Field label="Ruhsat Seri No" optional status={fieldStatus.license_serial}>
+                          <input value={licenseSerial} onChange={(e) => { setLicenseSerial(e.target.value); touch("license_serial"); }} placeholder="AA 00000" className={INPUT} />
                         </Field>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="Motor No" optional>
-                          <input value={engineNo} onChange={(e) => setEngineNo(e.target.value)} placeholder="G4EE6359743" className={INPUT} />
+                        <Field label="Araç Marka / Model" optional status={fieldStatus.brand_model}>
+                          <input value={brandModel} onChange={(e) => { setBrandModel(e.target.value); touch("brand_model"); }} placeholder="Hyundai Getz 1.4" className={INPUT} />
                         </Field>
-                        <Field label="Şasi No" optional>
-                          <input value={chassisNo} onChange={(e) => setChassisNo(e.target.value)} placeholder="KMHBU51DP6U513670" className={INPUT} />
+                        <Field label="Araç Yılı" optional status={fieldStatus.vehicle_year}>
+                          <input type="number" value={vehicleYear} onChange={(e) => { setVehicleYear(e.target.value); touch("vehicle_year"); }} placeholder="2020" min="1990" max="2030" className={INPUT} />
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Motor No" optional status={fieldStatus.engine_no}>
+                          <input value={engineNo} onChange={(e) => { setEngineNo(e.target.value); touch("engine_no"); }} placeholder="G4EE6359743" className={INPUT} />
+                        </Field>
+                        <Field label="Şasi No" optional status={fieldStatus.chassis_no}>
+                          <input value={chassisNo} onChange={(e) => { setChassisNo(e.target.value); touch("chassis_no"); }} placeholder="KMHBU51DP6U513670" className={INPUT} />
                         </Field>
                       </div>
                     </>
@@ -449,9 +690,6 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                           <input value={propDistrict} onChange={(e) => setPropDistrict(e.target.value)} placeholder="Kadıköy" className={INPUT} />
                         </Field>
                       </div>
-                      <Field label="Adres" optional>
-                        <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Tam adres" className={INPUT} />
-                      </Field>
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Bina Yaşı" optional>
                           <input type="number" value={buildingAge} onChange={(e) => setBuildingAge(e.target.value)} placeholder="15" min="0" className={INPUT} />
@@ -479,23 +717,23 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Poliçe Bilgileri</p>
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Poliçe No" optional>
-                      <input value={policyNo} onChange={(e) => setPolicyNo(e.target.value)} placeholder="74798326" className={INPUT} />
+                    <Field label="Poliçe No" optional status={fieldStatus.policy_no}>
+                      <input value={policyNo} onChange={(e) => { setPolicyNo(e.target.value); touch("policy_no"); }} placeholder="74798326" className={INPUT} />
                     </Field>
-                    <Field label="Sigorta Şirketi" optional>
-                      <input value={insuranceCompany} onChange={(e) => setInsuranceCompany(e.target.value)} placeholder="Ethica Sigorta" className={INPUT} />
+                    <Field label="Sigorta Şirketi" optional status={fieldStatus.insurance_company}>
+                      <input value={insuranceCompany} onChange={(e) => { setInsuranceCompany(e.target.value); touch("insurance_company"); }} placeholder="Ethica Sigorta" className={INPUT} />
                     </Field>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Başlangıç Tarihi" optional>
-                      <input type="date" value={policyStartDate} onChange={(e) => handleStartDate(e.target.value)} className={INPUT} />
+                    <Field label="Başlangıç Tarihi" optional status={fieldStatus.start_date}>
+                      <input type="date" value={policyStartDate} onChange={(e) => { handleStartDate(e.target.value); touch("start_date"); }} className={INPUT} />
                     </Field>
-                    <Field label="Poliçe Bitiş Tarihi" optional>
-                      <input type="date" value={policyEndDate} onChange={(e) => setPolicyEndDate(e.target.value)} className={INPUT} />
+                    <Field label="Poliçe Bitiş Tarihi" optional status={fieldStatus.end_date}>
+                      <input type="date" value={policyEndDate} onChange={(e) => { setPolicyEndDate(e.target.value); touch("end_date"); }} className={INPUT} />
                     </Field>
                   </div>
-                  <Field label="Ödenecek Prim (₺)" optional>
-                    <input type="number" step="0.01" min="0" value={premium} onChange={(e) => setPremium(e.target.value)} placeholder="10153.10" className={INPUT} />
+                  <Field label="Ödenecek Prim (₺)" optional status={fieldStatus.premium}>
+                    <input type="number" step="0.01" min="0" value={premium} onChange={(e) => { setPremium(e.target.value); touch("premium"); }} placeholder="10153.10" className={INPUT} />
                   </Field>
                   {policyEndDate && (
                     <p className="text-[11px] text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
@@ -563,6 +801,8 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                 {loading ? "Kaydediliyor..." : "Müşteri Ekle"}
               </button>
             </div>
+
+            </div>{/* /form alanları wrapper */}
           </form>
         )}
       </div>

@@ -19,19 +19,63 @@ const BUCKET    = "policy-documents";
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED   = ["application/pdf", "image/jpeg", "image/png"];
 
-type PolicyRow = { id: string; agency_id: string | null; document_path?: string | null };
+type PolicyRow = {
+  id: string;
+  agency_id: string | null;
+  customer_id: string | null;
+  document_path?: string | null;
+};
 
 async function getAuthorizedPolicy(policyId: string, callerRole: string, callerAgency: string | null) {
   const admin = getSupabaseAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: policy } = await (admin.from("policies") as any)
-    .select("id, agency_id, document_path")
+    .select("id, agency_id, customer_id, document_path")
     .eq("id", policyId)
     .maybeSingle();
 
   if (!policy) return null;
   if (callerRole !== "super_admin" && policy.agency_id !== callerAgency) return null;
   return policy as PolicyRow;
+}
+
+async function insertDocumentMetadata(input: {
+  policy: PolicyRow;
+  path: string;
+  file: File;
+}) {
+  const admin = getSupabaseAdmin();
+
+  // Preferred documents_migration.sql shape.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const preferred = await (admin.from("documents") as any).insert({
+    agency_id: input.policy.agency_id,
+    customer_id: input.policy.customer_id,
+    policy_id: input.policy.id,
+    doc_type: "policy",
+    file_path: input.path,
+    file_name: input.file.name,
+    mime_type: input.file.type,
+    size_bytes: input.file.size,
+    source: "upload",
+  });
+
+  if (!preferred.error) return null;
+
+  // Older schema.sql shape.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fallback = await (admin.from("documents") as any).insert({
+    agency_id: input.policy.agency_id,
+    customer_id: input.policy.customer_id,
+    policy_id: input.policy.id,
+    file_name: input.file.name,
+    file_path: input.path,
+    file_type: input.file.type,
+    file_size: input.file.size,
+    bucket: BUCKET,
+  });
+
+  return fallback.error ?? preferred.error;
 }
 
 export async function POST(request: NextRequest) {
@@ -82,7 +126,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updErr.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, path });
+    const docErr = await insertDocumentMetadata({ policy, path, file });
+    if (docErr) console.warn("[policy-documents] document metadata insert:", docErr.message);
+
+    return NextResponse.json({ ok: true, path, documentSaved: !docErr });
   } catch (err) {
     console.error("[policy-documents POST]", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
