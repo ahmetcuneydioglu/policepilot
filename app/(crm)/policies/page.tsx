@@ -117,6 +117,14 @@ function PolicyFormModal({
   const [custDropOpen, setCustDropOpen] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Akıllı otomatik doldurma: seçilen müşteri + son poliçesi
+  const [selectedCust, setSelectedCust] = useState<Customer | null>(null);
+  const [lastPolicy,   setLastPolicy]   = useState<{
+    policy_type: string; insurance_company: string | null;
+    end_date: string;    policy_no: string | null;
+  } | null>(null);
+  const [autoToast, setAutoToast] = useState("");
+
   function setField(k: keyof PolicyFormData, v: string) {
     setForm((p) => ({ ...p, [k]: v }));
   }
@@ -137,15 +145,76 @@ function PolicyFormModal({
   function handleCustInput(v: string) {
     setCustSearch(v);
     setField("customer_id", "");
+    setSelectedCust(null);
+    setLastPolicy(null);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => searchCustomers(v), 250);
   }
 
+  // Son poliçeyi bul ve formu doldur.
+  // Öncelik: 1) Aktif poliçe  2) En yeni bitişli  3) Son oluşturulan
+  async function copyLastPolicy(customerId: string) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q = (supabase.from("policies") as any)
+      .select("policy_type, insurance_company, premium, commission, policy_no, status, end_date, created_at")
+      .eq("customer_id", customerId)
+      .order("end_date",   { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (agencyId) q = q.eq("agency_id", agencyId);
+    const { data } = await q;
+
+    type Row = {
+      policy_type: string; insurance_company: string | null;
+      premium: number | null; commission: number | null;
+      policy_no: string | null; status: string; end_date: string;
+    };
+    const rows = (data ?? []) as Row[];
+    if (rows.length === 0) return;
+
+    const src = rows.find(r => r.status === "Aktif") ?? rows[0];
+
+    // Tarihler HARİÇ kopyala — kullanıcı her alanı değiştirebilir
+    setForm(prev => ({
+      ...prev,
+      policy_type:       src.policy_type,
+      insurance_company: src.insurance_company ?? "",
+      premium:           src.premium    != null ? String(src.premium)    : "",
+      commission:        src.commission != null ? String(src.commission) : "",
+      policy_no:         src.policy_no ?? "",
+    }));
+    setLastPolicy({
+      policy_type:       src.policy_type,
+      insurance_company: src.insurance_company,
+      end_date:          src.end_date,
+      policy_no:         src.policy_no,
+    });
+    setAutoToast("Son poliçe bilgileri kopyalandı");
+  }
+
   function selectCustomer(c: Customer) {
     setCustSearch(c.name);
-    setField("customer_id", c.id);
     setCustResults([]);
     setCustDropOpen(false);
+    setSelectedCust(c);
+
+    // Yeni poliçe: başlangıç = bugün, bitiş = bugün + 365 gün
+    const today = new Date();
+    const end   = new Date(today);
+    end.setDate(end.getDate() + 365);
+
+    setForm(prev => ({
+      ...prev,
+      customer_id: c.id,
+      ...(mode === "add" ? {
+        start_date: today.toISOString().slice(0, 10),
+        end_date:   end.toISOString().slice(0, 10),
+      } : {}),
+    }));
+    setAutoToast("Müşteri bilgileri yüklendi");
+
+    // Son poliçe kopyalama yalnız yeni poliçede — düzenlemede formu ezmesin
+    if (mode === "add") copyLastPolicy(c.id);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -232,13 +301,51 @@ function PolicyFormModal({
                 ))}
               </div>
             )}
-            {form.customer_id && (
+            {form.customer_id && !selectedCust && (
               <div className="mt-1.5 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 <span className="text-xs text-emerald-600 font-medium">Müşteri seçildi</span>
               </div>
             )}
           </div>
+
+          {/* Müşteri bilgi kartı — doğru müşteriyi seçtiğini hissettir */}
+          {selectedCust && (
+            <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50/60 p-4 animate-fade-in-up">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-sm">
+                  {selectedCust.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-slate-900 truncate">👤 {selectedCust.name}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
+                    {selectedCust.phone && (
+                      <span className="text-xs text-slate-500">📞 {selectedCust.phone}</span>
+                    )}
+                    {selectedCust.insurance_type && (
+                      <span className="text-xs text-slate-500">🛡️ {selectedCust.insurance_type}</span>
+                    )}
+                  </div>
+                  {lastPolicy ? (
+                    <div className="mt-2 pt-2 border-t border-emerald-200/60 flex flex-wrap gap-x-4 gap-y-0.5">
+                      <span className="text-xs text-slate-600">
+                        <span className="text-slate-400">Son Poliçe:</span>{" "}
+                        <b>{lastPolicy.policy_type}{lastPolicy.insurance_company ? ` - ${lastPolicy.insurance_company}` : ""}</b>
+                      </span>
+                      <span className="text-xs text-slate-600">
+                        <span className="text-slate-400">Bitiş:</span>{" "}
+                        <b>{new Date(lastPolicy.end_date).toLocaleDateString("tr-TR")}</b>
+                      </span>
+                    </div>
+                  ) : mode === "add" && (
+                    <p className="mt-2 pt-2 border-t border-emerald-200/60 text-xs text-slate-400">
+                      Kayıtlı poliçesi yok — ilk poliçesi oluşturulacak
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Poliçe Türü */}
           <div>
@@ -393,6 +500,9 @@ function PolicyFormModal({
           </button>
         </div>
       </div>
+
+      {/* Otomatik doldurma bildirimi */}
+      {autoToast && <Toast key={autoToast} message={autoToast} onDone={() => setAutoToast("")} />}
     </div>
   );
 }
