@@ -41,7 +41,14 @@ export async function POST(request: NextRequest) {
       name:     file.name,
     });
 
-    return NextResponse.json({ ok: true, provider: provider.name, fields: result });
+    return NextResponse.json({
+      ok: true,
+      provider: provider.name,
+      providerLabel: result.providerLabel,
+      mode: result.mode,
+      fields: result.fields,
+      raw_response: result.raw_response,
+    });
   } catch (err) {
     console.error("[api/ocr/policy]", err);
     return NextResponse.json(

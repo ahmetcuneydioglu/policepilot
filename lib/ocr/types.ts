@@ -19,29 +19,48 @@ export interface OcrFile {
   name: string;
 }
 
+export const POLICY_OCR_FIELD_KEYS = [
+  "customer_name",
+  "phone",
+  "tc_identity_no",
+  "tax_no",
+  "identity_no",
+  "address",
+  "plate",
+  "license_serial",
+  "vehicle_brand",
+  "vehicle_model",
+  "vehicle_year",
+  "engine_no",
+  "chassis_no",
+  "policy_type",
+  "policy_no",
+  "insurance_company",
+  "start_date",
+  "end_date",
+  "premium",
+] as const;
+
+export type PolicyOcrFieldKey = typeof POLICY_OCR_FIELD_KEYS[number];
+
+export interface PolicyOcrField {
+  value: string | null;
+  confidence: number;
+  needsReview: boolean;
+  validationMessage?: string | null;
+  sourceText?: string | null;
+}
+
+export type PolicyOcrFields = Record<PolicyOcrFieldKey, PolicyOcrField>;
+
+export type OcrMode = "demo" | "real";
+
 export interface PolicyOcrResult {
-  customer_name: string | null;
-  phone: string | null;
-  tc_identity_no: string | null;
-  tax_no: string | null;
-  /** Backward-compatible combined TC/VKN value. Prefer tc_identity_no/tax_no. */
-  identity_no: string | null;
-  address: string | null;
-
-  plate: string | null;
-  license_serial: string | null;
-  vehicle_brand: string | null;
-  vehicle_model: string | null;
-  vehicle_year: string | null;
-  engine_no: string | null;
-  chassis_no: string | null;
-
-  policy_type: string | null;
-  policy_no: string | null;
-  insurance_company: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  premium: string | null;
+  mode: OcrMode;
+  provider: OcrProviderName;
+  providerLabel: string;
+  fields: PolicyOcrFields;
+  raw_response: unknown;
 }
 
 export interface OcrProvider {

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { canAddCustomer, limitMessage } from "@/lib/limits";
 import { INACTIVE_MESSAGE } from "@/lib/limits";
+import { KNOWN_POLICY_TYPES } from "@/lib/ocr/validation";
 
 // ─── Insurance types & their extra field groups ────────────────────────────────
 const INSURANCE_TYPES = [
@@ -28,6 +29,69 @@ const INPUT = "w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focu
 const LABEL = "block text-xs font-semibold text-slate-600 mb-1.5";
 
 type FieldStatus = "ocr" | "edited";
+type OcrMode = "demo" | "real";
+type OcrApiField = {
+  value: string | null;
+  confidence: number;
+  needsReview: boolean;
+  validationMessage?: string | null;
+  sourceText?: string | null;
+};
+type OcrReviewItem = {
+  key: string;
+  label: string;
+  value: string;
+  confidence: number;
+  needsReview: boolean;
+  validationMessage?: string | null;
+  userEdited: boolean;
+};
+
+const OCR_REVIEW_FIELDS = [
+  { key: "customer_name", label: "Ad Soyad" },
+  { key: "phone", label: "Telefon" },
+  { key: "tc_identity_no", label: "TC Kimlik" },
+  { key: "tax_no", label: "VKN" },
+  { key: "address", label: "Adres" },
+  { key: "plate", label: "Plaka" },
+  { key: "license_serial", label: "Ruhsat Seri No" },
+  { key: "vehicle_brand", label: "Marka" },
+  { key: "vehicle_model", label: "Model" },
+  { key: "vehicle_year", label: "Model Yılı" },
+  { key: "engine_no", label: "Motor No" },
+  { key: "chassis_no", label: "Şasi No" },
+  { key: "policy_type", label: "Poliçe Türü" },
+  { key: "policy_no", label: "Poliçe No" },
+  { key: "insurance_company", label: "Sigorta Şirketi" },
+  { key: "start_date", label: "Başlangıç Tarihi" },
+  { key: "end_date", label: "Bitiş Tarihi" },
+  { key: "premium", label: "Prim" },
+];
+
+function reviewValue(items: OcrReviewItem[], key: string): string {
+  return items.find((item) => item.key === key)?.value.trim() ?? "";
+}
+
+function validIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+function validateReviewItem(key: string, value: string): string | null {
+  const v = value.trim();
+  if (!v && ["customer_name", "phone", "policy_type", "start_date", "end_date", "premium"].includes(key)) {
+    return "Zorunlu alan";
+  }
+  if (!v) return null;
+  if (key === "tc_identity_no" && !/^\d{11}$/.test(v.replace(/\D/g, ""))) return "11 hane olmalı";
+  if (key === "tax_no" && !/^\d{10}$/.test(v.replace(/\D/g, ""))) return "10 hane olmalı";
+  if (key === "plate" && !/^(0[1-9]|[1-7][0-9]|8[01])\s?[A-ZÇĞİÖŞÜ]{1,3}\s?\d{2,4}$/i.test(v)) return "Plaka formatı hatalı";
+  if ((key === "start_date" || key === "end_date") && !validIsoDate(v)) return "Tarih geçersiz";
+  if (key === "premium" && !Number.isFinite(Number(v.replace(",", ".")))) return "Prim sayısal olmalı";
+  if (key === "policy_type" && !KNOWN_POLICY_TYPES.includes(v)) return "Bilinmeyen poliçe türü";
+  return null;
+}
 
 function StatusBadge({ status }: { status?: FieldStatus }) {
   if (!status) return null;
@@ -130,6 +194,10 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrDone,    setOcrDone]    = useState(false);
   const [ocrError,   setOcrError]   = useState("");
+  const [ocrMode,    setOcrMode]    = useState<OcrMode | null>(null);
+  const [ocrProviderLabel, setOcrProviderLabel] = useState("");
+  const [ocrRawResponse, setOcrRawResponse] = useState("");
+  const [ocrReviewItems, setOcrReviewItems] = useState<OcrReviewItem[]>([]);
 
   // Alan kaynağı rozetleri: OCR ile bulundu / sonradan düzenlendi
   const [fieldStatus, setFieldStatus] = useState<Record<string, FieldStatus>>({});
@@ -185,37 +253,36 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Poliçe okunamadı.");
 
-      const x = json.fields as Record<string, string | null>;
-      const found: Record<string, FieldStatus> = {};
-      const apply = (key: string, value: string | null, setter: (v: string) => void) => {
-        if (value != null && value !== "") { setter(value); found[key] = "ocr"; }
-      };
+      const x = json.fields as Record<string, OcrApiField>;
+      const items = OCR_REVIEW_FIELDS.map((meta) => {
+        const field = x[meta.key];
+        const value = field?.value ?? "";
+        const validationMessage = validateReviewItem(meta.key, value) ?? field?.validationMessage ?? null;
+        return {
+          key: meta.key,
+          label: meta.label,
+          value,
+          confidence: typeof field?.confidence === "number" ? field.confidence : 0,
+          needsReview: Boolean(field?.needsReview || validationMessage),
+          validationMessage,
+          userEdited: false,
+        };
+      });
 
-      apply("name",              x.customer_name,     setName);
-      apply("phone",             x.phone,             setPhone);
-      apply("tc_identity_no",    x.tc_identity_no ?? x.identity_no, setTcIdentityNo);
-      apply("tax_no",            x.tax_no,            setTaxNo);
-      apply("address",           x.address,           setAddress);
-      apply("plate",             x.plate,             setPlate);
-      apply("license_serial",    x.license_serial,    setLicenseSerial);
-      apply("vehicle_year",      x.vehicle_year,      setVehicleYear);
-      apply("engine_no",         x.engine_no,         setEngineNo);
-      apply("chassis_no",        x.chassis_no,        setChassisNo);
-      apply("insurance_company", x.insurance_company, setInsuranceCompany);
-      apply("policy_no",         x.policy_no,         setPolicyNo);
-      apply("premium",           x.premium,           setPremium);
-      apply("start_date",        x.start_date,        setPolicyStartDate);
-      apply("end_date",          x.end_date,          setPolicyEndDate);
-
-      const brandModelVal = [x.vehicle_brand, x.vehicle_model].filter(Boolean).join(" ");
-      if (brandModelVal) { setBrandModel(brandModelVal); found["brand_model"] = "ocr"; }
-
-      if (x.policy_type && INSURANCE_TYPES.some(t => t.value === x.policy_type)) {
-        setInsuranceType(x.policy_type);
-        found["insurance_type"] = "ocr";
+      const startDate = reviewValue(items, "start_date");
+      const endDate = reviewValue(items, "end_date");
+      if (startDate && endDate && validIsoDate(startDate) && validIsoDate(endDate) && new Date(endDate) <= new Date(startDate)) {
+        const idx = items.findIndex((item) => item.key === "end_date");
+        if (idx >= 0) {
+          items[idx] = { ...items[idx], needsReview: true, validationMessage: "Bitiş tarihi başlangıçtan sonra olmalı" };
+        }
       }
 
-      setFieldStatus(found);
+      setOcrMode(json.mode ?? null);
+      setOcrProviderLabel(json.providerLabel ?? (json.mode === "real" ? "Gerçek OCR" : "Demo OCR"));
+      setOcrRawResponse(JSON.stringify(json.raw_response ?? json.fields ?? {}, null, 2));
+      setOcrReviewItems(items);
+      setFieldStatus({});
       setOcrDone(true);
     } catch (err) {
       setOcrError(err instanceof Error ? err.message : "Poliçe okunamadı.");
@@ -241,6 +308,111 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
   }, [agencyId]);
 
   const group = INSURANCE_TYPES.find((t) => t.value === insuranceType)?.group ?? "";
+
+  function updateReviewValue(key: string, value: string) {
+    setOcrReviewItems((prev) => {
+      const next = prev.map((item) => {
+        if (item.key !== key) return item;
+        const validationMessage = validateReviewItem(key, value);
+        return {
+          ...item,
+          value,
+          userEdited: true,
+          needsReview: Boolean(validationMessage) || item.confidence < 0.78,
+          validationMessage,
+        };
+      });
+
+      const startDate = reviewValue(next, "start_date");
+      const endDate = reviewValue(next, "end_date");
+      const endIdx = next.findIndex((item) => item.key === "end_date");
+      if (endIdx >= 0 && startDate && endDate && validIsoDate(startDate) && validIsoDate(endDate) && new Date(endDate) <= new Date(startDate)) {
+        next[endIdx] = { ...next[endIdx], needsReview: true, validationMessage: "Bitiş tarihi başlangıçtan sonra olmalı" };
+      }
+      return next;
+    });
+  }
+
+  async function saveOcrReview() {
+    if (!limitOk || !docFile) return;
+    if (isSuperAdmin && !selectedAgency) {
+      setOcrError("Süper admin olarak müşteri eklerken acente seçmelisiniz.");
+      return;
+    }
+
+    const errors = ocrReviewItems
+      .map((item) => ({ ...item, validationMessage: validateReviewItem(item.key, item.value) ?? item.validationMessage ?? null }))
+      .filter((item) => Boolean(item.validationMessage));
+
+    const startDate = reviewValue(ocrReviewItems, "start_date");
+    const endDate = reviewValue(ocrReviewItems, "end_date");
+    if (startDate && endDate && validIsoDate(startDate) && validIsoDate(endDate) && new Date(endDate) <= new Date(startDate)) {
+      errors.push({ ...ocrReviewItems.find((item) => item.key === "end_date")!, validationMessage: "Bitiş tarihi başlangıçtan sonra olmalı" });
+    }
+
+    if (errors.length > 0) {
+      setOcrError("Kontrol gerekli alanları düzeltmeden kayıt yapılamaz.");
+      setOcrReviewItems((prev) => prev.map((item) => {
+        const err = errors.find((e) => e.key === item.key);
+        return err ? { ...item, needsReview: true, validationMessage: err.validationMessage } : item;
+      }));
+      return;
+    }
+
+    setLoading(true);
+    setOcrError("");
+
+    const policyType = reviewValue(ocrReviewItems, "policy_type");
+    const vehicleBrand = reviewValue(ocrReviewItems, "vehicle_brand");
+    const vehicleModel = reviewValue(ocrReviewItems, "vehicle_model");
+    const brandModelValue = [vehicleBrand, vehicleModel].filter(Boolean).join(" ");
+
+    const fd = new FormData();
+    fd.append("file", docFile);
+    fd.append("name", reviewValue(ocrReviewItems, "customer_name"));
+    fd.append("phone", reviewValue(ocrReviewItems, "phone"));
+    fd.append("email", email.trim());
+    fd.append("insurance_type", policyType);
+    fd.append("note", note.trim());
+    fd.append("tc_identity_no", reviewValue(ocrReviewItems, "tc_identity_no"));
+    fd.append("tax_no", reviewValue(ocrReviewItems, "tax_no"));
+    fd.append("identity_no", reviewValue(ocrReviewItems, "tc_identity_no") || reviewValue(ocrReviewItems, "tax_no"));
+    fd.append("address", reviewValue(ocrReviewItems, "address"));
+    fd.append("vehicle_plate", reviewValue(ocrReviewItems, "plate").toUpperCase());
+    fd.append("license_serial", reviewValue(ocrReviewItems, "license_serial"));
+    fd.append("brand_model", brandModelValue);
+    fd.append("vehicle_year", reviewValue(ocrReviewItems, "vehicle_year"));
+    fd.append("engine_no", reviewValue(ocrReviewItems, "engine_no"));
+    fd.append("chassis_no", reviewValue(ocrReviewItems, "chassis_no"));
+    fd.append("policy_no", reviewValue(ocrReviewItems, "policy_no"));
+    fd.append("insurance_company", reviewValue(ocrReviewItems, "insurance_company"));
+    fd.append("premium", reviewValue(ocrReviewItems, "premium").replace(",", "."));
+    fd.append("policy_start_date", reviewValue(ocrReviewItems, "start_date"));
+    fd.append("policy_end_date", reviewValue(ocrReviewItems, "end_date"));
+    fd.append("ocr_provider", ocrProviderLabel);
+    fd.append("ocr_mode", ocrMode ?? "");
+    fd.append("ocr_raw_response", ocrRawResponse);
+    if (effectiveAgencyId) fd.append("agency_id", effectiveAgencyId);
+
+    const res = await fetch("/api/customers/from-policy", { method: "POST", body: fd });
+    const json = await res.json();
+    setLoading(false);
+
+    if (!res.ok) {
+      if (json.code === "limit_exceeded" || json.code === "policy_limit_exceeded" || json.code === "inactive") {
+        setLimitOk(false);
+        setLimitMsg(json.error);
+      } else {
+        setOcrError(json.error ?? "Kayıt sırasında bir hata oluştu.");
+      }
+      return;
+    }
+
+    setName(reviewValue(ocrReviewItems, "customer_name"));
+    setPolicyEndDate(reviewValue(ocrReviewItems, "end_date"));
+    setDocUploaded(Boolean(json.documentPath));
+    setDone(true);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -491,7 +663,7 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
                   <div className="flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/40">
                     <div className="w-8 h-8 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
                     <p className="text-sm font-semibold text-blue-700">Poliçe okunuyor…</p>
-                    <p className="text-[11px] text-blue-400">Bilgiler otomatik olarak forma aktarılacak</p>
+                    <p className="text-[11px] text-blue-400">Sonuçlar önce inceleme ekranında gösterilecek</p>
                   </div>
                 ) : (
                   <label
@@ -521,23 +693,89 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
 
             {/* ── OCR tamamlandı bildirimi ───────────────────────────────── */}
             {entryMode === "policy" && ocrDone && (
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                <span className="text-base">✅</span>
-                <p className="text-xs text-emerald-700 font-medium flex-1">
-                  Poliçe okundu, alanlar otomatik dolduruldu. Kontrol edip gerekirse düzenleyin.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { setOcrDone(false); setDocFile(null); setFieldStatus({}); }}
-                  className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 whitespace-nowrap"
-                >
-                  Yeni dosya
-                </button>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                  <span className="text-base">✅</span>
+                  <p className="text-xs text-emerald-700 font-medium flex-1">
+                    Poliçe okundu. Kaydetmeden önce kritik alanları kontrol edin.
+                  </p>
+                  <span className={`text-[10px] font-extrabold px-2 py-1 rounded-full ${
+                    ocrMode === "real" ? "bg-blue-600 text-white" : "bg-amber-100 text-amber-700"
+                  }`}>
+                    {ocrProviderLabel || (ocrMode === "real" ? "Gerçek OCR" : "Demo OCR")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setOcrDone(false); setDocFile(null); setFieldStatus({}); setOcrReviewItems([]); setOcrRawResponse(""); setOcrMode(null); }}
+                    className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 whitespace-nowrap"
+                  >
+                    Yeni dosya
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 overflow-hidden bg-white">
+                  <div className="grid grid-cols-[1fr_1fr_90px] gap-2 px-3 py-2 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    <span>Bulunan Alan</span>
+                    <span>OCR Değeri / Düzenle</span>
+                    <span>Güven</span>
+                  </div>
+                  <div className="divide-y divide-gray-100 max-h-[360px] overflow-y-auto">
+                    {ocrReviewItems.map((item) => (
+                      <div key={item.key} className="grid grid-cols-[1fr_1fr_90px] gap-2 px-3 py-2.5 items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-700">{item.label}</p>
+                          {item.needsReview && (
+                            <span className="inline-flex mt-1 px-1.5 py-px rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 text-[9px] font-bold">
+                              Kontrol Gerekli
+                            </span>
+                          )}
+                          {item.validationMessage && (
+                            <p className="mt-1 text-[10px] text-red-600">{item.validationMessage}</p>
+                          )}
+                        </div>
+                        <input
+                          value={item.value}
+                          onChange={(e) => updateReviewValue(item.key, e.target.value)}
+                          placeholder="Bulunamadı"
+                          className={`w-full px-2.5 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            item.validationMessage ? "border-red-200 bg-red-50/40" : item.needsReview ? "border-amber-200 bg-amber-50/30" : "border-gray-200"
+                          }`}
+                        />
+                        <div className="text-right">
+                          <p className={`text-xs font-extrabold ${
+                            item.confidence >= 0.85 ? "text-emerald-600" : item.confidence >= 0.65 ? "text-amber-600" : "text-red-500"
+                          }`}>
+                            %{Math.round(item.confidence * 100)}
+                          </p>
+                          {item.userEdited && <p className="text-[9px] text-amber-600 font-bold mt-1">Düzenlendi</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {ocrError && (
+                  <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ {ocrError}</p>
+                )}
+
+                <div className="flex gap-2">
+                  <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                    İptal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveOcrReview}
+                    disabled={loading}
+                    className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60"
+                  >
+                    {loading ? "Kaydediliyor..." : "Onayla ve Kaydet"}
+                  </button>
+                </div>
               </div>
             )}
 
             {/* ── Form alanları: manuel modda hemen, poliçe modunda OCR sonrası ── */}
-            <div className={entryMode === "policy" && !ocrDone ? "hidden" : "space-y-5"}>
+            <div className={entryMode === "policy" ? "hidden" : "space-y-5"}>
 
             {/* ── Acente seçimi (yalnız super_admin) ─────────────────────── */}
             {isSuperAdmin && (

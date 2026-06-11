@@ -7,6 +7,7 @@
  */
 
 import type { OcrFile, OcrProvider, PolicyOcrResult } from "../types";
+import { field, validatePolicyOcrFields } from "../validation";
 
 export class MockOcrProvider implements OcrProvider {
   readonly name = "mock" as const;
@@ -18,28 +19,34 @@ export class MockOcrProvider implements OcrProvider {
     const thisYear = new Date().getFullYear();
     const tc = "11111111110";
 
+    const fields = validatePolicyOcrFields({
+      customer_name: field("HASAN SULAR", 0.98),
+      phone: field("0530 111 22 33", 0.9),
+      tc_identity_no: field(tc, 0.97),
+      tax_no: field(null, 0),
+      identity_no: field(tc, 0.97),
+      address: field("Ataturk Mah. Sigorta Sok. No: 12/4 Kadikoy / Istanbul", 0.72),
+      plate: field("31ADU02", 0.95),
+      license_serial: field("AR691046", 0.88),
+      vehicle_brand: field("Hyundai", 0.91),
+      vehicle_model: field("Getz 1.4", 0.9),
+      vehicle_year: field("2006", 0.89),
+      engine_no: field("G4EE6359743", 0.85),
+      chassis_no: field("KMHBU51DP6U513670", 0.86),
+      policy_type: field("Trafik", 0.96),
+      policy_no: field("74798326", 0.93),
+      insurance_company: field("Ethica Sigorta", 0.94),
+      start_date: field(`${thisYear}-06-15`, 0.92),
+      end_date: field(`${thisYear + 1}-06-15`, 0.92),
+      premium: field("10153.10", 0.91),
+    });
+
     return {
-      customer_name: "HASAN SULAR",
-      phone: "0530 111 22 33",
-      tc_identity_no: tc,
-      tax_no: null,
-      identity_no: tc,
-      address: "Ataturk Mah. Sigorta Sok. No: 12/4 Kadikoy / Istanbul",
-
-      plate: "31ADU02",
-      license_serial: "AR691046",
-      vehicle_brand: "Hyundai",
-      vehicle_model: "Getz 1.4",
-      vehicle_year: "2006",
-      engine_no: "G4EE6359743",
-      chassis_no: "KMHBU51DP6U513670",
-
-      policy_type: "Trafik",
-      policy_no: "74798326",
-      insurance_company: "Ethica Sigorta",
-      start_date: `${thisYear}-06-15`,
-      end_date: `${thisYear + 1}-06-15`,
-      premium: "10153.10",
+      mode: "demo",
+      provider: this.name,
+      providerLabel: "Demo OCR",
+      fields,
+      raw_response: { provider: "mock", fileName: file.name, fields },
     };
   }
 }

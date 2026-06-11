@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canAddCustomer, canAddPolicy, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
+import { KNOWN_POLICY_TYPES } from "@/lib/ocr/validation";
 import { resolveCaller } from "../../whatsapp/_lib/auth";
 
 const BUCKET = "policy-documents";
@@ -28,6 +29,49 @@ function optionalText(form: FormData, key: string): string | null {
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function validIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+function validateCriticalFields(input: {
+  tcIdentityNo: string | null;
+  taxNo: string | null;
+  plate: string | null;
+  policyType: string;
+  startDate: string | null;
+  endDate: string;
+  premium: string | null;
+}): string[] {
+  const errors: string[] = [];
+  if (input.tcIdentityNo && !/^\d{11}$/.test(input.tcIdentityNo.replace(/\D/g, ""))) {
+    errors.push("TC Kimlik 11 haneli olmalı.");
+  }
+  if (input.taxNo && !/^\d{10}$/.test(input.taxNo.replace(/\D/g, ""))) {
+    errors.push("VKN 10 haneli olmalı.");
+  }
+  if (input.plate && !/^(0[1-9]|[1-7][0-9]|8[01])\s?[A-ZÇĞİÖŞÜ]{1,3}\s?\d{2,4}$/i.test(input.plate)) {
+    errors.push("Plaka Türkiye formatına uygun olmalı.");
+  }
+  if (!KNOWN_POLICY_TYPES.includes(input.policyType)) {
+    errors.push("Poliçe türü bilinen türlerden biri olmalı.");
+  }
+  if (input.startDate && !validIsoDate(input.startDate)) {
+    errors.push("Başlangıç tarihi geçerli tarih olmalı.");
+  }
+  if (!validIsoDate(input.endDate)) {
+    errors.push("Bitiş tarihi geçerli tarih olmalı.");
+  }
+  if (input.startDate && validIsoDate(input.startDate) && validIsoDate(input.endDate) && new Date(input.endDate) <= new Date(input.startDate)) {
+    errors.push("Bitiş tarihi başlangıç tarihinden sonra olmalı.");
+  }
+  if (input.premium && !Number.isFinite(Number(input.premium.replace(",", ".")))) {
+    errors.push("Prim sayısal olmalı.");
+  }
+  return errors;
 }
 
 async function insertDocumentMetadata(input: {
@@ -71,6 +115,31 @@ async function insertDocumentMetadata(input: {
   });
 
   return fallback.error ?? preferred.error;
+}
+
+async function insertOcrResult(input: {
+  agencyId: string;
+  customerId: string;
+  policyId: string;
+  documentPath: string;
+  provider: string;
+  mode: string;
+  normalizedData: Record<string, string | null>;
+  rawResponse: unknown;
+}) {
+  const admin = getSupabaseAdmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin.from("ocr_results") as any).insert({
+    agency_id: input.agencyId,
+    customer_id: input.customerId,
+    policy_id: input.policyId,
+    document_path: input.documentPath,
+    provider: input.provider || "unknown",
+    mode: input.mode || "real",
+    normalized_data: input.normalizedData,
+    raw_response: input.rawResponse ?? {},
+  });
+  return error;
 }
 
 export async function POST(request: NextRequest) {
@@ -141,6 +210,21 @@ export async function POST(request: NextRequest) {
     const taxNo = optionalText(form, "tax_no");
     const identityNo = tcIdentityNo || taxNo || optionalText(form, "identity_no");
     const vehiclePlate = optionalText(form, "vehicle_plate")?.toUpperCase() ?? null;
+    const policyStartDate = optionalText(form, "policy_start_date");
+    const premium = optionalText(form, "premium");
+
+    const validationErrors = validateCriticalFields({
+      tcIdentityNo,
+      taxNo,
+      plate: vehiclePlate,
+      policyType: insuranceType,
+      startDate: policyStartDate,
+      endDate: policyEndDate,
+      premium,
+    });
+    if (validationErrors.length > 0) {
+      return NextResponse.json({ error: validationErrors.join(" "), code: "validation_error" }, { status: 400 });
+    }
 
     const extraData = {
       tc_identity_no: tcIdentityNo,
@@ -154,6 +238,15 @@ export async function POST(request: NextRequest) {
       chassis_no: optionalText(form, "chassis_no"),
       source: "ocr_upload",
     };
+    const rawResponseText = text(form, "ocr_raw_response");
+    let rawResponse: unknown = {};
+    if (rawResponseText) {
+      try {
+        rawResponse = JSON.parse(rawResponseText);
+      } catch {
+        rawResponse = { text: rawResponseText };
+      }
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: customer, error: customerErr } = await (admin.from("customers") as any)
@@ -183,12 +276,12 @@ export async function POST(request: NextRequest) {
         customer_id: customer.id,
         agency_id: resolvedAgencyId,
         policy_type: insuranceType,
-        start_date: optionalText(form, "policy_start_date") || todayIso(),
+        start_date: policyStartDate || todayIso(),
         end_date: policyEndDate,
         status: "Aktif",
         policy_no: optionalText(form, "policy_no"),
         insurance_company: optionalText(form, "insurance_company"),
-        premium: optionalText(form, "premium") ? Number(text(form, "premium")) : null,
+        premium: premium ? Number(premium.replace(",", ".")) : null,
         source: "ocr_upload",
       })
       .select("id")
@@ -239,12 +332,45 @@ export async function POST(request: NextRequest) {
       console.warn("[customers/from-policy] document metadata insert:", docErr.message);
     }
 
+    const ocrErr = await insertOcrResult({
+      agencyId: resolvedAgencyId,
+      customerId: customer.id,
+      policyId: policy.id,
+      documentPath: path,
+      provider: optionalText(form, "ocr_provider") ?? "unknown",
+      mode: optionalText(form, "ocr_mode") ?? "real",
+      normalizedData: {
+        customer_name: name,
+        phone,
+        tc_identity_no: tcIdentityNo,
+        tax_no: taxNo,
+        address: optionalText(form, "address"),
+        plate: vehiclePlate,
+        license_serial: optionalText(form, "license_serial"),
+        brand_model: optionalText(form, "brand_model"),
+        vehicle_year: optionalText(form, "vehicle_year"),
+        engine_no: optionalText(form, "engine_no"),
+        chassis_no: optionalText(form, "chassis_no"),
+        policy_type: insuranceType,
+        policy_no: optionalText(form, "policy_no"),
+        insurance_company: optionalText(form, "insurance_company"),
+        start_date: policyStartDate,
+        end_date: policyEndDate,
+        premium,
+      },
+      rawResponse,
+    });
+    if (ocrErr) {
+      console.warn("[customers/from-policy] ocr_results insert:", ocrErr.message);
+    }
+
     return NextResponse.json({
       ok: true,
       customerId: customer.id,
       policyId: policy.id,
       documentPath: path,
       documentSaved: !docErr,
+      ocrSaved: !ocrErr,
     });
   } catch (err) {
     console.error("[customers/from-policy]", err);
