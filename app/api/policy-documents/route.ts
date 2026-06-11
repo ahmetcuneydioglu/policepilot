@@ -46,25 +46,9 @@ async function insertDocumentMetadata(input: {
 }) {
   const admin = getSupabaseAdmin();
 
-  // Preferred documents_migration.sql shape.
+  // Canonical live schema from supabase/schema.sql.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const preferred = await (admin.from("documents") as any).insert({
-    agency_id: input.policy.agency_id,
-    customer_id: input.policy.customer_id,
-    policy_id: input.policy.id,
-    doc_type: "policy",
-    file_path: input.path,
-    file_name: input.file.name,
-    mime_type: input.file.type,
-    size_bytes: input.file.size,
-    source: "upload",
-  });
-
-  if (!preferred.error) return null;
-
-  // Older schema.sql shape.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fallback = await (admin.from("documents") as any).insert({
+  const { error } = await (admin.from("documents") as any).insert({
     agency_id: input.policy.agency_id,
     customer_id: input.policy.customer_id,
     policy_id: input.policy.id,
@@ -75,7 +59,7 @@ async function insertDocumentMetadata(input: {
     bucket: BUCKET,
   });
 
-  return fallback.error ?? preferred.error;
+  return error;
 }
 
 export async function POST(request: NextRequest) {
@@ -127,9 +111,12 @@ export async function POST(request: NextRequest) {
     }
 
     const docErr = await insertDocumentMetadata({ policy, path, file });
-    if (docErr) console.warn("[policy-documents] document metadata insert:", docErr.message);
+    if (docErr) {
+      console.error("[policy-documents] document metadata insert:", docErr.message);
+      return NextResponse.json({ error: `Evrak kaydı oluşturulamadı: ${docErr.message}` }, { status: 500 });
+    }
 
-    return NextResponse.json({ ok: true, path, documentSaved: !docErr });
+    return NextResponse.json({ ok: true, path, documentSaved: true });
   } catch (err) {
     console.error("[policy-documents POST]", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });

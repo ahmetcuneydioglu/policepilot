@@ -71,25 +71,9 @@ async function insertDocumentMetadata(input: {
 }) {
   const admin = getSupabaseAdmin();
 
-  // Preferred shape from supabase/documents_migration.sql
+  // Canonical live schema from supabase/schema.sql.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const preferred = await (admin.from("documents") as any).insert({
-    agency_id: input.agencyId,
-    customer_id: input.customerId,
-    policy_id: input.policyId,
-    doc_type: "policy",
-    file_path: input.filePath,
-    file_name: input.fileName,
-    mime_type: input.mimeType,
-    size_bytes: input.sizeBytes,
-    source: "ocr_upload",
-  });
-
-  if (!preferred.error) return null;
-
-  // Backward-compatible shape from older schema.sql.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fallback = await (admin.from("documents") as any).insert({
+  const { error } = await (admin.from("documents") as any).insert({
     agency_id: input.agencyId,
     customer_id: input.customerId,
     policy_id: input.policyId,
@@ -100,7 +84,7 @@ async function insertDocumentMetadata(input: {
     bucket: BUCKET,
   });
 
-  return fallback.error ?? preferred.error;
+  return error;
 }
 
 async function insertOcrResult(input: {
@@ -315,7 +299,12 @@ export async function POST(request: NextRequest) {
     });
 
     if (docErr) {
-      console.warn("[customers/from-policy] document metadata insert:", docErr.message);
+      console.error("[customers/from-policy] document metadata insert:", docErr.message);
+      return NextResponse.json({
+        error: `Müşteri ve poliçe oluşturuldu ancak evrak kaydı oluşturulamadı: ${docErr.message}`,
+        customerId: customer.id,
+        policyId: policy.id,
+      }, { status: 500 });
     }
 
     const ocrErr = await insertOcrResult({
