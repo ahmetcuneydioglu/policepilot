@@ -22,7 +22,7 @@ const INSURANCE_TYPES = [
   { value: "Diğer",       label: "📁 Diğer",              group: "other"     },
 ];
 
-type Props = { onClose: () => void; agencyId?: string | null };
+type Props = { onClose: () => void; agencyId?: string | null; role?: string | null };
 
 const INPUT = "w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition placeholder:text-gray-300";
 const LABEL = "block text-xs font-semibold text-slate-600 mb-1.5";
@@ -36,11 +36,31 @@ function Field({ label, children, optional }: { label: string; children: React.R
   );
 }
 
-export default function AddCustomerModal({ onClose, agencyId }: Props) {
+export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
   // Limit state
   const [limitChecked, setLimitChecked] = useState(false);
   const [limitOk, setLimitOk]           = useState(true);
   const [limitMsg, setLimitMsg]         = useState("");
+
+  // Super admin: acenteye bağlı değildir, müşterinin ekleneceği acenteyi seçer
+  const isSuperAdmin = role === "super_admin";
+  const [agencies,       setAgencies]       = useState<{ id: string; name: string }[]>([]);
+  const [selectedAgency, setSelectedAgency] = useState("");
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase.from("agencies") as any)
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }: { data: { id: string; name: string }[] | null }) => {
+        setAgencies(data ?? []);
+        if (data?.length === 1) setSelectedAgency(data[0].id);
+      });
+  }, [isSuperAdmin]);
+
+  const effectiveAgencyId = isSuperAdmin ? (selectedAgency || null) : (agencyId ?? null);
 
   // Base fields
   const [name,         setName]         = useState("");
@@ -133,6 +153,10 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
       setError("Ad, telefon ve sigorta türü zorunludur.");
       return;
     }
+    if (isSuperAdmin && !selectedAgency) {
+      setError("Süper admin olarak müşteri eklerken acente seçmelisiniz.");
+      return;
+    }
     setLoading(true);
     setError("");
 
@@ -180,7 +204,7 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
         vehicle_plate:  (group === "vehicle" ? plate.trim().toUpperCase() : null) || null,
         policy_end_date:policyEndDate || null,
         extra_data:     extra,
-        agency_id:      agencyId ?? null,
+        agency_id:      effectiveAgencyId,
         // Poliçe bilgileri
         policy_no:         policyNo.trim() || null,
         insurance_company: insuranceCompany.trim() || null,
@@ -284,6 +308,31 @@ export default function AddCustomerModal({ onClose, agencyId }: Props) {
           </div>
         ) : (
           <form onSubmit={submit} className="p-6 space-y-5">
+
+            {/* ── Acente seçimi (yalnız super_admin) ─────────────────────── */}
+            {isSuperAdmin && (
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Acente</p>
+                <Field label="Müşterinin ekleneceği acente *">
+                  <select
+                    value={selectedAgency}
+                    onChange={(e) => setSelectedAgency(e.target.value)}
+                    required
+                    className={`${INPUT} bg-white`}
+                  >
+                    <option value="">Acente seçin…</option>
+                    {agencies.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </Field>
+                {agencies.length === 0 && (
+                  <p className="mt-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Aktif acente bulunamadı. Önce Acenteler ekranından bir acente oluşturun.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* ── Temel Bilgiler ─────────────────────────────────────────── */}
             <div>

@@ -97,7 +97,7 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {showAdd && <AddCustomerModal onClose={handleClose} agencyId={agencyId} />}
+      {showAdd && <AddCustomerModal onClose={handleClose} agencyId={agencyId} role={role} />}
     </div>
   );
 }
