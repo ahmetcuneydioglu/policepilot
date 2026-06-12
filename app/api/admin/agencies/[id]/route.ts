@@ -1,7 +1,7 @@
 /**
- * GET /api/admin/agencies/[id] — acente yönetim paneli toplu verisi
- * Sekmeler: genel, kullanıcılar, müşteriler, teklifler, poliçeler, whatsapp,
- * abonelik, loglar, AI analizi — tek istekte (yalnız super_admin).
+ * GET   /api/admin/agencies/[id] — acente yönetim paneli toplu verisi
+ * PATCH /api/admin/agencies/[id] — abonelik/limit/durum düzenleme
+ * (yalnız super_admin)
  */
 
 import { NextResponse } from "next/server";
@@ -100,6 +100,61 @@ export async function GET(
     });
   } catch (err) {
     console.error("[api/admin/agencies/[id]]", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
+
+// ─── PATCH — abonelik/limit/durum düzenleme ───────────────────────────────────
+
+const PLANS = ["starter", "pro", "enterprise"];
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await requireSuperAdmin(request);
+    if (auth.error) return auth.error;
+
+    const { id } = await params;
+    const body = await request.json();
+
+    const update: Record<string, unknown> = {};
+
+    if (typeof body.plan === "string") {
+      if (!PLANS.includes(body.plan)) {
+        return NextResponse.json({ error: `Geçersiz plan: ${body.plan}` }, { status: 400 });
+      }
+      update.plan = body.plan;
+    }
+    if (typeof body.is_active === "boolean") update.is_active = body.is_active;
+    if (body.expires_at === null || typeof body.expires_at === "string") {
+      update.expires_at = body.expires_at || null;
+    }
+    for (const k of ["max_users", "max_customers", "max_requests", "max_policies"] as const) {
+      if (body[k] != null) {
+        const n = parseInt(String(body[k]), 10);
+        if (!Number.isFinite(n) || n < 0) {
+          return NextResponse.json({ error: `${k} sayısal olmalı.` }, { status: 400 });
+        }
+        update[k] = n;
+      }
+    }
+    if (typeof body.name === "string" && body.name.trim()) update.name = body.name.trim();
+    if (typeof body.phone === "string") update.phone = body.phone.trim() || null;
+
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json({ error: "Güncellenecek alan yok." }, { status: 400 });
+    }
+
+    const admin = getSupabaseAdmin();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin.from("agencies") as any).update(update).eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[api/admin/agencies/[id] PATCH]", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

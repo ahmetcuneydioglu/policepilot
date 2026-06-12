@@ -192,9 +192,10 @@ export default function AdminAgencyDetailPage() {
       {/* ── Abonelik ── */}
       {tab === "subscription" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <SectionCard title="Abonelik" subtitle={data.subscription.plan_label}>
+          <SubscriptionEditor agency={a} onSaved={load} />
+          <div className="space-y-4">
+          <SectionCard title="Özet" subtitle={data.subscription.plan_label}>
             <div className="p-5 space-y-2 text-sm">
-              <Row k="Paket" v={data.subscription.plan_label} />
               <Row k="Aylık Gelir" v={fmtMoney(data.subscription.monthly_revenue)} />
               <Row k="Bitiş" v={data.subscription.expires_at ? fmtDate(data.subscription.expires_at) : "Süresiz"} />
               <Row k="Durum" v={a.is_active ? "Aktif" : "Pasif"} />
@@ -219,6 +220,7 @@ export default function AdminAgencyDetailPage() {
               })}
             </div>
           </SectionCard>
+          </div>
         </div>
       )}
 
@@ -266,6 +268,135 @@ export default function AdminAgencyDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Abonelik düzenleme (plan, durum, bitiş, limitler) ────────────────────────
+
+function SubscriptionEditor({ agency, onSaved }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  agency: any;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    plan:          agency.plan ?? "starter",
+    is_active:     Boolean(agency.is_active),
+    expires_at:    agency.expires_at ? String(agency.expires_at).slice(0, 10) : "",
+    max_users:     String(agency.max_users ?? 20),
+    max_customers: String(agency.max_customers ?? 200),
+    max_requests:  String(agency.max_requests ?? 500),
+    max_policies:  String(agency.max_policies ?? 500),
+  });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
+    setForm(f => ({ ...f, [k]: v }));
+    setMsg(null);
+  }
+
+  async function save() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res  = await fetch(`/api/admin/agencies/${agency.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan:          form.plan,
+          is_active:     form.is_active,
+          expires_at:    form.expires_at || null,
+          max_users:     form.max_users,
+          max_customers: form.max_customers,
+          max_requests:  form.max_requests,
+          max_policies:  form.max_policies,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Kaydedilemedi.");
+      setMsg({ ok: true, text: "Abonelik güncellendi ✓" });
+      onSaved();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Kaydedilemedi." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const INPUT = "w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40 bg-slate-50";
+  const LIMITS: { key: "max_users" | "max_customers" | "max_requests" | "max_policies"; label: string }[] = [
+    { key: "max_users",     label: "Maks. Kullanıcı" },
+    { key: "max_customers", label: "Maks. Müşteri" },
+    { key: "max_requests",  label: "Maks. Teklif" },
+    { key: "max_policies",  label: "Maks. Poliçe" },
+  ];
+
+  return (
+    <SectionCard title="Aboneliği Düzenle" subtitle="Paket, durum, bitiş ve limitler">
+      <div className="p-5 space-y-4">
+
+        {/* Paket */}
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">Paket</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(["starter", "pro", "enterprise"] as const).map(p => (
+              <button key={p} type="button" onClick={() => set("plan", p)}
+                className={`px-3 py-2 rounded-xl border text-xs font-bold capitalize transition-all ${
+                  form.plan === p
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+                }`}>
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Durum + Bitiş */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">Durum</label>
+            <button type="button" onClick={() => set("is_active", !form.is_active)}
+              className={`w-full px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+                form.is_active
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-rose-50 text-rose-600 border-rose-200"
+              }`}>
+              {form.is_active ? "🟢 Aktif" : "🔴 Pasif"}
+            </button>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">Bitiş Tarihi <span className="font-normal text-slate-300">(boş = süresiz)</span></label>
+            <input type="date" value={form.expires_at} onChange={e => set("expires_at", e.target.value)} className={INPUT} />
+          </div>
+        </div>
+
+        {/* Limitler */}
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">Limitler</label>
+          <div className="grid grid-cols-2 gap-3">
+            {LIMITS.map(l => (
+              <div key={l.key}>
+                <p className="text-[10px] text-slate-400 mb-1">{l.label}</p>
+                <input type="number" min={0} value={form[l.key]}
+                  onChange={e => set(l.key, e.target.value)} className={INPUT} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {msg && (
+          <p className={`text-xs rounded-xl px-3 py-2 border ${
+            msg.ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"
+          }`}>{msg.text}</p>
+        )}
+
+        <button onClick={save} disabled={saving}
+          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-bold hover:from-indigo-500 hover:to-violet-500 transition-all shadow-sm disabled:opacity-50">
+          {saving ? "Kaydediliyor…" : "Kaydet"}
+        </button>
+      </div>
+    </SectionCard>
   );
 }
 
