@@ -55,6 +55,7 @@ export default function AdminWhatsAppPage() {
   }, []);
 
   // Canlı izleme: 15 sn'de bir sessiz yenileme
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     load();
     timerRef.current = setInterval(() => load(true), 15000);
