@@ -23,14 +23,13 @@ type Settings = {
   daily_summary_enabled: boolean;
   test_mode:             boolean;
   has_api_key:           boolean;
+  whatsapp_sender_id:           string;
+  whatsapp_business_account_id: string;
 };
 
 const PROVIDERS = [
   { value: "mock",       label: "Mock (Test)",            hint: "Gerçek gönderim yapmaz — geliştirme için" },
-  { value: "meta_cloud", label: "Meta WhatsApp Cloud API", hint: "Resmi Meta Cloud API" },
-  { value: "twilio",     label: "Twilio",                  hint: "Yakında" },
-  { value: "dialog360",  label: "360dialog",               hint: "Yakında" },
-  { value: "wati",       label: "WATI",                    hint: "Yakında" },
+  { value: "meta_cloud", label: "Meta WhatsApp Cloud API", hint: "Resmi Meta Cloud API — üretim" },
 ];
 
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
@@ -58,6 +57,33 @@ export default function WhatsAppSettingsPage() {
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
   const [error,    setError]    = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [testResult,  setTestResult]  = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Test Gönder — KAYITLI ayarlarla gerçek gönderim dener (test_mode'dan bağımsız)
+  async function sendTest() {
+    setTestSending(true);
+    setTestResult(null);
+    try {
+      const res  = await fetch("/api/whatsapp/test-send", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Test gönderimi başarısız.");
+      setTestResult({
+        ok: true,
+        msg: json.provider === "mock"
+          ? "Mock test başarılı (gerçek mesaj gitmedi — sağlayıcı Mock). Meta için sağlayıcıyı değiştirin."
+          : `Test mesajı gönderildi! 🎉 (${json.phone} — ${json.provider})`,
+      });
+    } catch (e) {
+      setTestResult({ ok: false, msg: e instanceof Error ? e.message : "Test gönderimi başarısız." });
+    } finally {
+      setTestSending(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -192,24 +218,53 @@ export default function WhatsAppSettingsPage() {
           </div>
         </div>
 
-        {/* API Anahtarı */}
-        <div className="p-5">
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-            <KeyRound className="w-3.5 h-3.5" /> API Anahtarı
-          </label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => { setApiKey(e.target.value); setSaved(false); }}
-            placeholder={settings.has_api_key ? "••••••••  (kayıtlı — değiştirmek için yeni anahtar girin)" : "Sağlayıcı API anahtarı"}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50 font-mono"
-          />
-          {settings.has_api_key && (
-            <p className="text-[11px] text-emerald-600 mt-1.5 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Anahtar kayıtlı. Boş bırakırsanız mevcut anahtar korunur.
+        {/* Meta Cloud API ayarları — yalnız meta_cloud seçiliyken */}
+        {settings.whatsapp_provider === "meta_cloud" && (
+          <div className="p-5 space-y-4 bg-blue-50/30">
+            <p className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-2">
+              <KeyRound className="w-3.5 h-3.5" /> Meta Cloud API Yapılandırması
             </p>
-          )}
-        </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Access Token</label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={e => { setApiKey(e.target.value); setSaved(false); }}
+                placeholder={settings.has_api_key ? "••••••••  (kayıtlı — değiştirmek için yeni token girin)" : "EAAG… ile başlayan kalıcı token"}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white font-mono"
+              />
+              {settings.has_api_key && (
+                <p className="text-[11px] text-emerald-600 mt-1.5 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Token kayıtlı. Boş bırakırsanız mevcut token korunur.
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Phone Number ID</label>
+                <input
+                  value={settings.whatsapp_sender_id}
+                  onChange={e => set("whatsapp_sender_id", e.target.value)}
+                  placeholder="784356962233…"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white font-mono"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Gönderen hat — Meta panelindeki &ldquo;Phone number ID&rdquo;</p>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">WhatsApp Business Account ID</label>
+                <input
+                  value={settings.whatsapp_business_account_id}
+                  onChange={e => set("whatsapp_business_account_id", e.target.value)}
+                  placeholder="1093847562…"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white font-mono"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">WABA ID — şablon yönetimi için</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Günlük özet */}
         <div className="p-5 flex items-center justify-between gap-4">
@@ -245,21 +300,45 @@ export default function WhatsAppSettingsPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3">
+      {testResult && (
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm border ${
+          testResult.ok
+            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+            : "bg-rose-50 border-rose-200 text-rose-700"
+        }`}>
+          {testResult.ok ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+          {testResult.msg}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <Link
           href="/whatsapp-queue"
           className="text-sm font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
         >
           WhatsApp Kuyruğunu Görüntüle →
         </Link>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-bold hover:from-emerald-500 hover:to-green-500 transition-all shadow-sm shadow-emerald-500/25 disabled:opacity-50"
-        >
-          {saving ? "Kaydediliyor…" : saved ? <><CheckCircle2 className="w-4 h-4" /> Kaydedildi</> : "Kaydet"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={sendTest}
+            disabled={testSending || saving}
+            title="Kayıtlı ayarlarla kendi numaranıza anında test mesajı gönderir"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border-2 border-emerald-300 text-emerald-700 text-sm font-bold hover:bg-emerald-50 transition-all disabled:opacity-50"
+          >
+            {testSending ? "Gönderiliyor…" : "📲 Test Gönder"}
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-bold hover:from-emerald-500 hover:to-green-500 transition-all shadow-sm shadow-emerald-500/25 disabled:opacity-50"
+          >
+            {saving ? "Kaydediliyor…" : saved ? <><CheckCircle2 className="w-4 h-4" /> Kaydedildi</> : "Kaydet"}
+          </button>
+        </div>
       </div>
+      <p className="text-[11px] text-slate-400 text-right">
+        Test Gönder, <b>kayıtlı</b> ayarları kullanır — önce Kaydet&apos;e basın.
+      </p>
     </div>
   );
 }

@@ -47,6 +47,9 @@ export async function GET(request: NextRequest) {
         daily_summary_enabled: data?.daily_summary_enabled ?? false,
         test_mode:             data?.test_mode             ?? true,
         has_api_key:           Boolean(data?.whatsapp_api_key),
+        // Meta Cloud API alanları (token asla dönmez)
+        whatsapp_sender_id:           data?.whatsapp_sender_id           ?? "",
+        whatsapp_business_account_id: data?.whatsapp_business_account_id ?? "",
       },
     });
   } catch (err) {
@@ -76,6 +79,9 @@ export async function PUT(request: NextRequest) {
       whatsapp_provider:     provider,
       daily_summary_enabled: Boolean(body.daily_summary_enabled),
       test_mode:             Boolean(body.test_mode),
+      // Meta Cloud API: Phone Number ID (gönderen hat) + WABA ID
+      whatsapp_sender_id:           (body.whatsapp_sender_id ?? "").toString().replace(/\D/g, "") || null,
+      whatsapp_business_account_id: (body.whatsapp_business_account_id ?? "").toString().trim() || null,
       updated_at:            new Date().toISOString(),
     };
     // Boş anahtar gönderilirse mevcut anahtara dokunma

@@ -30,9 +30,11 @@ export interface EnqueueInput {
 export interface AgencyWhatsAppSettings {
   agency_id:             string;
   whatsapp_enabled:      boolean;
-  whatsapp_phone:        string | null;
+  whatsapp_phone:        string | null;  // ALICI: özetlerin gittiği acente numarası
   whatsapp_provider:     WhatsAppProviderName;
-  whatsapp_api_key:      string | null;
+  whatsapp_api_key:      string | null;  // Meta Access Token
+  whatsapp_sender_id:    string | null;  // GÖNDEREN: Meta Phone Number ID
+  whatsapp_business_account_id: string | null;
   daily_summary_enabled: boolean;
   test_mode:             boolean;
 }
@@ -144,7 +146,8 @@ export async function processQueue(limit = 50): Promise<ProcessResult> {
       const provider = getProvider({
         provider: settings.whatsapp_provider,
         apiKey:   settings.whatsapp_api_key,
-        senderId: settings.whatsapp_phone,
+        // Meta'da gönderen hat = Phone Number ID (alıcı numarayla karıştırılmaz)
+        senderId: settings.whatsapp_sender_id,
       });
 
       const sendRes = await provider.send({ phone: row.phone, message: row.message });
