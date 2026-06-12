@@ -21,6 +21,7 @@ import type { NextRequest } from "next/server";
 import { generateDailySummaries, trToday } from "@/services/whatsapp/dailySummaryService";
 import { processQueue } from "@/services/whatsapp/queueService";
 import { inspectMetaToken } from "@/services/whatsapp/metaToken";
+import { getPlatformWhatsAppConfig } from "@/services/whatsapp/platformConfig";
 
 export async function GET(request: NextRequest) {
   const auth = request.headers.get("authorization");
@@ -34,8 +35,9 @@ export async function GET(request: NextRequest) {
     // ama Meta gönderimi processQueue içinde pending bekletilir; mock
     // acenteler etkilenmez. Sonuç cron yanıtında raporlanır.
     let metaToken: { valid: boolean; hours_left: number | null; error: string | null } | null = null;
-    if (process.env.META_ACCESS_TOKEN) {
-      const st = await inspectMetaToken(process.env.META_ACCESS_TOKEN);
+    const platform = await getPlatformWhatsAppConfig();
+    if (platform.provider === "meta_cloud" && !platform.testMode && platform.token) {
+      const st = await inspectMetaToken(platform.token);
       metaToken = { valid: st.valid, hours_left: st.hours_left, error: st.error };
       if (!st.valid) {
         console.error("[cron/daily-summary] META TOKEN GEÇERSİZ:", st.error);

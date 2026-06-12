@@ -103,8 +103,7 @@ export async function POST(request: NextRequest) {
         agency_id:             agencyId,
         whatsapp_enabled:      true,
         daily_summary_enabled: true,
-        test_mode:             true,   // gerçek gönderim bilinçli olarak kapalı başlar
-        whatsapp_provider:     "mock",
+        // Gönderim modu/sağlayıcı platform seviyesinde yönetilir (platform_settings)
         whatsapp_phone:        operationPhone,
       });
       if (insErr) console.error("[auth/bootstrap] agency_settings insert:", insErr.message);

@@ -12,8 +12,9 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getProvider }      from "./providerFactory";
-import { inspectMetaToken, resolveMetaToken } from "./metaToken";
-import type { WhatsAppProviderName } from "./types";
+import { inspectMetaToken } from "./metaToken";
+import { getPlatformWhatsAppConfig } from "./platformConfig";
+import type { WhatsAppProvider, WhatsAppProviderName } from "./types";
 
 const MAX_ATTEMPTS = 3;
 
@@ -28,16 +29,16 @@ export interface EnqueueInput {
   dedupKey?:   string;
 }
 
+// Acente ayarları artık yalnız ALICI tercihlerini taşır.
+// Meta kimlik bilgileri ve gönderim modu platform seviyesindedir
+// (platform_settings → services/whatsapp/platformConfig.ts).
 export interface AgencyWhatsAppSettings {
   agency_id:             string;
   whatsapp_enabled:      boolean;
   whatsapp_phone:        string | null;  // ALICI: özetlerin gittiği acente numarası
-  whatsapp_provider:     WhatsAppProviderName;
-  whatsapp_api_key:      string | null;  // Meta Access Token
-  whatsapp_sender_id:    string | null;  // GÖNDEREN: Meta Phone Number ID
-  whatsapp_business_account_id: string | null;
   daily_summary_enabled: boolean;
-  test_mode:             boolean;
+  /** @deprecated Platform seviyesine taşındı — kod artık okumaz */
+  whatsapp_provider?:    WhatsAppProviderName;
 }
 
 type QueueRow = {
@@ -77,7 +78,7 @@ export async function getAgencySettings(agencyId: string): Promise<AgencyWhatsAp
   const admin = getSupabaseAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (admin.from("agency_settings") as any)
-    .select("*")
+    .select("agency_id, whatsapp_enabled, whatsapp_phone, daily_summary_enabled")
     .eq("agency_id", agencyId)
     .maybeSingle();
   return (data as AgencyWhatsAppSettings) ?? null;
@@ -107,10 +108,39 @@ export async function processQueue(limit = 50): Promise<ProcessResult> {
 
   if (error) throw new Error(`whatsapp_queue fetch: ${error.message}`);
 
-  // Acente ayarlarını tek tek değil, batch başına bir kez çek
+  // ── Gönderim yapılandırması PLATFORM seviyesindedir ───────────────────────
+  // Meta token/sender acentelerden değil platform_settings → env'den gelir.
+  const platform = await getPlatformWhatsAppConfig();
+
+  // Meta + gerçek mod: token'ı batch başına BİR KEZ doğrula — geçersizse tüm
+  // Meta mesajları pending bekler, deneme hakkı yakılmaz.
+  let tokenCheck: { valid: boolean; error: string | null } = { valid: true, error: null };
+  if (!platform.testMode && platform.provider === "meta_cloud") {
+    if (!platform.token) {
+      tokenCheck = { valid: false, error: "Platform token'ı tanımlı değil." };
+    } else {
+      const st = await inspectMetaToken(platform.token);
+      tokenCheck = { valid: st.valid, error: st.error };
+    }
+  }
+
+  // Provider tüm batch için aynıdır — bir kez kurulur
+  let provider: WhatsAppProvider | null = null;
+  let providerInitError: string | null = null;
+  if (!platform.testMode && tokenCheck.valid) {
+    try {
+      provider = getProvider({
+        provider: platform.provider,
+        apiKey:   platform.token,
+        senderId: platform.senderId,
+      });
+    } catch (err) {
+      providerInitError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  // Acente ayarlarını batch başına bir kez çek (yalnız alıcı tercihleri)
   const settingsCache = new Map<string, AgencyWhatsAppSettings | null>();
-  // Token doğrulaması da batch başına bir kez yapılır (geçici token akışı)
-  const tokenValidCache = new Map<string, { valid: boolean; error: string | null }>();
 
   for (const row of (rows ?? []) as QueueRow[]) {
     result.processed++;
@@ -132,8 +162,8 @@ export async function processQueue(limit = 50): Promise<ProcessResult> {
       continue;
     }
 
-    // Test modu → gerçek gönderim YOK, kayıt skipped olarak işaretlenir
-    if (settings.test_mode) {
+    // Platform test modu → gerçek gönderim YOK, kayıt skipped işaretlenir
+    if (platform.testMode) {
       await updateRow(row.id, {
         status:   "skipped",
         provider: "mock",
@@ -145,39 +175,26 @@ export async function processQueue(limit = 50): Promise<ProcessResult> {
       continue;
     }
 
-    // Meta: göndermeden önce token'ı doğrula — geçersizse mesaj PENDING kalır,
-    // deneme hakkı yakılmaz; token yenilenince bir sonraki cron'da gider.
-    if (settings.whatsapp_provider === "meta_cloud") {
-      let tokenCheck = tokenValidCache.get(row.agency_id);
-      if (!tokenCheck) {
-        const token = resolveMetaToken(settings.whatsapp_api_key);
-        if (!token) {
-          tokenCheck = { valid: false, error: "Token tanımlı değil." };
-        } else {
-          const st = await inspectMetaToken(token);
-          tokenCheck = { valid: st.valid, error: st.error };
-        }
-        tokenValidCache.set(row.agency_id, tokenCheck);
-      }
-      if (!tokenCheck.valid) {
-        await updateRow(row.id, {
-          // pending kalır, attempts artmaz — token gelince otomatik denenir
-          error_message: `Token geçersiz: ${tokenCheck.error ?? "doğrulanamadı"} → Ayarlar > WhatsApp'tan yeni token girin.`,
-        });
-        result.token_blocked++;
-        continue;
-      }
+    // Token geçersiz → PENDING kalır, attempts artmaz; token yenilenince gider
+    if (!tokenCheck.valid) {
+      await updateRow(row.id, {
+        error_message: `Platform token geçersiz: ${tokenCheck.error ?? "doğrulanamadı"} → super_admin: WhatsApp ayarlarından yeni token girin.`,
+      });
+      result.token_blocked++;
+      continue;
+    }
+
+    // Provider kurulamadıysa (eksik yapılandırma) → pending beklet
+    if (!provider) {
+      await updateRow(row.id, {
+        error_message: `Gönderim yapılandırması eksik: ${providerInitError ?? "bilinmiyor"}`,
+      });
+      result.token_blocked++;
+      continue;
     }
 
     // Gerçek gönderim
     try {
-      const provider = getProvider({
-        provider: settings.whatsapp_provider,
-        apiKey:   settings.whatsapp_api_key,
-        // Meta'da gönderen hat = Phone Number ID (alıcı numarayla karıştırılmaz)
-        senderId: settings.whatsapp_sender_id,
-      });
-
       const sendRes = await provider.send({ phone: row.phone, message: row.message });
 
       if (sendRes.success) {

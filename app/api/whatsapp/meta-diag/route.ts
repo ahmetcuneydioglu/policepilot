@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getAgencySettings } from "@/services/whatsapp/queueService";
+import { getPlatformWhatsAppConfig } from "@/services/whatsapp/platformConfig";
 import { resolveCaller } from "../_lib/auth";
 
 const V = "v21.0";
@@ -40,19 +41,19 @@ export async function GET(request: NextRequest) {
   try {
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    // Meta kimlik bilgileri platform varlığıdır — tanı yalnız super_admin'e açık
+    if (caller.role !== "super_admin") {
+      return NextResponse.json({ error: "Bu işlem yalnız super_admin için." }, { status: 403 });
+    }
 
-    const settings = caller.agencyId ? await getAgencySettings(caller.agencyId) : null;
-
-    const token   = settings?.whatsapp_api_key  || process.env.META_ACCESS_TOKEN    || null;
-    const phoneId = settings?.whatsapp_sender_id || process.env.META_PHONE_NUMBER_ID || null;
-    const tokenSource = settings?.whatsapp_api_key ? "agency_settings" : process.env.META_ACCESS_TOKEN ? "env" : "yok";
-    const phoneSource = settings?.whatsapp_sender_id ? "agency_settings" : process.env.META_PHONE_NUMBER_ID ? "env" : "yok";
+    const platform = await getPlatformWhatsAppConfig();
+    const token   = platform.token;
+    const phoneId = platform.senderId;
 
     if (!token || !phoneId) {
       return NextResponse.json({
         error: "Yapılandırma eksik.",
-        token_source: tokenSource,
-        phone_id_source: phoneSource,
+        source: platform.source,
       }, { status: 400 });
     }
 
@@ -69,6 +70,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     let templateSend: unknown = "atlandı (?send=1 ile dene)";
     if (searchParams.get("send") === "1") {
+      const settings = caller.agencyId ? await getAgencySettings(caller.agencyId) : null;
       const to = (searchParams.get("to") || settings?.whatsapp_phone || "").replace(/\D/g, "");
       if (!to) {
         templateSend = { error: "Alıcı yok — ayarlardaki whatsapp_phone boş, ?to=90... ekleyin" };
@@ -87,10 +89,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       config: {
-        token_source:    tokenSource,
+        token_source:    platform.source,
         token_preview:   `${token.slice(0, 6)}…${token.slice(-4)} (${token.length} kr)`,
         phone_number_id: phoneId,
-        phone_id_source: phoneSource,
+        phone_id_source: platform.source,
       },
       token_check:    me,
       phone_check:    phone,

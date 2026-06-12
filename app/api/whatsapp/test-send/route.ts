@@ -15,6 +15,7 @@ import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getProvider } from "@/services/whatsapp/providerFactory";
 import { getAgencySettings } from "@/services/whatsapp/queueService";
+import { getPlatformWhatsAppConfig } from "@/services/whatsapp/platformConfig";
 import { resolveCaller } from "../_lib/auth";
 
 export async function POST(request: NextRequest) {
@@ -27,28 +28,27 @@ export async function POST(request: NextRequest) {
     const agencyId = caller.role === "super_admin" ? (requestedAgency ?? caller.agencyId) : caller.agencyId;
     if (!agencyId) return NextResponse.json({ error: "Acente bilgisi bulunamadı." }, { status: 403 });
 
+    // Alıcı numara acente tercihinden; gönderim yapılandırması PLATFORM'dan
     const settings = await getAgencySettings(agencyId);
-    if (!settings) {
-      return NextResponse.json({ error: "WhatsApp ayarları bulunamadı. Önce ayarları kaydedin." }, { status: 400 });
-    }
-
-    const phone = ((body.phone as string) || settings.whatsapp_phone || "").replace(/\D/g, "");
+    const phone = ((body.phone as string) || settings?.whatsapp_phone || "").replace(/\D/g, "");
     if (!phone) {
       return NextResponse.json({ error: "Telefon numarası gerekli (ayarlardan girin veya istekle gönderin)." }, { status: 400 });
     }
+
+    const platform = await getPlatformWhatsAppConfig();
 
     const message =
       (typeof body.message === "string" && body.message.trim()) ||
       `🔔 *PolicePilot Test Mesajı*\n\nWhatsApp entegrasyonunuz çalışıyor! 🎉\n\nBu mesaj ${new Date().toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })} tarihinde gönderildi.`;
 
-    // ── Provider'ı kur ve gönder (test_mode'dan bağımsız) ──────────────────
+    // ── Provider'ı PLATFORM config ile kur ve gönder (test_mode'dan bağımsız) ─
     let result: { success: boolean; providerId?: string; errorMessage?: string };
-    let providerName = settings.whatsapp_provider;
+    let providerName: string = platform.provider;
     try {
       const provider = getProvider({
-        provider: settings.whatsapp_provider,
-        apiKey:   settings.whatsapp_api_key,
-        senderId: settings.whatsapp_sender_id,
+        provider: platform.provider,
+        apiKey:   platform.token,
+        senderId: platform.senderId,
       });
       providerName = provider.name;
       result = await provider.send({ phone, message });

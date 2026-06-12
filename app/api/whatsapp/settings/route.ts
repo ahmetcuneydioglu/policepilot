@@ -1,22 +1,23 @@
 /**
- * GET /api/whatsapp/settings — acentenin WhatsApp ayarları
- * PUT /api/whatsapp/settings — ayarları güncelle (upsert)
+ * GET /api/whatsapp/settings — acentenin bildirim tercihleri
+ * PUT /api/whatsapp/settings — tercihleri güncelle (upsert)
  *
- * Güvenlik: api_key client'a ASLA dönmez; yalnız has_api_key boolean'ı döner.
- * PUT'ta whatsapp_api_key boş gönderilirse mevcut anahtar korunur.
- * agency_settings tablosunda RLS client erişimine kapalı — tek kapı bu API.
+ * Acente yalnız ALICI tercihlerini yönetir:
+ *   whatsapp_enabled · whatsapp_phone · daily_summary_enabled
+ *
+ * Meta kimlik bilgileri (token, phone number id, WABA), sağlayıcı ve test
+ * modu PLATFORM seviyesindedir — yalnız super_admin yönetir:
+ *   /api/whatsapp/platform-settings
+ * Body'de bu alanlar gelse bile YOK SAYILIR (token yazma yolu kapalıdır).
  */
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { inspectMetaToken, resolveMetaToken } from "@/services/whatsapp/metaToken";
 import { resolveCaller } from "../_lib/auth";
 
-const PROVIDERS = ["mock", "meta_cloud", "twilio", "dialog360", "wati"];
-
 function targetAgency(callerRole: string, callerAgency: string | null, requested: string | null): string | null {
-  // super_admin istediği acentenin ayarını yönetebilir; agency_user yalnız kendisininkini
+  // super_admin istediği acentenin tercihini yönetebilir; agency_user yalnız kendisininkini
   if (callerRole === "super_admin") return requested ?? callerAgency;
   return callerAgency;
 }
@@ -33,37 +34,18 @@ export async function GET(request: NextRequest) {
     const admin = getSupabaseAdmin();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (admin.from("agency_settings") as any)
-      .select("*")
+      .select("whatsapp_enabled, whatsapp_phone, daily_summary_enabled")
       .eq("agency_id", agencyId)
       .maybeSingle();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Meta seçiliyse etkin token'ın ömrünü kontrol et (geçici token akışı)
-    const provider = data?.whatsapp_provider ?? "mock";
-    let tokenStatus = null;
-    if (provider === "meta_cloud") {
-      const token = resolveMetaToken(data?.whatsapp_api_key);
-      tokenStatus = token
-        ? await inspectMetaToken(token)
-        : { valid: false, expires_at: null, hours_left: null, expiring_soon: false, error: "Token tanımlı değil." };
-    }
-
     return NextResponse.json({
-      token_status: tokenStatus,
       settings: {
         agency_id:             agencyId,
         whatsapp_enabled:      data?.whatsapp_enabled      ?? false,
         whatsapp_phone:        data?.whatsapp_phone        ?? "",
-        whatsapp_provider:     data?.whatsapp_provider     ?? "mock",
         daily_summary_enabled: data?.daily_summary_enabled ?? false,
-        test_mode:             data?.test_mode             ?? true,
-        has_api_key:           Boolean(data?.whatsapp_api_key),
-        // Meta Cloud API alanları (token asla dönmez)
-        whatsapp_sender_id:           data?.whatsapp_sender_id           ?? "",
-        whatsapp_business_account_id: data?.whatsapp_business_account_id ?? "",
-        // Sunucuda platform geneli Meta yapılandırması var mı? (env fallback)
-        env_meta_configured: Boolean(process.env.META_ACCESS_TOKEN && process.env.META_PHONE_NUMBER_ID),
       },
     });
   } catch (err) {
@@ -81,27 +63,14 @@ export async function PUT(request: NextRequest) {
     const agencyId = targetAgency(caller.role, caller.agencyId, body.agency_id ?? null);
     if (!agencyId) return NextResponse.json({ error: "Acente bilgisi bulunamadı." }, { status: 403 });
 
-    const provider = body.whatsapp_provider ?? "mock";
-    if (!PROVIDERS.includes(provider)) {
-      return NextResponse.json({ error: `Geçersiz sağlayıcı: ${provider}` }, { status: 400 });
-    }
-
+    // Yalnız alıcı tercihleri — Meta/provider/test_mode alanları bilinçli yok sayılır
     const row: Record<string, unknown> = {
       agency_id:             agencyId,
       whatsapp_enabled:      Boolean(body.whatsapp_enabled),
       whatsapp_phone:        (body.whatsapp_phone ?? "").toString().replace(/\D/g, "") || null,
-      whatsapp_provider:     provider,
       daily_summary_enabled: Boolean(body.daily_summary_enabled),
-      test_mode:             Boolean(body.test_mode),
-      // Meta Cloud API: Phone Number ID (gönderen hat) + WABA ID
-      whatsapp_sender_id:           (body.whatsapp_sender_id ?? "").toString().replace(/\D/g, "") || null,
-      whatsapp_business_account_id: (body.whatsapp_business_account_id ?? "").toString().trim() || null,
       updated_at:            new Date().toISOString(),
     };
-    // Boş anahtar gönderilirse mevcut anahtara dokunma
-    if (typeof body.whatsapp_api_key === "string" && body.whatsapp_api_key.trim() !== "") {
-      row.whatsapp_api_key = body.whatsapp_api_key.trim();
-    }
 
     const admin = getSupabaseAdmin();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
