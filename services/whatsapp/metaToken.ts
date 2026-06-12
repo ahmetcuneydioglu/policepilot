@@ -25,6 +25,54 @@ export function resolveMetaToken(agencyToken?: string | null): string | null {
   return agencyToken || process.env.META_ACCESS_TOKEN || null;
 }
 
+/**
+ * Kısa süreli (~24 saat) token'ı 60 günlük long-lived token'a çevirir.
+ * Meta'nın resmi fb_exchange_token akışı — Business Verification GEREKTİRMEZ.
+ * META_APP_ID + META_APP_SECRET env değişkenleri şarttır (yalnız server-side).
+ */
+export async function exchangeForLongLivedToken(shortToken: string): Promise<
+  { ok: true; token: string } | { ok: false; error: string }
+> {
+  const appId     = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+  if (!appId || !appSecret) {
+    return {
+      ok: false,
+      error: "META_APP_ID ve META_APP_SECRET tanımlı değil — Vercel'e ekleyin (Meta App Dashboard → Settings → Basic) ve redeploy edin.",
+    };
+  }
+
+  try {
+    const url =
+      `https://graph.facebook.com/v21.0/oauth/access_token` +
+      `?grant_type=fb_exchange_token` +
+      `&client_id=${encodeURIComponent(appId)}` +
+      `&client_secret=${encodeURIComponent(appSecret)}` +
+      `&fb_exchange_token=${encodeURIComponent(shortToken)}`;
+
+    const res  = await fetch(url);
+    const text = await res.text();
+    let json: { access_token?: string; error?: { message?: string; code?: number } };
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return { ok: false, error: `Meta beklenmeyen cevap (HTTP ${res.status}): ${text.slice(0, 120)}` };
+    }
+
+    if (!res.ok || !json.access_token) {
+      const e = json.error;
+      return {
+        ok: false,
+        error: `${e?.message ?? "Token uzatılamadı"}${e?.code != null ? ` (code ${e.code})` : ""}`,
+      };
+    }
+
+    return { ok: true, token: json.access_token };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function inspectMetaToken(token: string): Promise<MetaTokenStatus> {
   try {
     const res = await fetch(

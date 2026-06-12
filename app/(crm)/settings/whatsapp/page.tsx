@@ -256,6 +256,34 @@ function PlatformView() {
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
   const [error,    setError]    = useState("");
+  const [exchanging, setExchanging] = useState(false);
+  const [exchangeMsg, setExchangeMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Kısa token'ı Meta'nın fb_exchange_token akışıyla 60 günlük token'a çevir
+  async function extendToken() {
+    setExchanging(true);
+    setExchangeMsg(null);
+    try {
+      const res  = await fetch("/api/whatsapp/token-exchange", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        // Alana yeni token yazıldıysa onu uzat; boşsa kayıtlı token uzatılır
+        body: JSON.stringify(token.trim() ? { token: token.trim() } : {}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Token uzatılamadı.");
+      setExchangeMsg({
+        ok: true,
+        msg: `Token 60 güne uzatıldı ve kaydedildi 🎉${json.days_left != null ? ` — kalan süre ~${json.days_left} gün` : ""}`,
+      });
+      setToken("");
+      load();
+    } catch (e) {
+      setExchangeMsg({ ok: false, msg: e instanceof Error ? e.message : "Token uzatılamadı." });
+    } finally {
+      setExchanging(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -341,6 +369,7 @@ function PlatformView() {
                 <p className="text-red-600 text-xs mt-1">
                   {tokenStatus.error ?? "Token doğrulanamadı."} — Meta panelinden yeni token alıp aşağıya girin.
                   Yenilenene kadar gönderimler beklemede kalır.
+                  <b> İpucu:</b> kısa token&apos;ı yapıştırıp &ldquo;🔁 60 Güne Uzat&rdquo;ı kullanın — 2 ay boyunca yenileme gerekmez.
                 </p>
               </>
             ) : (
@@ -415,6 +444,31 @@ function PlatformView() {
             {settings.has_token && (
               <p className="text-[11px] text-emerald-600 mt-1.5 flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" /> Token kayıtlı. Boş bırakırsanız mevcut korunur.
+              </p>
+            )}
+
+            {/* 60 günlük token'a çevirme — Business Verification gerektirmez */}
+            <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={extendToken}
+                disabled={exchanging}
+                title="Kısa süreli (24 saat) token'ı Meta'nın resmi akışıyla 60 günlük token'a çevirir ve kaydeder"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 transition-all shadow-sm disabled:opacity-50"
+              >
+                {exchanging ? "Uzatılıyor…" : "🔁 60 Güne Uzat"}
+              </button>
+              <span className="text-[10px] text-slate-400">
+                Alana taze kısa token yapıştırıp uzatın — günlük yenileme derdi biter (gereksinim: Vercel&apos;de META_APP_ID + META_APP_SECRET)
+              </span>
+            </div>
+            {exchangeMsg && (
+              <p className={`text-[11px] mt-2 rounded-lg px-3 py-2 border ${
+                exchangeMsg.ok
+                  ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                  : "text-rose-700 bg-rose-50 border-rose-200"
+              }`}>
+                {exchangeMsg.ok ? "✅ " : "⚠️ "}{exchangeMsg.msg}
               </p>
             )}
           </div>
