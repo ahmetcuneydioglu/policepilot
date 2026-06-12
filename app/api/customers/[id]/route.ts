@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { buildCustomerInsights } from "@/lib/customerInsights";
 import { resolveCaller } from "../../whatsapp/_lib/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -169,6 +170,15 @@ export async function GET(
       })),
     ].sort((a, b) => (a.date < b.date ? 1 : -1));
 
+    // ── İçgörüler: kural tabanlı motor (ileride AI'ya devredilecek) ───────
+    const insights = buildCustomerInsights({
+      customer:   { name: customer.name, note: customer.note, created_at: customer.created_at },
+      policies,
+      quote_runs: quoteRuns,
+      documents,
+      whatsapp,
+    });
+
     return NextResponse.json({
       customer,
       policies,
@@ -177,6 +187,7 @@ export async function GET(
       whatsapp,
       stats,
       timeline: events,
+      insights,
     });
   } catch (err) {
     console.error("[api/customers/[id]]", err);

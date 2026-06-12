@@ -15,29 +15,31 @@ import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import {
   ChevronLeft, RefreshCw, LayoutDashboard, FileText, Zap,
-  FolderOpen, StickyNote, History, AlertTriangle, Phone,
+  FolderOpen, StickyNote, History, AlertTriangle, Phone, MessageCircle,
 } from "lucide-react";
 
 import type { CustomerBundle } from "@/components/customer/types";
 import { initials, fmtDate } from "@/components/customer/types";
-import OverviewTab  from "@/components/customer/OverviewTab";
-import PoliciesTab  from "@/components/customer/PoliciesTab";
-import RenewalsTab  from "@/components/customer/RenewalsTab";
-import QuotesTab    from "@/components/customer/QuotesTab";
-import DocumentsTab from "@/components/customer/DocumentsTab";
-import NotesTab     from "@/components/customer/NotesTab";
-import TimelineTab  from "@/components/customer/TimelineTab";
+import OverviewTab      from "@/components/customer/OverviewTab";
+import PoliciesTab      from "@/components/customer/PoliciesTab";
+import RenewalsTab      from "@/components/customer/RenewalsTab";
+import QuotesTab        from "@/components/customer/QuotesTab";
+import DocumentsTab     from "@/components/customer/DocumentsTab";
+import NotesTab         from "@/components/customer/NotesTab";
+import TimelineTab      from "@/components/customer/TimelineTab";
+import CommunicationTab from "@/components/customer/CommunicationTab";
 
-type TabKey = "overview" | "policies" | "renewals" | "quotes" | "documents" | "notes" | "timeline";
+type TabKey = "overview" | "policies" | "renewals" | "quotes" | "documents" | "communication" | "notes" | "timeline";
 
 const TABS: { key: TabKey; label: string; Icon: typeof LayoutDashboard }[] = [
-  { key: "overview",  label: "Genel Bakış",    Icon: LayoutDashboard },
-  { key: "policies",  label: "Poliçeler",      Icon: FileText },
-  { key: "renewals",  label: "Yenilemeler",    Icon: RefreshCw },
-  { key: "quotes",    label: "Teklifler",      Icon: Zap },
-  { key: "documents", label: "Evraklar",       Icon: FolderOpen },
-  { key: "notes",     label: "Notlar",         Icon: StickyNote },
-  { key: "timeline",  label: "İşlem Geçmişi",  Icon: History },
+  { key: "overview",      label: "Genel Bakış",    Icon: LayoutDashboard },
+  { key: "policies",      label: "Poliçeler",      Icon: FileText },
+  { key: "renewals",      label: "Yenilemeler",    Icon: RefreshCw },
+  { key: "quotes",        label: "Teklifler",      Icon: Zap },
+  { key: "documents",     label: "Evraklar",       Icon: FolderOpen },
+  { key: "communication", label: "İletişim",       Icon: MessageCircle },
+  { key: "notes",         label: "Notlar",         Icon: StickyNote },
+  { key: "timeline",      label: "İşlem Geçmişi",  Icon: History },
 ];
 
 export default function CustomerControlCenterPage() {
@@ -70,11 +72,12 @@ export default function CustomerControlCenterPage() {
 
   // ── Sekme rozetleri (sayılar) ───────────────────────────────────────────────
   const counts: Partial<Record<TabKey, number>> = data ? {
-    policies:  data.policies.length,
-    renewals:  data.stats.upcoming_renewals,
-    quotes:    data.quote_runs.length,
-    documents: data.documents.length,
-    timeline:  data.timeline.length,
+    policies:      data.policies.length,
+    renewals:      data.stats.upcoming_renewals,
+    quotes:        data.quote_runs.length,
+    documents:     data.documents.length,
+    communication: data.timeline.filter(e => e.type === "whatsapp" || e.type === "quote_run").length,
+    timeline:      data.timeline.length,
   } : {};
 
   if (loading) {
@@ -144,6 +147,22 @@ export default function CustomerControlCenterPage() {
               </span>
             </div>
           </div>
+          {/* ── Müşteri Durumu mini özeti — 5 saniyede anla ── */}
+          <div className="rounded-xl bg-white/10 border border-white/20 px-4 py-3 min-w-[180px]">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className={`w-2 h-2 rounded-full ${data.insights.status_summary.state === "active" ? "bg-emerald-400 animate-pulse" : "bg-slate-400"}`} />
+              <p className="text-[9px] font-bold text-blue-200 uppercase tracking-widest">
+                Müşteri Durumu · {data.insights.status_summary.state === "active" ? "Aktif" : "Pasif"}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-0.5 text-[11px] text-blue-100">
+              <span><b className="text-white">{data.insights.status_summary.active_policies}</b> aktif poliçe</span>
+              <span><b className="text-white">{data.insights.status_summary.upcoming_renewals}</b> yaklaşan yenileme</span>
+              <span><b className="text-white">{data.insights.status_summary.documents}</b> evrak · <b className="text-white">{data.insights.status_summary.open_quotes}</b> açık teklif</span>
+              <span><b className="text-emerald-300">{data.insights.status_summary.cross_sell}</b> çapraz satış fırsatı</span>
+            </div>
+          </div>
+
           <button
             onClick={load}
             className="p-2.5 rounded-xl bg-white/10 border border-white/20 text-blue-200 hover:bg-white/20 transition-all"
@@ -180,12 +199,13 @@ export default function CustomerControlCenterPage() {
       </div>
 
       {/* ── Sekme içeriği ── */}
-      {tab === "overview"  && <OverviewTab data={data} />}
-      {tab === "policies"  && <PoliciesTab policies={data.policies} />}
-      {tab === "renewals"  && <RenewalsTab policies={data.policies} />}
-      {tab === "quotes"    && <QuotesTab quoteRuns={data.quote_runs} />}
-      {tab === "documents" && <DocumentsTab documents={data.documents} />}
-      {tab === "notes"     && (
+      {tab === "overview"      && <OverviewTab data={data} onNavigate={(t) => setTab(t as TabKey)} />}
+      {tab === "policies"      && <PoliciesTab policies={data.policies} />}
+      {tab === "renewals"      && <RenewalsTab policies={data.policies} />}
+      {tab === "quotes"        && <QuotesTab quoteRuns={data.quote_runs} />}
+      {tab === "documents"     && <DocumentsTab documents={data.documents} customerPhone={customer.phone || null} customerName={customer.name} />}
+      {tab === "communication" && <CommunicationTab timeline={data.timeline} />}
+      {tab === "notes"         && (
         <NotesTab
           customerId={customer.id}
           initialNote={customer.note}

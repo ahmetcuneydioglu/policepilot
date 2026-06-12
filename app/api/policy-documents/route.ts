@@ -131,6 +131,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const policyId   = searchParams.get("policy_id");
     const documentId = searchParams.get("document_id");
+    const download   = searchParams.get("download") === "1";
     if (!policyId && !documentId) {
       return NextResponse.json({ error: "policy_id veya document_id gerekli." }, { status: 400 });
     }
@@ -138,12 +139,13 @@ export async function GET(request: NextRequest) {
     const admin = getSupabaseAdmin();
     let bucket = BUCKET;
     let filePath: string | null = null;
+    let fileName: string | null = null;
 
     if (documentId) {
       // Evrak kaydı üzerinden: documents tablosundan yol + bucket
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: doc } = await (admin.from("documents") as any)
-        .select("id, agency_id, file_path, bucket")
+        .select("id, agency_id, file_path, file_name, bucket")
         .eq("id", documentId)
         .maybeSingle();
       if (!doc) return NextResponse.json({ error: "Evrak bulunamadı." }, { status: 404 });
@@ -151,6 +153,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Bu evraka erişim yetkiniz yok." }, { status: 404 });
       }
       filePath = doc.file_path;
+      fileName = doc.file_name;
       bucket   = doc.bucket || BUCKET;
     } else {
       const policy = await getAuthorizedPolicy(policyId!, caller.role, caller.agencyId);
@@ -161,7 +164,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await admin.storage
       .from(bucket)
-      .createSignedUrl(filePath!, 60 * 60);
+      .createSignedUrl(filePath!, 60 * 60, download ? { download: fileName ?? true } : undefined);
 
     if (error || !data?.signedUrl) {
       return NextResponse.json({ error: error?.message ?? "İmzalı URL üretilemedi." }, { status: 500 });

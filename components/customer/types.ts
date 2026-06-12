@@ -78,6 +78,28 @@ export type CustomerTimelineEvent = {
   ref_id: string | null;
 };
 
+export type CustomerInsights = {
+  ai_summary: string[];
+  next_action: {
+    type: "renewal" | "quote" | "document" | "cross_sell" | "idle";
+    label: string;
+    detail: string;
+    ref_id: string | null;
+  };
+  cross_sell: { type: string; label: string; emoji: string; est_value: number }[];
+  cross_sell_total: number;
+  score: { grade: "A+" | "A" | "B" | "C" | "Yeni"; color: string };
+  last_contact: { date: string; channel: string; label: string } | null;
+  status_summary: {
+    state: "active" | "passive";
+    active_policies: number;
+    upcoming_renewals: number;
+    documents: number;
+    open_quotes: number;
+    cross_sell: number;
+  };
+};
+
 export type CustomerBundle = {
   customer: CustomerDetail;
   policies: CustomerPolicy[];
@@ -86,6 +108,7 @@ export type CustomerBundle = {
   whatsapp: CustomerWhatsApp[];
   stats: CustomerStats;
   timeline: CustomerTimelineEvent[];
+  insights: CustomerInsights;
 };
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
