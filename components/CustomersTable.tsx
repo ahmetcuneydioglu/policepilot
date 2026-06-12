@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Customer } from "@/lib/database.types";
-import CustomerModal from "@/components/CustomerModal";
 import WhatsAppModal from "@/components/WhatsAppModal";
 
 const WA_SVG = (
@@ -25,7 +25,7 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
 }
 
 export default function CustomersTable({ customers }: { customers: Customer[] }) {
-  const [selected, setSelected] = useState<Customer | null>(null);
+  const router = useRouter();
   const [waCustomer, setWaCustomer] = useState<Customer | null>(null);
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState("");
@@ -87,7 +87,7 @@ export default function CustomersTable({ customers }: { customers: Customer[] })
               {filtered.map((customer, i) => (
                 <tr
                   key={customer.id}
-                  onClick={() => setSelected(customer)}
+                  onClick={() => router.push(`/customers/${customer.id}`)}
                   className="hover:bg-blue-50/40 transition-colors group cursor-pointer animate-fade-in-up"
                   style={{ animationDelay: `${i * 30}ms` }}
                 >
@@ -121,10 +121,10 @@ export default function CustomersTable({ customers }: { customers: Customer[] })
                         WhatsApp
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); setSelected(customer); }}
+                        onClick={(e) => { e.stopPropagation(); router.push(`/customers/${customer.id}`); }}
                         className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                       >
-                        Detay
+                        Kontrol Merkezi →
                       </button>
                     </div>
                   </td>
@@ -134,8 +134,6 @@ export default function CustomersTable({ customers }: { customers: Customer[] })
           </table>
         </div>
       </div>
-
-      {selected && <CustomerModal customer={selected} onClose={() => setSelected(null)} />}
 
       {waCustomer && (
         <WhatsAppModal

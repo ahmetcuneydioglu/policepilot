@@ -129,17 +129,39 @@ export async function GET(request: NextRequest) {
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
-    const policyId = searchParams.get("policy_id");
-    if (!policyId) return NextResponse.json({ error: "policy_id gerekli." }, { status: 400 });
-
-    const policy = await getAuthorizedPolicy(policyId, caller.role, caller.agencyId);
-    if (!policy) return NextResponse.json({ error: "Poliçe bulunamadı veya erişim yetkiniz yok." }, { status: 404 });
-    if (!policy.document_path) return NextResponse.json({ error: "Bu poliçeye dosya yüklenmemiş." }, { status: 404 });
+    const policyId   = searchParams.get("policy_id");
+    const documentId = searchParams.get("document_id");
+    if (!policyId && !documentId) {
+      return NextResponse.json({ error: "policy_id veya document_id gerekli." }, { status: 400 });
+    }
 
     const admin = getSupabaseAdmin();
+    let bucket = BUCKET;
+    let filePath: string | null = null;
+
+    if (documentId) {
+      // Evrak kaydı üzerinden: documents tablosundan yol + bucket
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: doc } = await (admin.from("documents") as any)
+        .select("id, agency_id, file_path, bucket")
+        .eq("id", documentId)
+        .maybeSingle();
+      if (!doc) return NextResponse.json({ error: "Evrak bulunamadı." }, { status: 404 });
+      if (caller.role !== "super_admin" && doc.agency_id !== caller.agencyId) {
+        return NextResponse.json({ error: "Bu evraka erişim yetkiniz yok." }, { status: 404 });
+      }
+      filePath = doc.file_path;
+      bucket   = doc.bucket || BUCKET;
+    } else {
+      const policy = await getAuthorizedPolicy(policyId!, caller.role, caller.agencyId);
+      if (!policy) return NextResponse.json({ error: "Poliçe bulunamadı veya erişim yetkiniz yok." }, { status: 404 });
+      if (!policy.document_path) return NextResponse.json({ error: "Bu poliçeye dosya yüklenmemiş." }, { status: 404 });
+      filePath = policy.document_path;
+    }
+
     const { data, error } = await admin.storage
-      .from(BUCKET)
-      .createSignedUrl(policy.document_path, 60 * 60);
+      .from(bucket)
+      .createSignedUrl(filePath!, 60 * 60);
 
     if (error || !data?.signedUrl) {
       return NextResponse.json({ error: error?.message ?? "İmzalı URL üretilemedi." }, { status: 500 });
