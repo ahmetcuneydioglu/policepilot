@@ -23,8 +23,14 @@ async function graph(path: string, token: string, init?: RequestInit) {
       ...init,
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init?.headers ?? {}) },
     });
-    const json = await res.json();
-    return { http: res.status, ok: res.ok, body: json };
+    // Facebook bazı hatalarda JSON yerine HTML hata sayfası döner —
+    // o durumda status + ilk satırlar raporlanır, SyntaxError yutulmaz.
+    const text = await res.text();
+    try {
+      return { http: res.status, ok: res.ok, body: JSON.parse(text) };
+    } catch {
+      return { http: res.status, ok: false, body: { non_json_response: text.slice(0, 200) } };
+    }
   } catch (err) {
     return { http: 0, ok: false, body: { error: String(err) } };
   }
