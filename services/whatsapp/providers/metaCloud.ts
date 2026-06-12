@@ -44,9 +44,18 @@ export class MetaCloudProvider implements WhatsAppProvider {
       const json = await res.json();
 
       if (!res.ok) {
+        // Meta'nın jenerik mesajları ("An unknown error has occurred.") tek
+        // başına teşhise yetmez — status, code ve fbtrace_id de raporlanır.
+        const e = json?.error ?? {};
+        const parts = [
+          e.message ?? "Meta API hatası",
+          `HTTP ${res.status}`,
+          e.code != null ? `code ${e.code}${e.error_subcode ? `/${e.error_subcode}` : ""}` : null,
+          e.fbtrace_id ? `fbtrace ${e.fbtrace_id}` : null,
+        ].filter(Boolean);
         return {
           success:      false,
-          errorMessage: json?.error?.message ?? `Meta API HTTP ${res.status}`,
+          errorMessage: `Meta: ${parts.join(" · ")}`,
         };
       }
 
