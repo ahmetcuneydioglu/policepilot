@@ -77,16 +77,21 @@ async function getTemplate(): Promise<string> {
     .maybeSingle();
 
   // Şablon DB'de yoksa/pasifse gömülü varsayılan kullanılır — özet asla aksamaz
-  return data?.content ?? (
-    "🔔 *PolicePilot Günlük Operasyon Özeti*\n\n" +
-    "Tarih: {{date}}\n\n" +
-    "Bugün Yenilenecek: *{{today_count}}*\n" +
-    "Bu Hafta Yenilenecek: *{{week_count}}*\n" +
-    "Geciken Yenileme: *{{overdue_count}}*\n\n" +
-    "{{urgent_list}}\n" +
-    "PolicePilot'a giriş yap:\n{{app_url}}"
-  );
+  return data?.content ?? DEFAULT_TEMPLATE;
 }
+
+export const DEFAULT_TEMPLATE =
+  "📊 *PolicePilot Günlük Operasyon Özeti*\n\n" +
+  "Tarih: {{date}}\n\n" +
+  "👥 Toplam Müşteri: *{{total_customers}}*\n" +
+  "📄 Aktif Poliçe: *{{active_policies}}*\n" +
+  "🔄 Bugün Yenilenecek: *{{today_count}}*\n" +
+  "📅 Bu Hafta Yenilenecek: *{{week_count}}*\n" +
+  "⚠️ Geciken Yenileme: *{{overdue_count}}*\n" +
+  "📨 Açık Teklif: *{{open_quotes}}*\n" +
+  "🆕 Yeni Talep: *{{new_requests}}*\n\n" +
+  "{{urgent_list}}\n" +
+  "PolicePilot'a giriş yap:\n{{app_url}}";
 
 function render(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? "");
@@ -140,6 +145,42 @@ export async function generateDailySummaries(): Promise<DailySummaryStats> {
     byAgency.set(p.agency_id, list);
   }
 
+  // ── Genişletilmiş metrikler: müşteri, aktif poliçe, açık teklif, yeni talep
+  // Toplu çekilir (acente başına ayrı sorgu yok), JS'te acenteye göre sayılır.
+  const agencyIds = agencies.map(a => a.agency_id);
+  const OPEN_QUOTE_STATUSES = ["Yeni", "Teklif Verildi", "Müşteri Düşünüyor"];
+
+  const [custRows, activePolRows, quoteRows, reqRows] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (admin.from("customers") as any).select("agency_id").in("agency_id", agencyIds),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (admin.from("policies") as any).select("agency_id").eq("status", "Aktif").in("agency_id", agencyIds),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (admin.from("quote_runs") as any).select("agency_id").in("status", OPEN_QUOTE_STATUSES).in("agency_id", agencyIds),
+    // Talepler acenteye müşteri üzerinden bağlı (requests tablosunda agency_id yok)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (admin.from("requests") as any).select("id, status, customers!inner(agency_id)").eq("status", "Yeni").in("customers.agency_id", agencyIds),
+  ]);
+
+  const countBy = (rows: { agency_id?: string | null }[] | null | undefined): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const r of rows ?? []) {
+      if (!r.agency_id) continue;
+      m.set(r.agency_id, (m.get(r.agency_id) ?? 0) + 1);
+    }
+    return m;
+  };
+  const customerCounts = countBy(custRows.data);
+  const policyCounts   = countBy(activePolRows.data);
+  const quoteCounts    = countBy(quoteRows.data);
+  const requestCounts  = new Map<string, number>();
+  type ReqRow = { customers: { agency_id: string | null } | { agency_id: string | null }[] };
+  for (const r of (reqRows.data ?? []) as ReqRow[]) {
+    const c  = Array.isArray(r.customers) ? r.customers[0] : r.customers;
+    const ag = c?.agency_id;
+    if (ag) requestCounts.set(ag, (requestCounts.get(ag) ?? 0) + 1);
+  }
+
   const template = await getTemplate();
   const weekEnd  = addDays(today, 7);
 
@@ -154,8 +195,8 @@ export async function generateDailySummaries(): Promise<DailySummaryStats> {
     const todays  = pols.filter(p => p.end_date === today);
     const week    = pols.filter(p => p.end_date >= today && p.end_date <= weekEnd);
 
-    // Hiç iş yoksa boş özet gönderme
-    if (pols.length === 0) { stats.skipped_empty++; continue; }
+    // Not: yenileme olmasa da özet gönderilir — acente sistemin çalıştığını
+    // ilk günden görür (toplam müşteri/poliçe/teklif metrikleri her zaman anlamlı).
 
     // En acil 3 müşteri: gecikenler önce, sonra en yakın bitiş
     const urgent = [...overdue, ...pols.filter(p => p.end_date >= today)].slice(0, 3);
@@ -168,12 +209,16 @@ export async function generateDailySummaries(): Promise<DailySummaryStats> {
       .join("\n");
 
     const message = render(template, {
-      date:          fmtTr(today),
-      today_count:   String(todays.length),
-      week_count:    String(week.length),
-      overdue_count: String(overdue.length),
-      urgent_list:   urgentList ? `${urgentList}\n` : "",
-      app_url:       APP_URL,
+      date:            fmtTr(today),
+      total_customers: String(customerCounts.get(agency.agency_id) ?? 0),
+      active_policies: String(policyCounts.get(agency.agency_id) ?? 0),
+      today_count:     String(todays.length),
+      week_count:      String(week.length),
+      overdue_count:   String(overdue.length),
+      open_quotes:     String(quoteCounts.get(agency.agency_id) ?? 0),
+      new_requests:    String(requestCounts.get(agency.agency_id) ?? 0),
+      urgent_list:     urgentList ? `${urgentList}\n` : "",
+      app_url:         APP_URL,
     });
 
     const { queued, reason } = await enqueue({

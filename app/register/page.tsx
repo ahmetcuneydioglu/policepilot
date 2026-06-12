@@ -198,6 +198,11 @@ export default function RegisterPage() {
 
     if (!agencyName.trim()) { setError("Acente adı zorunludur."); return; }
     if (!agencySlug.trim()) { setError("Acente bağlantısı zorunludur."); return; }
+    // Telefon zorunlu — günlük operasyon özetleri bu numaraya gider (TR formatı)
+    const phoneDigits = agencyPhone.replace(/\D/g, "");
+    const trPhoneOk = /^(90)?0?5\d{9}$/.test(phoneDigits) || /^(90)?0?[2348]\d{9}$/.test(phoneDigits);
+    if (!phoneDigits) { setError("Telefon numarası zorunludur."); return; }
+    if (!trPhoneOk) { setError("Geçerli bir Türkiye telefon numarası girin (örn. 0532 123 45 67)."); return; }
     setError(""); setLoading(true);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -456,11 +461,15 @@ export default function RegisterPage() {
                       </div>
 
                       <div>
-                        <label className={LABEL}>Telefon <span className="font-normal normal-case text-gray-300">(isteğe bağlı)</span></label>
+                        <label className={LABEL}>Telefon *</label>
                         <input type="tel" value={agencyPhone}
                           onChange={(e) => setAgencyPhone(e.target.value)}
-                          placeholder="0212 123 45 67"
+                          required
+                          placeholder="0532 123 45 67"
                           className={INPUT} />
+                        <p className="mt-1.5 text-[11px] text-gray-400">
+                          Operasyon bildirim numaranız — günlük WhatsApp özetleri bu numaraya gönderilir.
+                        </p>
                       </div>
                     </div>
                   )}

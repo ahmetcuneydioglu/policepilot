@@ -56,7 +56,7 @@ insert into public.whatsapp_templates (template_key, title, content)
 values (
   'daily_summary',
   'Günlük Operasyon Özeti',
-  E'🔔 *PolicePilot Günlük Operasyon Özeti*\n\nTarih: {{date}}\n\nBugün Yenilenecek: *{{today_count}}*\nBu Hafta Yenilenecek: *{{week_count}}*\nGeciken Yenileme: *{{overdue_count}}*\n\n{{urgent_list}}\nPolicePilot''a giriş yap:\n{{app_url}}'
+  E'📊 *PolicePilot Günlük Operasyon Özeti*\n\nTarih: {{date}}\n\n👥 Toplam Müşteri: *{{total_customers}}*\n📄 Aktif Poliçe: *{{active_policies}}*\n🔄 Bugün Yenilenecek: *{{today_count}}*\n📅 Bu Hafta Yenilenecek: *{{week_count}}*\n⚠️ Geciken Yenileme: *{{overdue_count}}*\n📨 Açık Teklif: *{{open_quotes}}*\n🆕 Yeni Talep: *{{new_requests}}*\n\n{{urgent_list}}\nPolicePilot''a giriş yap:\n{{app_url}}'
 )
 on conflict (template_key) do nothing;
 

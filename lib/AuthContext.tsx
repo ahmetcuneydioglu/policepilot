@@ -111,6 +111,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [fetchProfile]);
 
+  // ── Sunucu bootstrap: oturum başına bir kez, kendini onaran kurulum ────────
+  // agencies.phone + agency_settings garantisi (günlük WhatsApp özeti için).
+  // Idempotent ve fire-and-forget — UI'ı bekletmez, hata olursa sessiz geçer.
+  useEffect(() => {
+    if (!user) return;
+    const key = `pp_bootstrap_${user.id}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch { /* sessionStorage kapalıysa her seferinde çağrılır — zararsız */ }
+    fetch("/api/auth/bootstrap", { method: "POST" }).catch(() => {});
+  }, [user]);
+
   // ── React to sign-in / sign-out events ────────────────────────────────────
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

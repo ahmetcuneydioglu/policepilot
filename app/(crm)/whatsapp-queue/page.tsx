@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   MessageCircle, RefreshCw, Clock, CheckCircle2, XCircle,
   FlaskConical, Settings, ChevronDown, ChevronUp,
+  Send, CalendarDays, Gauge, CalendarClock, Power,
 } from "lucide-react";
 
 type QueueItem = {
@@ -62,15 +63,27 @@ export default function WhatsAppQueuePage() {
   const [filter,  setFilter]  = useState<StatusFilter>("Tümü");
   const [openId,  setOpenId]  = useState<string | null>(null);
   const [error,   setError]   = useState("");
+  const [systemOn, setSystemOn] = useState<boolean | null>(null);
+  // "Şimdi" değeri render'da değil veri yüklemede sabitlenir (saf render)
+  const [nowMs, setNowMs] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setNowMs(Date.now());
     try {
-      const res  = await fetch("/api/whatsapp/queue?limit=200");
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Kuyruk yüklenemedi.");
+      const [queueRes, settingsRes] = await Promise.all([
+        fetch("/api/whatsapp/queue?limit=200"),
+        fetch("/api/whatsapp/settings"),
+      ]);
+      const json = await queueRes.json();
+      if (!queueRes.ok) throw new Error(json.error ?? "Kuyruk yüklenemedi.");
       setItems(json.items ?? []);
+
+      if (settingsRes.ok) {
+        const sj = await settingsRes.json();
+        setSystemOn(Boolean(sj.settings?.whatsapp_enabled && sj.settings?.daily_summary_enabled));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kuyruk yüklenemedi.");
     } finally {
@@ -90,6 +103,44 @@ export default function WhatsAppQueuePage() {
   };
 
   const filtered = filter === "Tümü" ? items : items.filter(i => i.status === filter);
+
+  // ── Operasyon metrikleri (TR günü bazlı, "şimdi" load anında sabitlenir) ───
+  const trDay = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString("en-CA", { timeZone: "Europe/Istanbul" }) : null;
+  const todayTr  = nowMs != null ? new Date(nowMs).toLocaleDateString("en-CA", { timeZone: "Europe/Istanbul" }) : null;
+  const weekAgo  = nowMs != null ? new Date(nowMs - 7 * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/Istanbul" }) : null;
+  const delivered = items.filter(i => i.status === "sent" || i.status === "skipped");
+
+  const sentToday = todayTr ? delivered.filter(i => trDay(i.sent_at ?? i.created_at) === todayTr).length : 0;
+  const sentWeek  = weekAgo ? delivered.filter(i => {
+    const d = trDay(i.sent_at ?? i.created_at);
+    return d != null && d >= weekAgo;
+  }).length : 0;
+  const attempted   = delivered.length + counts.failed;
+  const successRate = attempted > 0 ? Math.round((delivered.length / attempted) * 100) : null;
+  const lastSentAt  = delivered.reduce<string | null>((max, i) => {
+    const d = i.sent_at ?? i.created_at;
+    return !max || d > max ? d : max;
+  }, null);
+
+  // Sonraki planlanan gönderim: her gün 09:00 TR — bugünkü geçtiyse yarın
+  let nextLabel = "—";
+  if (nowMs != null) {
+    const nowTr = new Date(new Date(nowMs).toLocaleString("en-US", { timeZone: "Europe/Istanbul" }));
+    const next  = new Date(nowTr);
+    next.setHours(9, 0, 0, 0);
+    if (nowTr.getTime() >= next.getTime()) next.setDate(next.getDate() + 1);
+    nextLabel = `${next.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" })} 09:00`;
+  }
+
+  const OPS_CARDS = [
+    { label: "Bugün Gönderilen",   value: String(sentToday),                                  Icon: Send,          cls: "from-emerald-50 to-teal-100/60 ring-emerald-200/60",  iconBg: "bg-emerald-500", val: "text-emerald-700" },
+    { label: "Bu Hafta Gönderilen",value: String(sentWeek),                                   Icon: CalendarDays,  cls: "from-blue-50 to-indigo-100/60 ring-blue-200/60",      iconBg: "bg-blue-500",    val: "text-blue-700" },
+    { label: "Başarı Oranı",       value: successRate != null ? `%${successRate}` : "—",      Icon: Gauge,         cls: "from-violet-50 to-purple-100/60 ring-violet-200/60",  iconBg: "bg-violet-500",  val: "text-violet-700" },
+    { label: "Son Gönderim",       value: lastSentAt ? fmtDateTime(lastSentAt) : "—",         Icon: Clock,         cls: "from-slate-50 to-slate-100/60 ring-slate-200/60",     iconBg: "bg-slate-500",   val: "text-slate-700" },
+    { label: "Sonraki Planlanan",  value: nextLabel,                                          Icon: CalendarClock, cls: "from-amber-50 to-orange-100/60 ring-amber-200/60",    iconBg: "bg-amber-500",   val: "text-amber-700" },
+    { label: "Sistem Durumu",      value: systemOn == null ? "—" : systemOn ? "🟢 Aktif" : "🔴 Pasif", Icon: Power, cls: systemOn ? "from-emerald-50 to-green-100/60 ring-emerald-200/60" : "from-rose-50 to-red-100/60 ring-rose-200/60", iconBg: systemOn ? "bg-emerald-600" : "bg-rose-500", val: systemOn ? "text-emerald-700" : "text-rose-700" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -119,6 +170,21 @@ export default function WhatsAppQueuePage() {
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
+      </div>
+
+      {/* ── Operasyon kartları ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {OPS_CARDS.map(c => (
+          <div key={c.label} className={`rounded-2xl bg-gradient-to-br ${c.cls} ring-1 p-3.5`}>
+            <div className={`w-7 h-7 rounded-lg ${c.iconBg} flex items-center justify-center mb-2.5 shadow-sm`}>
+              <c.Icon className="w-3.5 h-3.5 text-white" />
+            </div>
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-tight">{c.label}</p>
+            <p className={`text-sm font-bold mt-1 leading-tight ${c.val}`}>
+              {loading ? <span className="inline-block w-12 h-4 rounded bg-current opacity-20 animate-pulse" /> : c.value}
+            </p>
+          </div>
+        ))}
       </div>
 
       {/* Filtre chipleri */}
