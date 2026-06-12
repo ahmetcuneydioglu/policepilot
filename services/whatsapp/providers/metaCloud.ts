@@ -53,9 +53,14 @@ export class MetaCloudProvider implements WhatsAppProvider {
           e.code != null ? `code ${e.code}${e.error_subcode ? `/${e.error_subcode}` : ""}` : null,
           e.fbtrace_id ? `fbtrace ${e.fbtrace_id}` : null,
         ].filter(Boolean);
+        // Token kaynaklı hatalarda kullanıcıyı doğrudan çözüme yönlendir
+        const isTokenIssue = e.type === "OAuthException" && (e.code === 190 || e.code === 1 || e.code === 102);
+        const hint = isTokenIssue
+          ? " → Token geçersiz/dolmuş olabilir: Ayarlar > WhatsApp'tan yeni token girin veya Vercel'de META_ACCESS_TOKEN'ı yenileyin."
+          : "";
         return {
           success:      false,
-          errorMessage: `Meta: ${parts.join(" · ")}`,
+          errorMessage: `Meta: ${parts.join(" · ")}${hint}`,
         };
       }
 

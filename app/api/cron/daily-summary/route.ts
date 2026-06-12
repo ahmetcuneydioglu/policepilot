@@ -20,6 +20,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { generateDailySummaries, trToday } from "@/services/whatsapp/dailySummaryService";
 import { processQueue } from "@/services/whatsapp/queueService";
+import { inspectMetaToken } from "@/services/whatsapp/metaToken";
 
 export async function GET(request: NextRequest) {
   const auth = request.headers.get("authorization");
@@ -28,10 +29,25 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // ── Token ön-doğrulaması (geçici token akışı) ────────────────────────
+    // Platform token'ı geçersizse özetler yine ÜRETİLİR (kuyruğa yazılır),
+    // ama Meta gönderimi processQueue içinde pending bekletilir; mock
+    // acenteler etkilenmez. Sonuç cron yanıtında raporlanır.
+    let metaToken: { valid: boolean; hours_left: number | null; error: string | null } | null = null;
+    if (process.env.META_ACCESS_TOKEN) {
+      const st = await inspectMetaToken(process.env.META_ACCESS_TOKEN);
+      metaToken = { valid: st.valid, hours_left: st.hours_left, error: st.error };
+      if (!st.valid) {
+        console.error("[cron/daily-summary] META TOKEN GEÇERSİZ:", st.error);
+      } else if (st.expiring_soon) {
+        console.warn(`[cron/daily-summary] Meta token ~${st.hours_left} saat içinde dolacak.`);
+      }
+    }
+
     const stats = await generateDailySummaries();
     // Hobby planı: ayrı 5dk'lık gönderim cron'u yok → kuyruğu hemen işle
     const sendResult = await processQueue(100);
-    return NextResponse.json({ ok: true, date: trToday(), ...stats, send: sendResult });
+    return NextResponse.json({ ok: true, date: trToday(), meta_token: metaToken, ...stats, send: sendResult });
   } catch (err) {
     console.error("[cron/daily-summary]", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });

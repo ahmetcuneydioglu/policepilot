@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { inspectMetaToken, resolveMetaToken } from "@/services/whatsapp/metaToken";
 import { resolveCaller } from "../_lib/auth";
 
 const PROVIDERS = ["mock", "meta_cloud", "twilio", "dialog360", "wati"];
@@ -38,7 +39,18 @@ export async function GET(request: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    // Meta seçiliyse etkin token'ın ömrünü kontrol et (geçici token akışı)
+    const provider = data?.whatsapp_provider ?? "mock";
+    let tokenStatus = null;
+    if (provider === "meta_cloud") {
+      const token = resolveMetaToken(data?.whatsapp_api_key);
+      tokenStatus = token
+        ? await inspectMetaToken(token)
+        : { valid: false, expires_at: null, hours_left: null, expiring_soon: false, error: "Token tanımlı değil." };
+    }
+
     return NextResponse.json({
+      token_status: tokenStatus,
       settings: {
         agency_id:             agencyId,
         whatsapp_enabled:      data?.whatsapp_enabled      ?? false,

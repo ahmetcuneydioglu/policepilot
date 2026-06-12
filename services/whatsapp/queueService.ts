@@ -12,6 +12,7 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getProvider }      from "./providerFactory";
+import { inspectMetaToken, resolveMetaToken } from "./metaToken";
 import type { WhatsAppProviderName } from "./types";
 
 const MAX_ATTEMPTS = 3;
@@ -87,13 +88,14 @@ export async function getAgencySettings(agencyId: string): Promise<AgencyWhatsAp
 export interface ProcessResult {
   processed: number;
   sent:      number;
-  skipped:   number;  // test modu
+  skipped:   number;        // test modu
   failed:    number;
+  token_blocked: number;    // token geçersiz — pending bekletildi, deneme yakılmadı
 }
 
 export async function processQueue(limit = 50): Promise<ProcessResult> {
   const admin  = getSupabaseAdmin();
-  const result: ProcessResult = { processed: 0, sent: 0, skipped: 0, failed: 0 };
+  const result: ProcessResult = { processed: 0, sent: 0, skipped: 0, failed: 0, token_blocked: 0 };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: rows, error } = await (admin.from("whatsapp_queue") as any)
@@ -107,6 +109,8 @@ export async function processQueue(limit = 50): Promise<ProcessResult> {
 
   // Acente ayarlarını tek tek değil, batch başına bir kez çek
   const settingsCache = new Map<string, AgencyWhatsAppSettings | null>();
+  // Token doğrulaması da batch başına bir kez yapılır (geçici token akışı)
+  const tokenValidCache = new Map<string, { valid: boolean; error: string | null }>();
 
   for (const row of (rows ?? []) as QueueRow[]) {
     result.processed++;
@@ -139,6 +143,30 @@ export async function processQueue(limit = 50): Promise<ProcessResult> {
       });
       result.skipped++;
       continue;
+    }
+
+    // Meta: göndermeden önce token'ı doğrula — geçersizse mesaj PENDING kalır,
+    // deneme hakkı yakılmaz; token yenilenince bir sonraki cron'da gider.
+    if (settings.whatsapp_provider === "meta_cloud") {
+      let tokenCheck = tokenValidCache.get(row.agency_id);
+      if (!tokenCheck) {
+        const token = resolveMetaToken(settings.whatsapp_api_key);
+        if (!token) {
+          tokenCheck = { valid: false, error: "Token tanımlı değil." };
+        } else {
+          const st = await inspectMetaToken(token);
+          tokenCheck = { valid: st.valid, error: st.error };
+        }
+        tokenValidCache.set(row.agency_id, tokenCheck);
+      }
+      if (!tokenCheck.valid) {
+        await updateRow(row.id, {
+          // pending kalır, attempts artmaz — token gelince otomatik denenir
+          error_message: `Token geçersiz: ${tokenCheck.error ?? "doğrulanamadı"} → Ayarlar > WhatsApp'tan yeni token girin.`,
+        });
+        result.token_blocked++;
+        continue;
+      }
     }
 
     // Gerçek gönderim

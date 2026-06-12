@@ -28,6 +28,14 @@ type Settings = {
   env_meta_configured:          boolean;
 };
 
+type TokenStatus = {
+  valid: boolean;
+  expires_at: number | null;
+  hours_left: number | null;
+  expiring_soon: boolean;
+  error: string | null;
+};
+
 const PROVIDERS = [
   { value: "mock",       label: "Mock (Test)",            hint: "Gerçek gönderim yapmaz — geliştirme için" },
   { value: "meta_cloud", label: "Meta WhatsApp Cloud API", hint: "Resmi Meta Cloud API — üretim" },
@@ -53,6 +61,7 @@ export default function WhatsAppSettingsPage() {
   const { loading: authLoading } = useAuth();
 
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [tokenStatus, setTokenStatus] = useState<TokenStatus | null>(null);
   const [apiKey,   setApiKey]   = useState("");
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
@@ -94,6 +103,7 @@ export default function WhatsAppSettingsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Ayarlar yüklenemedi.");
       setSettings(json.settings);
+      setTokenStatus(json.token_status ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ayarlar yüklenemedi.");
     } finally {
@@ -164,6 +174,41 @@ export default function WhatsAppSettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Token ömrü uyarısı — Meta seçiliyken */}
+      {tokenStatus && (!tokenStatus.valid || tokenStatus.expiring_soon) && (
+        <div className="flex items-start gap-3 px-4 py-3.5 rounded-2xl bg-red-50 border-2 border-red-300">
+          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            {!tokenStatus.valid ? (
+              <>
+                <p className="font-bold text-red-700">Meta token geçersiz veya süresi dolmuş!</p>
+                <p className="text-red-600 text-xs mt-1">
+                  {tokenStatus.error ?? "Token doğrulanamadı."} — Meta panelinden yeni token alıp aşağıdaki
+                  Access Token alanına girin (veya Vercel&apos;de META_ACCESS_TOKEN&apos;ı yenileyip redeploy edin).
+                  Token yenilenene kadar WhatsApp gönderimleri beklemede kalır.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-bold text-red-700">
+                  Meta token&apos;ın süresi {tokenStatus.hours_left != null ? `~${Math.round(tokenStatus.hours_left)} saat içinde` : "yakında"} doluyor!
+                </p>
+                <p className="text-red-600 text-xs mt-1">
+                  Geçici token kullanıyorsunuz. Süresi dolmadan Meta panelinden yeni token alıp buradan girin —
+                  yoksa günlük özetler gönderilemez.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {tokenStatus && tokenStatus.valid && !tokenStatus.expiring_soon && (
+        <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 flex items-center gap-1.5">
+          <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+          Meta token geçerli{tokenStatus.hours_left != null ? ` — kalan süre ~${Math.round(tokenStatus.hours_left)} saat` : " (süresiz)"}.
+        </p>
+      )}
 
       {/* Ana toggle */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-4">
