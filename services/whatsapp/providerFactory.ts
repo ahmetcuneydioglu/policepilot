@@ -16,10 +16,18 @@ export function getProvider(config: ProviderConfig): WhatsAppProvider {
       return new MockProvider();
 
     case "meta_cloud": {
-      if (!config.apiKey || !config.senderId) {
-        throw new Error("Meta Cloud API için api_key ve sender_id (phone_number_id) gerekli.");
+      // Öncelik: acente ayarları → sunucu env değişkenleri (Vercel)
+      // Token koda yazılmaz; acente bazlı kurulum yoksa platform geneli
+      // META_ACCESS_TOKEN / META_PHONE_NUMBER_ID kullanılır.
+      const apiKey   = config.apiKey   || process.env.META_ACCESS_TOKEN    || null;
+      const senderId = config.senderId || process.env.META_PHONE_NUMBER_ID || null;
+      if (!apiKey || !senderId) {
+        throw new Error(
+          "Meta Cloud API yapılandırması eksik: Access Token + Phone Number ID gerekli " +
+          "(ayarlardan girin veya META_ACCESS_TOKEN / META_PHONE_NUMBER_ID env değişkenlerini tanımlayın)."
+        );
       }
-      return new MetaCloudProvider(config.apiKey, config.senderId);
+      return new MetaCloudProvider(apiKey, senderId);
     }
 
     case "twilio":

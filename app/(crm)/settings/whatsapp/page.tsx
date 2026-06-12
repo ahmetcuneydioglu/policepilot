@@ -25,6 +25,7 @@ type Settings = {
   has_api_key:           boolean;
   whatsapp_sender_id:           string;
   whatsapp_business_account_id: string;
+  env_meta_configured:          boolean;
 };
 
 const PROVIDERS = [
@@ -224,6 +225,14 @@ export default function WhatsAppSettingsPage() {
             <p className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-2">
               <KeyRound className="w-3.5 h-3.5" /> Meta Cloud API Yapılandırması
             </p>
+
+            {settings.env_meta_configured && (
+              <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                Sunucuda platform geneli Meta yapılandırması bulundu — aşağıdaki alanları boş bırakırsanız o kullanılır.
+                Doldurursanız bu acenteye özel değerler önceliklidir.
+              </p>
+            )}
 
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Access Token</label>

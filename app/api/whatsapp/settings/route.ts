@@ -50,6 +50,8 @@ export async function GET(request: NextRequest) {
         // Meta Cloud API alanları (token asla dönmez)
         whatsapp_sender_id:           data?.whatsapp_sender_id           ?? "",
         whatsapp_business_account_id: data?.whatsapp_business_account_id ?? "",
+        // Sunucuda platform geneli Meta yapılandırması var mı? (env fallback)
+        env_meta_configured: Boolean(process.env.META_ACCESS_TOKEN && process.env.META_PHONE_NUMBER_ID),
       },
     });
   } catch (err) {
