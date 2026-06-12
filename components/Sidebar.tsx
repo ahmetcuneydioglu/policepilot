@@ -210,6 +210,10 @@ export default function Sidebar() {
                 <p className="px-3 text-[9px] font-bold text-slate-600 uppercase tracking-widest">Yönetim</p>
               )}
             </div>
+            <NavLink href="/admin" label="⚡ Command Center" icon={Icon.dashboard}
+              isActive={false} collapsed={collapsed} onClick={closeMobile} />
+            <div>
+            </div>
             <NavLink href="/agencies" label="Acenteler" icon={Icon.agencies}
               isActive={pathname.startsWith("/agencies")} collapsed={collapsed} onClick={closeMobile} />
             <NavLink href="/leads" label="Satış Leadleri" icon={Icon.leads}

@@ -1,0 +1,105 @@
+/**
+ * GET /api/admin/agencies/[id] — acente yönetim paneli toplu verisi
+ * Sekmeler: genel, kullanıcılar, müşteriler, teklifler, poliçeler, whatsapp,
+ * abonelik, loglar, AI analizi — tek istekte (yalnız super_admin).
+ */
+
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { planMonthlyRevenue, PLAN_LABELS } from "@/lib/planPricing";
+import { requireSuperAdmin } from "../../_lib/auth";
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await requireSuperAdmin(request);
+    if (auth.error) return auth.error;
+
+    const { id } = await params;
+    const admin = getSupabaseAdmin();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const t = (table: string) => admin.from(table) as any;
+
+    const [agRes, usersRes, custRes, runsRes, polRes, waRes, setRes] = await Promise.all([
+      t("agencies").select("*").eq("id", id).maybeSingle(),
+      t("profiles").select("id, full_name, role, created_at").eq("agency_id", id).order("created_at"),
+      t("customers").select("id, name, phone, insurance_type, created_at").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
+      t("quote_runs").select("id, customer_name, product_type, status, created_at, quote_results(id, price)").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
+      t("policies").select("id, policy_type, status, premium, commission, insurance_company, policy_no, start_date, end_date, created_at, renewal_status").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
+      t("whatsapp_queue").select("id, phone, status, template_key, message, created_at, sent_at, error_message").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
+      t("agency_settings").select("whatsapp_enabled, whatsapp_phone, daily_summary_enabled").eq("agency_id", id).maybeSingle(),
+    ]);
+
+    if (!agRes.data) return NextResponse.json({ error: "Acente bulunamadı." }, { status: 404 });
+    const agency = agRes.data;
+    const policies = polRes.data ?? [];
+    const quotes   = runsRes.data ?? [];
+    const wa       = waRes.data ?? [];
+
+    // ── Loglar: tüm varlıklardan birleşik zaman akışı ─────────────────────
+    type Log = { date: string; type: string; text: string };
+    const logs: Log[] = [
+      ...(custRes.data ?? []).map((c: { created_at: string; name: string }) => ({ date: c.created_at, type: "customer", text: `Müşteri eklendi: ${c.name}` })),
+      ...quotes.map((r: { created_at: string; product_type: string; customer_name: string | null }) => ({ date: r.created_at, type: "quote", text: `Teklif çalışıldı: ${r.product_type}${r.customer_name ? ` — ${r.customer_name}` : ""}` })),
+      ...policies.map((p: { created_at: string; policy_type: string }) => ({ date: p.created_at, type: "policy", text: `Poliçe kaydı: ${p.policy_type}` })),
+      ...wa.map((w: { created_at: string; status: string; template_key: string | null }) => ({ date: w.created_at, type: "whatsapp", text: `WhatsApp (${w.template_key ?? "mesaj"}): ${w.status}` })),
+    ].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 80);
+
+    // ── AI analizi (kural motoru) — skor + risk + öneriler ────────────────
+    const activePol  = policies.filter((p: { status: string }) => p.status === "Aktif").length;
+    const totalPrem  = policies.reduce((s: number, p: { premium: number | null }) => s + (p.premium ?? 0), 0);
+    const lastDates  = logs.map(l => l.date);
+    const idleDays   = lastDates.length ? Math.floor((Date.now() - new Date(lastDates[0]).getTime()) / 864e5) : 999;
+    const wonQuotes  = quotes.filter((q: { status: string }) => q.status === "Kazanıldı").length;
+    const conv       = quotes.length ? Math.round((wonQuotes / quotes.length) * 100) : 0;
+
+    let score = 50;
+    score += Math.min(20, activePol * 4);
+    score += Math.min(15, Math.floor(totalPrem / 10000) * 3);
+    score += Math.min(10, conv / 5);
+    score -= Math.min(30, idleDays * 2);
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    const aiAnalysis = {
+      score,
+      grade: score >= 75 ? "A" : score >= 50 ? "B" : score >= 25 ? "C" : "D",
+      risk:  idleDays > 14 ? "Yüksek — uzun süredir işlem yok" : !agency.is_active ? "Yüksek — hesap pasif" : score < 40 ? "Orta" : "Düşük",
+      insights: [
+        `${activePol} aktif poliçe, toplam ${totalPrem.toLocaleString("tr-TR")} ₺ prim hacmi`,
+        `Teklif → poliçe dönüşümü %${conv}`,
+        idleDays <= 1 ? "Bugün aktif" : `Son işlem ${idleDays} gün önce`,
+        (setRes.data?.daily_summary_enabled ? "Günlük WhatsApp özeti açık" : "Günlük özet kapalı — etkinleştirme önerilir"),
+      ],
+    };
+
+    return NextResponse.json({
+      agency,
+      users:     usersRes.data ?? [],
+      customers: custRes.data ?? [],
+      quotes,
+      policies,
+      whatsapp:  wa,
+      settings:  setRes.data ?? null,
+      subscription: {
+        plan:            agency.plan,
+        plan_label:      PLAN_LABELS[agency.plan] ?? agency.plan,
+        monthly_revenue: agency.is_active ? planMonthlyRevenue(agency.plan) : 0,
+        expires_at:      agency.expires_at,
+        limits: {
+          users:     { used: (usersRes.data ?? []).length, max: agency.max_users },
+          customers: { used: (custRes.data ?? []).length,  max: agency.max_customers },
+          requests:  { used: quotes.length,                 max: agency.max_requests },
+          policies:  { used: policies.length,               max: agency.max_policies },
+        },
+      },
+      logs,
+      ai: aiAnalysis,
+    });
+  } catch (err) {
+    console.error("[api/admin/agencies/[id]]", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}

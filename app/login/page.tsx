@@ -29,7 +29,7 @@ function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
@@ -42,7 +42,18 @@ function LoginForm() {
       setLoading(false);
       return;
     }
-    router.push(next);
+
+    // Super admin varsayılan olarak Command Center'a gider (CEO paneli)
+    let target = next;
+    if (next === "/dashboard" && signInData?.user) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: prof } = await (supabase.from("profiles") as any)
+        .select("role")
+        .eq("id", signInData.user.id)
+        .maybeSingle();
+      if (prof?.role === "super_admin") target = "/admin";
+    }
+    router.push(target);
   }
 
   if (checking) {
