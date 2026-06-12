@@ -68,16 +68,19 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 
 // ─── Test Gönder (her iki görünümde ortak) ────────────────────────────────────
 
-function TestSendButton({ disabled }: { disabled?: boolean }) {
+function TestSendButton({ disabled, askPhone }: { disabled?: boolean; askPhone?: boolean }) {
   const [sending, setSending] = useState(false);
   const [result,  setResult]  = useState<{ ok: boolean; msg: string } | null>(null);
+  const [phone,   setPhone]   = useState("");
 
   async function send() {
     setSending(true);
     setResult(null);
     try {
       const res  = await fetch("/api/whatsapp/test-send", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(phone.trim() ? { phone: phone.trim() } : {}),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Test gönderimi başarısız.");
@@ -104,14 +107,25 @@ function TestSendButton({ disabled }: { disabled?: boolean }) {
           {result.msg}
         </div>
       )}
-      <button
-        onClick={send}
-        disabled={sending || disabled}
-        title="Platform hattından kayıtlı numaranıza anında test mesajı gönderir"
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border-2 border-emerald-300 text-emerald-700 text-sm font-bold hover:bg-emerald-50 transition-all disabled:opacity-50"
-      >
-        {sending ? "Gönderiliyor…" : "📲 Test Gönder"}
-      </button>
+      <div className="flex items-center gap-2">
+        {askPhone && (
+          <input
+            type="tel"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            placeholder="Alıcı: 905XXXXXXXXX"
+            className="w-44 px-3 py-2.5 rounded-xl border border-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white font-mono"
+          />
+        )}
+        <button
+          onClick={send}
+          disabled={sending || disabled}
+          title="Platform hattından anında test mesajı gönderir"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border-2 border-emerald-300 text-emerald-700 text-sm font-bold hover:bg-emerald-50 transition-all disabled:opacity-50"
+        >
+          {sending ? "Gönderiliyor…" : "📲 Test Gönder"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -521,7 +535,7 @@ function PlatformView() {
           WhatsApp Kuyruğunu Görüntüle →
         </Link>
         <div className="flex items-center gap-2">
-          <TestSendButton />
+          <TestSendButton askPhone />
           <button
             onClick={save}
             disabled={saving}

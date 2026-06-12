@@ -26,13 +26,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const requestedAgency = typeof body.agency_id === "string" ? body.agency_id : null;
     const agencyId = caller.role === "super_admin" ? (requestedAgency ?? caller.agencyId) : caller.agencyId;
-    if (!agencyId) return NextResponse.json({ error: "Acente bilgisi bulunamadı." }, { status: 403 });
+    // super_admin acenteye bağlı olmayabilir — alıcı numara body'den gelir
+    if (!agencyId && caller.role !== "super_admin") {
+      return NextResponse.json({ error: "Acente bilgisi bulunamadı." }, { status: 403 });
+    }
 
-    // Alıcı numara acente tercihinden; gönderim yapılandırması PLATFORM'dan
-    const settings = await getAgencySettings(agencyId);
+    // Alıcı numara acente tercihinden (varsa); gönderim yapılandırması PLATFORM'dan
+    const settings = agencyId ? await getAgencySettings(agencyId) : null;
     const phone = ((body.phone as string) || settings?.whatsapp_phone || "").replace(/\D/g, "");
     if (!phone) {
-      return NextResponse.json({ error: "Telefon numarası gerekli (ayarlardan girin veya istekle gönderin)." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Telefon numarası gerekli — alıcı numarayı girin (örn. 905XXXXXXXXX)." },
+        { status: 400 }
+      );
     }
 
     const platform = await getPlatformWhatsAppConfig();
@@ -56,8 +62,10 @@ export async function POST(request: NextRequest) {
       result = { success: false, errorMessage: err instanceof Error ? err.message : String(err) };
     }
 
-    // ── İz: kuyruk tablosuna kaydet ────────────────────────────────────────
+    // ── İz: kuyruk tablosuna kaydet (acente bağlamı varsa) ─────────────────
+    // super_admin acentesiz test ederse kuyruk izi atlanır (agency_id zorunlu)
     const admin = getSupabaseAdmin();
+    if (agencyId)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (admin.from("whatsapp_queue") as any).insert({
       agency_id:     agencyId,
