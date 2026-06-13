@@ -13,6 +13,9 @@ import type { NextRequest } from "next/server";
 import { extractPolicyData, getOcrProvider } from "@/lib/ocr";
 import { resolveCaller } from "../../whatsapp/_lib/auth";
 
+// OCR (OpenAI Vision) tek dosyada birkaç saniye sürebilir; varsayılan limiti aş
+export const maxDuration = 60;
+
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED   = ["application/pdf", "image/jpeg", "image/png"];
 

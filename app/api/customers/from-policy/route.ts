@@ -13,6 +13,9 @@ import { canAddCustomer, canAddPolicy, limitMessage, INACTIVE_MESSAGE } from "@/
 import { KNOWN_POLICY_TYPES } from "@/lib/ocr/validation";
 import { resolveCaller } from "../../whatsapp/_lib/auth";
 
+// Müşteri+poliçe+dosya+OCR kaydı zinciri; storage yüklemesi dahil süre payı
+export const maxDuration = 60;
+
 const BUCKET = "policy-documents";
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED = ["application/pdf", "image/jpeg", "image/png"];
@@ -146,17 +149,47 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = getSupabaseAdmin();
-    const customerLimit = await canAddCustomer(admin, resolvedAgencyId);
-    if (!customerLimit.isActive) {
-      return NextResponse.json({ error: INACTIVE_MESSAGE, code: "inactive" }, { status: 403 });
+
+    // ── Müşteri eşleştirme: TC/VKN veya telefonla mevcut müşteriyi bul ──────
+    // Aynı kişinin birden fazla poliçesi tek müşteriye bağlanır (toplu içe
+    // aktarmada mükerrer müşteri oluşmaz). Eşleşme varsa müşteri limiti tüketilmez.
+    const matchTc    = optionalText(form, "tc_identity_no");
+    const matchTax   = optionalText(form, "tax_no");
+    const matchId    = (matchTc && /^\d{11}$/.test(matchTc.replace(/\D/g, "")) ? matchTc : null)
+                    ?? (matchTax && /^\d{10}$/.test(matchTax.replace(/\D/g, "")) ? matchTax : null)
+                    ?? optionalText(form, "identity_no");
+    const matchPhone = (optionalText(form, "phone") ?? "").replace(/\D/g, "");
+
+    let existingCustomerId: string | null = null;
+    if (matchId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (admin.from("customers") as any)
+        .select("id").eq("agency_id", resolvedAgencyId).eq("identity_no", matchId).limit(1).maybeSingle();
+      existingCustomerId = data?.id ?? null;
     }
-    if (!customerLimit.ok) {
-      return NextResponse.json({
-        error: limitMessage("customer"),
-        code: "limit_exceeded",
-        current: customerLimit.current,
-        max: customerLimit.max,
-      }, { status: 403 });
+    if (!existingCustomerId && matchPhone.length >= 10) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (admin.from("customers") as any)
+        .select("id, phone").eq("agency_id", resolvedAgencyId).limit(200);
+      const norm = (p: string) => (p ?? "").replace(/\D/g, "").replace(/^90/, "").replace(/^0/, "");
+      const target = norm(matchPhone);
+      existingCustomerId = (data ?? []).find((c: { phone: string }) => norm(c.phone) === target)?.id ?? null;
+    }
+
+    // Yeni müşteri oluşturulacaksa müşteri limitini kontrol et (eşleşme varsa atla)
+    if (!existingCustomerId) {
+      const customerLimit = await canAddCustomer(admin, resolvedAgencyId);
+      if (!customerLimit.isActive) {
+        return NextResponse.json({ error: INACTIVE_MESSAGE, code: "inactive" }, { status: 403 });
+      }
+      if (!customerLimit.ok) {
+        return NextResponse.json({
+          error: limitMessage("customer"),
+          code: "limit_exceeded",
+          current: customerLimit.current,
+          max: customerLimit.max,
+        }, { status: 403 });
+      }
     }
 
     const policyLimit = await canAddPolicy(admin, resolvedAgencyId);
@@ -229,26 +262,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: customer, error: customerErr } = await (admin.from("customers") as any)
-      .insert({
-        agency_id: resolvedAgencyId,
-        name,
-        phone,
-        email: optionalText(form, "email"),
-        insurance_type: insuranceType,
-        note: optionalText(form, "note"),
-        identity_no: identityNo,
-        vehicle_plate: vehiclePlate,
-        policy_end_date: policyEndDate,
-        extra_data: extraData,
-      })
-      .select("id")
-      .single();
+    // Mevcut müşteri varsa onu kullan; yoksa yeni oluştur
+    let customer: { id: string };
+    let customerMatched = false;
+    if (existingCustomerId) {
+      customer = { id: existingCustomerId };
+      customerMatched = true;
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: created, error: customerErr } = await (admin.from("customers") as any)
+        .insert({
+          agency_id: resolvedAgencyId,
+          name,
+          phone,
+          email: optionalText(form, "email"),
+          insurance_type: insuranceType,
+          note: optionalText(form, "note"),
+          identity_no: identityNo,
+          vehicle_plate: vehiclePlate,
+          policy_end_date: policyEndDate,
+          extra_data: extraData,
+        })
+        .select("id")
+        .single();
 
-    if (customerErr || !customer?.id) {
-      console.error("[customers/from-policy] customer insert:", customerErr);
-      return NextResponse.json({ error: customerErr?.message ?? "Müşteri oluşturulamadı." }, { status: 500 });
+      if (customerErr || !created?.id) {
+        console.error("[customers/from-policy] customer insert:", customerErr);
+        return NextResponse.json({ error: customerErr?.message ?? "Müşteri oluşturulamadı." }, { status: 500 });
+      }
+      customer = created;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -354,6 +396,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       customerId: customer.id,
       policyId: policy.id,
+      customerMatched,  // true → mevcut müşteriye eklendi, false → yeni müşteri
       documentPath: path,
       documentSaved: !docErr,
       ocrSaved: !ocrErr,
