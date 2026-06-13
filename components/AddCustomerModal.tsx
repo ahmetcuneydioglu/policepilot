@@ -130,15 +130,11 @@ function validateReviewItem(key: string, value: string): string | null {
   return null;
 }
 
-function isBlockingReviewIssue(item: OcrReviewItem, allItems: OcrReviewItem[]): boolean {
+function isBlockingReviewIssue(item: OcrReviewItem, _allItems: OcrReviewItem[]): boolean {
+  // Yalnız Ad Soyad + Poliçe Türü zorunlu. TC/telefon opsiyonel — gerçek
+  // poliçelerde TC maskeli (261******84), telefon çoğu zaman hiç yazmaz.
   if (item.key === "customer_name" || item.key === "policy_type") {
     return Boolean(item.validationMessage);
-  }
-  if (item.key === "phone" || item.key === "tc_identity_no") {
-    const hasPhone = Boolean(reviewValue(allItems, "phone"));
-    const tc = reviewValue(allItems, "tc_identity_no").replace(/\D/g, "");
-    const hasValidTc = /^\d{11}$/.test(tc);
-    return !hasPhone && !hasValidTc;
   }
   return false;
 }
@@ -406,21 +402,13 @@ export default function AddCustomerModal({ onClose, agencyId, role }: Props) {
       return;
     }
 
-    const nextItems = ocrReviewItems.map((item) => ({
+    const finalItems = ocrReviewItems.map((item) => ({
       ...item,
       validationMessage: validateReviewItem(item.key, item.value) ?? item.validationMessage ?? null,
     }));
 
-    const hasIdentity = Boolean(reviewValue(nextItems, "phone")) || /^\d{11}$/.test(reviewValue(nextItems, "tc_identity_no").replace(/\D/g, ""));
-    const finalItems = nextItems.map((item) => {
-      if (!hasIdentity && (item.key === "phone" || item.key === "tc_identity_no")) {
-        return { ...item, needsReview: true, validationMessage: "TC veya telefon gerekli" };
-      }
-      return item;
-    });
-
     if (hasBlockingReviewIssues(finalItems)) {
-      setOcrError("Kayıt için Ad Soyad, Sigorta Türü ve TC veya Telefon alanlarından biri gerekli.");
+      setOcrError("Kayıt için Ad Soyad ve Sigorta Türü gerekli.");
       setOcrReviewItems(finalItems);
       return;
     }

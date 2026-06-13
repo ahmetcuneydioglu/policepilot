@@ -90,11 +90,9 @@ function ocrToRow(fields: Record<string, { value: string | null }>): RowData {
 }
 
 function isValidRow(r: Row): boolean {
-  // Kritik: ad + poliçe türü; ayrıca telefon VEYA geçerli TC
-  if (!r.data.name.trim() || !r.data.policy_type) return false;
-  const hasPhone = Boolean(r.data.phone.trim());
-  const hasTc = /^\d{11}$/.test(r.data.tc_identity_no.replace(/\D/g, ""));
-  return hasPhone || hasTc;
+  // Yalnız Ad Soyad + Poliçe Türü zorunlu. TC/telefon opsiyonel — gerçek
+  // poliçelerde TC maskeli (261******84), telefon çoğu zaman hiç yazmaz.
+  return Boolean(r.data.name.trim()) && Boolean(r.data.policy_type);
 }
 
 export default function BulkPolicyImport({
@@ -411,7 +409,7 @@ export default function BulkPolicyImport({
 
             {rows.length > 0 && phase === "review" && (
               <p className="text-[11px] text-gray-400">
-                İpucu: Sarı satırlar eksik (ad, tür veya TC/telefon gerekli). Aynı TC veya telefona sahip poliçeler otomatik olarak tek müşteriye bağlanır. Plaka, motor/şasi no gibi diğer alanlar OCR&apos;dan otomatik kaydedilir.
+                İpucu: Sarı satırlarda <b>Ad Soyad</b> veya <b>Poliçe Türü</b> eksik — bunlar zorunlu. TC ve telefon opsiyoneldir (poliçede maskeli/eksik olabilir). Aynı TC veya telefona sahip poliçeler otomatik olarak tek müşteriye bağlanır; diğer alanlar OCR&apos;dan otomatik kaydedilir.
               </p>
             )}
           </div>

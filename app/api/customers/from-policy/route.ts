@@ -46,11 +46,9 @@ function validateCriticalFields(input: {
   policyType: string;
 }): string[] {
   const errors: string[] = [];
-  const hasPhone = Boolean(input.phone?.trim());
-  const hasValidTc = Boolean(input.tcIdentityNo && /^\d{11}$/.test(input.tcIdentityNo.replace(/\D/g, "")));
-  if (!hasPhone && !hasValidTc) {
-    errors.push("Ad Soyad ve Sigorta Türü yanında TC veya Telefon alanlarından biri gerekli.");
-  }
+  // Yalnız Ad Soyad + Poliçe Türü zorunlu. TC/telefon ASLA zorunlu değil:
+  // gerçek poliçelerde TC maskeli (261******84) yazılır, telefon çoğu zaman
+  // hiç yer almaz. Bunları zorunlu tutmak geçerli poliçeleri kaybettiriyordu.
   if (!KNOWN_POLICY_TYPES.includes(input.policyType)) {
     errors.push("Poliçe türü bilinen türlerden biri olmalı.");
   }
