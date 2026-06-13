@@ -14,7 +14,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getProvider }      from "./providerFactory";
 import { inspectMetaToken } from "./metaToken";
 import { getPlatformWhatsAppConfig } from "./platformConfig";
-import type { WhatsAppProvider, WhatsAppProviderName } from "./types";
+import type { WhatsAppProvider, WhatsAppProviderName, WhatsAppTemplate } from "./types";
 
 const MAX_ATTEMPTS = 3;
 
@@ -23,8 +23,10 @@ const MAX_ATTEMPTS = 3;
 export interface EnqueueInput {
   agencyId:    string;
   phone:       string;
-  message:     string;
+  message:     string;        // okunabilir metin (önizleme + şablon yoksa fallback)
   templateKey?: string;
+  /** Verilirse Meta'ya onaylı şablonla gider (24 saat penceresi gerektirmez) */
+  template?:   WhatsAppTemplate;
   /** Aynı mesajın tekrar kuyruğa girmesini engeller (ör. "daily:AGENCY:2026-06-10") */
   dedupKey?:   string;
 }
@@ -47,6 +49,8 @@ type QueueRow = {
   phone:     string;
   message:   string;
   attempts:  number;
+  template_name?:   string | null;
+  template_params?: { languageCode: string; bodyParams: string[] } | null;
 };
 
 // ─── Enqueue ──────────────────────────────────────────────────────────────────
@@ -54,15 +58,31 @@ type QueueRow = {
 export async function enqueue(input: EnqueueInput): Promise<{ queued: boolean; reason?: string }> {
   const admin = getSupabaseAdmin();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (admin.from("whatsapp_queue") as any).insert({
+  const baseRow = {
     agency_id:    input.agencyId,
     phone:        input.phone,
     message:      input.message,
     template_key: input.templateKey ?? null,
     dedup_key:    input.dedupKey ?? null,
     status:       "pending",
-  });
+  };
+  const fullRow = {
+    ...baseRow,
+    template_name:   input.template?.name ?? null,
+    template_params: input.template
+      ? { languageCode: input.template.languageCode, bodyParams: input.template.bodyParams }
+      : null,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let { error } = await (admin.from("whatsapp_queue") as any).insert(fullRow);
+
+  // Şablon kolonları henüz oluşturulmadıysa (migration bekleniyor) düz metinle ekle
+  if (error && /template_(name|params)/.test(error.message)) {
+    console.warn("[whatsapp/enqueue] şablon kolonları yok, düz metin olarak ekleniyor (migration gerekli).");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({ error } = await (admin.from("whatsapp_queue") as any).insert(baseRow));
+  }
 
   if (error) {
     // 23505 = unique violation → aynı dedup_key zaten kuyrukta, sorun değil
@@ -100,7 +120,7 @@ export async function processQueue(limit = 50): Promise<ProcessResult> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: rows, error } = await (admin.from("whatsapp_queue") as any)
-    .select("id, agency_id, phone, message, attempts")
+    .select("id, agency_id, phone, message, attempts, template_name, template_params")
     .eq("status", "pending")
     .lt("attempts", MAX_ATTEMPTS)
     .order("created_at", { ascending: true })
@@ -193,9 +213,16 @@ export async function processQueue(limit = 50): Promise<ProcessResult> {
       continue;
     }
 
-    // Gerçek gönderim
+    // Gerçek gönderim — şablon kayıtlıysa şablonla (24 saat penceresi gerekmez)
+    const template = row.template_name
+      ? {
+          name:         row.template_name,
+          languageCode: row.template_params?.languageCode ?? "tr",
+          bodyParams:   row.template_params?.bodyParams ?? [],
+        }
+      : undefined;
     try {
-      const sendRes = await provider.send({ phone: row.phone, message: row.message });
+      const sendRes = await provider.send({ phone: row.phone, message: row.message, template });
 
       if (sendRes.success) {
         await updateRow(row.id, {

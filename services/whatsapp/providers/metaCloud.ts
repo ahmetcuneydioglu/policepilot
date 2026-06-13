@@ -6,8 +6,8 @@
  *  - sender_id        → phone_number_id (Cloud API gönderen numara id'si)
  *
  * Not: 24 saat penceresi dışındaki mesajlar için onaylı template gerekir.
- * Şimdilik düz metin (type: text) gönderilir; template desteği ileride
- * bu sınıfa eklenecek — interface değişmez.
+ * msg.template verilirse type:template (pencere gerektirmez), yoksa
+ * type:text (yalnız 24 saat penceresi açıkken teslim edilir) gönderilir.
  */
 
 import type { WhatsAppMessage, WhatsAppProvider, WhatsAppSendResult } from "../types";
@@ -24,6 +24,30 @@ export class MetaCloudProvider implements WhatsAppProvider {
 
   async send(msg: WhatsAppMessage): Promise<WhatsAppSendResult> {
     try {
+      // Şablon varsa type:template (24 saat penceresi gerektirmez), yoksa düz metin
+      const payload = msg.template
+        ? {
+            messaging_product: "whatsapp",
+            to:   msg.phone,
+            type: "template",
+            template: {
+              name:     msg.template.name,
+              language: { code: msg.template.languageCode },
+              components: msg.template.bodyParams.length > 0
+                ? [{
+                    type: "body",
+                    parameters: msg.template.bodyParams.map((text) => ({ type: "text", text })),
+                  }]
+                : [],
+            },
+          }
+        : {
+            messaging_product: "whatsapp",
+            to:   msg.phone,
+            type: "text",
+            text: { body: msg.message },
+          };
+
       const res = await fetch(
         `https://graph.facebook.com/${GRAPH_VERSION}/${this.phoneNumberId}/messages`,
         {
@@ -32,12 +56,7 @@ export class MetaCloudProvider implements WhatsAppProvider {
             Authorization:  `Bearer ${this.apiKey}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to:   msg.phone,
-            type: "text",
-            text: { body: msg.message },
-          }),
+          body: JSON.stringify(payload),
         }
       );
 

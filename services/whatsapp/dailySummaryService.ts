@@ -13,6 +13,11 @@ import { enqueue } from "./queueService";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://policepilot.vercel.app";
 
+// Meta'da onaylı günlük özet şablonu (24 saat penceresi gerektirmez).
+// İsim/dil env ile değiştirilebilir; varsayılan canlı şablonla aynı.
+const DAILY_SUMMARY_TEMPLATE = process.env.META_DAILY_TEMPLATE ?? "policepilot_daily_summary";
+const DAILY_SUMMARY_LANG     = process.env.META_DAILY_TEMPLATE_LANG ?? "tr";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type RenewalRow = {
@@ -208,15 +213,26 @@ export async function generateDailySummaries(): Promise<DailySummaryStats> {
       )
       .join("\n");
 
+    // Şablon body parametreleri — Meta'daki {{1}}..{{7}} ile BİREBİR sıralı
+    const bodyParams = [
+      String(customerCounts.get(agency.agency_id) ?? 0), // {{1}} Toplam Müşteri
+      String(policyCounts.get(agency.agency_id) ?? 0),   // {{2}} Aktif Poliçe
+      String(todays.length),                             // {{3}} Bugün Yenilenecek
+      String(week.length),                               // {{4}} Bu Hafta Yenilenecek
+      String(overdue.length),                            // {{5}} Geciken Yenileme
+      String(quoteCounts.get(agency.agency_id) ?? 0),    // {{6}} Açık Teklif
+      String(requestCounts.get(agency.agency_id) ?? 0),  // {{7}} Yeni Talep
+    ];
+
     const message = render(template, {
       date:            fmtTr(today),
-      total_customers: String(customerCounts.get(agency.agency_id) ?? 0),
-      active_policies: String(policyCounts.get(agency.agency_id) ?? 0),
-      today_count:     String(todays.length),
-      week_count:      String(week.length),
-      overdue_count:   String(overdue.length),
-      open_quotes:     String(quoteCounts.get(agency.agency_id) ?? 0),
-      new_requests:    String(requestCounts.get(agency.agency_id) ?? 0),
+      total_customers: bodyParams[0],
+      active_policies: bodyParams[1],
+      today_count:     bodyParams[2],
+      week_count:      bodyParams[3],
+      overdue_count:   bodyParams[4],
+      open_quotes:     bodyParams[5],
+      new_requests:    bodyParams[6],
       urgent_list:     urgentList ? `${urgentList}\n` : "",
       app_url:         APP_URL,
     });
@@ -224,8 +240,13 @@ export async function generateDailySummaries(): Promise<DailySummaryStats> {
     const { queued, reason } = await enqueue({
       agencyId:    agency.agency_id,
       phone:       agency.whatsapp_phone,
-      message,
+      message,                       // okunabilir metin (kuyruk önizleme + fallback)
       templateKey: "daily_summary",
+      template: {
+        name:         DAILY_SUMMARY_TEMPLATE,
+        languageCode: DAILY_SUMMARY_LANG,
+        bodyParams,
+      },
       dedupKey:    `daily:${agency.agency_id}:${today}`,
     });
 

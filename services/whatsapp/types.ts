@@ -9,10 +9,22 @@
 
 export type WhatsAppProviderName = "mock" | "meta_cloud" | "twilio" | "dialog360" | "wati";
 
+export interface WhatsAppTemplate {
+  /** Meta'da onaylı şablon adı, ör. policepilot_daily_summary */
+  name:         string;
+  /** Dil kodu, ör. tr */
+  languageCode: string;
+  /** Body {{1}}, {{2}}… parametreleri sırayla */
+  bodyParams:   string[];
+}
+
 export interface WhatsAppMessage {
   /** E.164 benzeri numara: 905xxxxxxxxx */
   phone:   string;
+  /** Okunabilir metin — şablon yoksa gönderilir, varsa kuyruk/önizleme için tutulur */
   message: string;
+  /** Verilirse Meta'ya şablon (24 saat penceresi gerektirmez) olarak gider */
+  template?: WhatsAppTemplate;
 }
 
 export interface WhatsAppSendResult {
