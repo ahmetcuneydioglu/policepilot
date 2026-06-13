@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       ocr_30d:     ocr.filter((o: { created_at: string }) => o.created_at >= monthAgo).length,
       ocr_real:    ocr.filter((o: { mode: string }) => o.mode === "real").length,
       ocr_demo:    ocr.filter((o: { mode: string }) => o.mode !== "real").length,
-      model:       process.env.OPENAI_OCR_MODEL ?? "gpt-5.5",
+      model:       process.env.OPENAI_OCR_MODEL ?? "gpt-5.4-mini",
       configured:  Boolean(process.env.OPENAI_API_KEY),
     };
 

@@ -81,7 +81,9 @@ export class OpenAiVisionOcrProvider implements OcrProvider {
       throw new Error("OPENAI_API_KEY eksik. Gerçek OCR için .env.local içine ekleyin veya DEMO_MODE=true kullanın.");
     }
 
-    const model = process.env.OPENAI_OCR_MODEL ?? "gpt-5.5";
+    // Varsayılan gpt-5.4-mini: gpt-5.5'e göre ~6.7x ucuz, poliçe OCR'ı için
+    // yeterli doğrulukta. Gerekirse OPENAI_OCR_MODEL env ile değiştirilebilir.
+    const model = process.env.OPENAI_OCR_MODEL ?? "gpt-5.4-mini";
     const dataUrl = `data:${file.mimeType};base64,${toBase64(file.buffer)}`;
     const filePart = file.mimeType === "application/pdf"
       ? { type: "input_file", filename: file.name, file_data: dataUrl }

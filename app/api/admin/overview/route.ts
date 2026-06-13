@@ -74,7 +74,7 @@ async function checkHealth(): Promise<Health[]> {
   checks.push({
     key: "ai", label: "AI Servisleri",
     status: process.env.OPENAI_API_KEY ? "ok" : "off",
-    detail: process.env.OPENAI_API_KEY ? `OCR aktif (${process.env.OPENAI_OCR_MODEL ?? "gpt-5.5"})` : "Yapılandırılmadı",
+    detail: process.env.OPENAI_API_KEY ? `OCR aktif (${process.env.OPENAI_OCR_MODEL ?? "gpt-5.4-mini"})` : "Yapılandırılmadı",
   });
 
   // Henüz entegre olmayanlar — dürüstçe "off"
