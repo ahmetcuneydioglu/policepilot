@@ -257,7 +257,7 @@ function ErrorDetailModal({ result, onClose }: { result: QuoteResult; onClose: (
 export default function QuoteRunDetailPage() {
   const { id } = useParams<{ id: string }>();
   useRouter();
-  const { agencyId } = useAuth();
+  const { agencyId, can } = useAuth();
 
   const [run,          setRun]          = useState<QuoteRun | null>(null);
   const [results,      setResults]      = useState<QuoteResult[]>([]);
@@ -499,12 +499,14 @@ export default function QuoteRunDetailPage() {
           >
             <FileText className="w-3.5 h-3.5" /> Teklif Özeti
           </Link>
-          <button
-            onClick={() => setWaOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
-          >
-            <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Gönder
-          </button>
+          {can("whatsapp.send") && (
+            <button
+              onClick={() => setWaOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Gönder
+            </button>
+          )}
           {savingStatus && <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />}
         </div>
       </div>
@@ -764,14 +766,14 @@ export default function QuoteRunDetailPage() {
                               <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 text-teal-700 text-[10px] font-bold ring-1 ring-teal-200">
                                 <Check className="w-3 h-3" /> Kesildi
                               </span>
-                            ) : (
+                            ) : can("policy.create") ? (
                               <Link href={`/policies/issue/${r.id}`}
                                 className="flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-50 text-violet-700 text-[10px] font-bold hover:bg-violet-100 transition-colors ring-1 ring-violet-200"
                                 title="Bu tekliften poliçe kes"
                               >
                                 <FileText className="w-3 h-3" /> Poliçeleştir
                               </Link>
-                            )
+                            ) : null
                           )}
                           {hasErr && (
                             <button onClick={() => setErrorModal(r)}
@@ -830,7 +832,7 @@ export default function QuoteRunDetailPage() {
           </div>
 
           {/* ── WhatsApp section — compact ── */}
-          {successResults.length > 0 && (
+          {successResults.length > 0 && can("whatsapp.send") && (
             <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">

@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { FolderOpen, FileText, Eye, Download } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
 import type { CustomerDocument } from "./types";
 import { fmtDateTime, waPhone } from "./types";
 
@@ -43,6 +44,7 @@ export default function DocumentsTab({
   customerPhone: string | null;
   customerName: string;
 }) {
+  const { can } = useAuth();
   const [busy,  setBusy]  = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -118,14 +120,16 @@ export default function DocumentsTab({
               >
                 <Download className="w-3 h-3" /> İndir
               </button>
-              <button
-                onClick={() => act(doc, "whatsapp")}
-                disabled={busy === `${doc.id}:whatsapp` || !customerPhone}
-                title={customerPhone ? "Belgeyi WhatsApp ile gönder" : "Telefon numarası kayıtlı değil"}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 text-[11px] font-bold hover:bg-emerald-100 transition-colors disabled:opacity-40"
-              >
-                {WA_ICON} WhatsApp
-              </button>
+              {can("whatsapp.send") && (
+                <button
+                  onClick={() => act(doc, "whatsapp")}
+                  disabled={busy === `${doc.id}:whatsapp` || !customerPhone}
+                  title={customerPhone ? "Belgeyi WhatsApp ile gönder" : "Telefon numarası kayıtlı değil"}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 text-[11px] font-bold hover:bg-emerald-100 transition-colors disabled:opacity-40"
+                >
+                  {WA_ICON} WhatsApp
+                </button>
+              )}
             </div>
           </div>
         ))}

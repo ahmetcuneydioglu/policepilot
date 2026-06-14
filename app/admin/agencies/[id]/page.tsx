@@ -542,9 +542,40 @@ function UserCard({ agencyId, user, onSaved }: {
   );
   const [open, setOpen]       = useState(false);
   const [saving, setSaving]   = useState(false);
+  const [busy, setBusy]       = useState<"resend" | "delete" | null>(null);
+  const [resendLink, setResendLink] = useState<string | null>(null);
   const [msg, setMsg]         = useState<{ ok: boolean; text: string } | null>(null);
 
   const isSuperAdmin = user.role === "super_admin";
+
+  async function resendInvite() {
+    setBusy("resend"); setMsg(null); setResendLink(null);
+    try {
+      const res = await fetch(`/api/admin/agencies/${agencyId}/users/${user.id}`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Link üretilemedi.");
+      setResendLink(json.inviteLink ?? null);
+      setMsg({ ok: true, text: "Yeni davet/parola linki üretildi ✓" });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Link üretilemedi." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function removeUser() {
+    if (!confirm(`${user.full_name ?? user.email ?? "Bu kullanıcı"} silinecek. Onaylıyor musunuz?`)) return;
+    setBusy("delete"); setMsg(null);
+    try {
+      const res = await fetch(`/api/admin/agencies/${agencyId}/users/${user.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Silinemedi.");
+      onSaved();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Silinemedi." });
+      setBusy(null);
+    }
+  }
   const enabledCount = Object.values(perms).filter(Boolean).length;
 
   function pickRole(r: AgencyRole) {
@@ -724,8 +755,29 @@ function UserCard({ agencyId, user, onSaved }: {
             msg.ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"
           }`}>{msg.text}</p>
         )}
+        {resendLink && (
+          <div className="text-[11px] bg-white border border-slate-200 rounded-xl p-2.5 space-y-1">
+            <p className="font-semibold text-slate-500">Aktivasyon linki (kullanıcıya iletin):</p>
+            <p className="break-all text-indigo-600">{resendLink}</p>
+            <button onClick={() => navigator.clipboard?.writeText(resendLink)} className="text-indigo-600 font-semibold hover:underline">Kopyala</button>
+          </div>
+        )}
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            {!isSuperAdmin && (
+              <>
+                <button onClick={resendInvite} disabled={busy !== null}
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all disabled:opacity-50">
+                  {busy === "resend" ? "Üretiliyor…" : "Daveti Yenile"}
+                </button>
+                <button onClick={removeUser} disabled={busy !== null}
+                  className="px-3 py-2 rounded-xl border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-50 transition-all disabled:opacity-50">
+                  {busy === "delete" ? "Siliniyor…" : "Sil"}
+                </button>
+              </>
+            )}
+          </div>
           <button onClick={save} disabled={saving}
             className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-bold hover:from-indigo-500 hover:to-violet-500 transition-all shadow-sm disabled:opacity-50">
             {saving ? "Kaydediliyor…" : "Kaydet"}

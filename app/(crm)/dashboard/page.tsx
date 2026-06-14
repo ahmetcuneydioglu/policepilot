@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ComponentType } from "react";
 import AnimatedCounter from "@/components/AnimatedCounter";
 import WeeklyChart from "@/components/WeeklyChart";
+import UsageLimits from "@/components/UsageLimits";
 import { supabase } from "@/lib/supabase";
 import { useNotifications } from "@/lib/NotificationContext";
 import NotifPermissionButton from "@/components/NotifPermissionButton";
@@ -616,6 +617,9 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* ══ PAKET KULLANIMI (agency_user only) ══════════════════════════════ */}
+      {role === "agency_user" && agencyId && <UsageLimits />}
 
       {/* ══ YENİ GELEN TALEPLER — notifications are already agency-scoped ════ */}
       {notifications.length > 0 && (
