@@ -108,6 +108,8 @@ export default function AdminWhatsAppPage() {
         </div>
       )}
 
+      <TemplateSendPanel onSent={() => load(true)} />
+
       {/* Canlı kuyruk / son 100 mesaj */}
       <SectionCard title="Canlı Kuyruk" subtitle="Son 100 mesaj — en yeni üstte">
         <div className="divide-y divide-slate-50 max-h-[560px] overflow-y-auto">
@@ -127,7 +129,7 @@ export default function AdminWhatsAppPage() {
                     <p className="text-[10px] text-slate-400 font-mono">{m.phone}</p>
                   </div>
                   <div className="hidden sm:block col-span-4 text-[11px] text-slate-500 truncate">
-                    {m.template_key === "daily_summary" ? "📊 Günlük özet" : m.template_key === "test_send" ? "🧪 Test mesajı" : (m.message ?? "").split("\n")[0].slice(0, 60)}
+                    {m.template_key === "daily_summary" ? "📊 Günlük özet" : m.template_key === "test_template" ? "🧩 Şablon testi" : m.template_key === "test_send" ? "🧪 Test mesajı" : (m.message ?? "").split("\n")[0].slice(0, 60)}
                   </div>
                   <div className="col-span-5 sm:col-span-3 text-right text-[10px] text-slate-400">
                     {fmtDateTime(m.sent_at ?? m.created_at)}
@@ -148,5 +150,71 @@ export default function AdminWhatsAppPage() {
 
       <p className="text-[11px] text-slate-400">{t.cost_note}</p>
     </div>
+  );
+}
+
+// ─── Şablon gönderim paneli ───────────────────────────────────────────────────
+function TemplateSendPanel({ onSent }: { onSent: () => void }) {
+  const [phone, setPhone]   = useState("");
+  const [busy, setBusy]     = useState<"template" | "daily" | null>(null);
+  const [msg, setMsg]       = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function sendTemplate() {
+    const clean = phone.replace(/\D/g, "");
+    if (!clean) { setMsg({ ok: false, text: "Alıcı numara girin (örn. 905XXXXXXXXX)." }); return; }
+    setBusy("template"); setMsg(null);
+    try {
+      const res = await fetch("/api/whatsapp/test-send", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: clean, use_template: true }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false) throw new Error(json.error ?? "Gönderim başarısız.");
+      setMsg({ ok: true, text: `Şablon mesajı gönderildi ✓ (${json.provider ?? "meta"})` });
+      onSent();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Gönderim başarısız." });
+    } finally { setBusy(null); }
+  }
+
+  async function runDaily() {
+    if (!confirm("Tüm acentelerin günlük operasyon özeti şimdi üretilip gönderilecek. Devam edilsin mi?")) return;
+    setBusy("daily"); setMsg(null);
+    try {
+      const res = await fetch("/api/admin/whatsapp/run-daily", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Çalıştırılamadı.");
+      const note = json.test_mode ? " (TEST MODU — gerçek gönderim yok, kuyrukta 'skipped')" : "";
+      setMsg({ ok: true, text: `Özetler: ${json.summaries_queued} kuyruğa · gönderildi ${json.send?.sent ?? 0} · atlandı ${json.send?.skipped ?? 0} · hata ${json.send?.failed ?? 0}${note}` });
+      onSent();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Çalıştırılamadı." });
+    } finally { setBusy(null); }
+  }
+
+  return (
+    <SectionCard title="Şablon Gönderim" subtitle="Onaylı şablonla anlık test + günlük özeti manuel tetikle">
+      <div className="p-5 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Alıcı numara (905XXXXXXXXX)"
+            className="flex-1 min-w-[200px] px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40 bg-slate-50" />
+          <button onClick={sendTemplate} disabled={busy !== null}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 transition-all shadow-sm disabled:opacity-50">
+            <Send className="w-3.5 h-3.5" /> {busy === "template" ? "Gönderiliyor…" : "Şablonla Test Gönder"}
+          </button>
+          <button onClick={runDaily} disabled={busy !== null}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 transition-all shadow-sm disabled:opacity-50">
+            <RefreshCw className="w-3.5 h-3.5" /> {busy === "daily" ? "Çalışıyor…" : "Günlük Özetleri Şimdi Gönder"}
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-400">
+          “Şablonla Test Gönder” onaylı <code className="text-slate-500">policepilot_daily_summary</code> şablonunu örnek değerlerle tek numaraya yollar (24 saat penceresi gerekmez).
+          “Günlük Özetleri Şimdi Gönder” cron’u beklemeden tüm acentelere üretir.
+        </p>
+        {msg && (
+          <p className={`text-xs rounded-xl px-3 py-2 border ${msg.ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"}`}>{msg.text}</p>
+        )}
+      </div>
+    </SectionCard>
   );
 }

@@ -6,8 +6,11 @@
  * Meta yapılandırmasını doğrulamak. Sonuç whatsapp_queue'ya da yazılır
  * (kuyruk ekranında izlenebilsin diye).
  *
- * Body (opsiyonel): { phone?: string, message?: string }
+ * Body (opsiyonel): { phone?, message?, use_template?, template_name?, template_lang?, body_params? }
  *   phone verilmezse agency_settings.whatsapp_phone kullanılır.
+ *   use_template=true → onaylı şablonla gönderir (24 saat penceresi GEREKMEZ).
+ *     template_name varsayılan "policepilot_daily_summary", lang "tr".
+ *     body_params verilmezse 7 örnek değer ({{1}}..{{7}}) kullanılır.
  */
 
 import { NextResponse } from "next/server";
@@ -45,9 +48,23 @@ export async function POST(request: NextRequest) {
 
     const platform = await getPlatformWhatsAppConfig();
 
+    // ── Şablon modu: onaylı template ile gönder (24 saat penceresi gerekmez) ──
+    const useTemplate = body.use_template === true;
+    const template = useTemplate
+      ? {
+          name:         typeof body.template_name === "string" ? body.template_name : "policepilot_daily_summary",
+          languageCode: typeof body.template_lang === "string" ? body.template_lang : "tr",
+          bodyParams:   Array.isArray(body.body_params) && body.body_params.length > 0
+            ? body.body_params.map((p: unknown) => String(p))
+            : ["12", "8", "1", "3", "0", "2", "1"], // örnek {{1}}..{{7}}
+        }
+      : undefined;
+
     const message =
       (typeof body.message === "string" && body.message.trim()) ||
-      `🔔 *PolicePilot Test Mesajı*\n\nWhatsApp entegrasyonunuz çalışıyor! 🎉\n\nBu mesaj ${new Date().toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })} tarihinde gönderildi.`;
+      (useTemplate
+        ? `📊 PolicePilot Günlük Operasyon Özeti (şablon testi)`
+        : `🔔 *PolicePilot Test Mesajı*\n\nWhatsApp entegrasyonunuz çalışıyor! 🎉\n\nBu mesaj ${new Date().toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })} tarihinde gönderildi.`);
 
     // ── Provider'ı PLATFORM config ile kur ve gönder (test_mode'dan bağımsız) ─
     let result: { success: boolean; providerId?: string; errorMessage?: string };
@@ -59,7 +76,7 @@ export async function POST(request: NextRequest) {
         senderId: platform.senderId,
       });
       providerName = provider.name;
-      result = await provider.send({ phone, message });
+      result = await provider.send({ phone, message, template });
     } catch (err) {
       result = { success: false, errorMessage: err instanceof Error ? err.message : String(err) };
     }
@@ -73,7 +90,7 @@ export async function POST(request: NextRequest) {
       agency_id:     agencyId,
       phone,
       message,
-      template_key:  "test_send",
+      template_key:  useTemplate ? "test_template" : "test_send",
       provider:      providerName,
       attempts:      1,
       status:        result.success ? "sent" : "failed",
