@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { Users } from "lucide-react";
+import TeamManagement from "@/components/TeamManagement";
 
 // ─── Product links shown in the "quick links" section ─────────────────────────
 const QUICK_PRODUCTS = [
@@ -39,7 +41,7 @@ function CopyButton({ text, label = "Kopyala" }: { text: string; label?: string 
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function SettingsPage() {
-  const { user, profile, role, agencyId } = useAuth();
+  const { user, profile, role, agencyId, can } = useAuth();
 
   const [agencySlug,  setAgencySlug]  = useState<string | null>(null);
   const [agencyName,  setAgencyName]  = useState<string | null>(null);
@@ -175,6 +177,22 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {/* ── Kullanıcı Yönetimi (acente sahibi/yönetici) ──────────────────── */}
+      {role === "agency_user" && can("users.manage") && (
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+            <Users className="w-4 h-4 text-indigo-600" />
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">Kullanıcı Yönetimi</h2>
+              <p className="text-[11px] text-gray-400 mt-0.5">Ekibinizi yönetin, alt kullanıcı ekleyin ve yetkilerini belirleyin</p>
+            </div>
+          </div>
+          <div className="p-6">
+            <TeamManagement embedded />
+          </div>
         </section>
       )}
 

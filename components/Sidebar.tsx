@@ -84,7 +84,7 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed,  setCollapsed]  = useState(false);
 
-  const { user, profile, role, roleSource, profileError, agencyId, signOut, can } = useAuth();
+  const { user, profile, role, roleSource, profileError, agencyId, signOut } = useAuth();
   const { unreadCount } = useNotifications();
 
   // Persist collapse preference (client-side only — localStorage unavailable on SSR)
@@ -197,10 +197,6 @@ export default function Sidebar() {
         <NavLink href="/ai-assistant" label="AI Asistan"       icon={Icon.ai}         isActive={pathname.startsWith("/ai-assistant")} collapsed={collapsed} onClick={closeMobile} />
         <NavLink href="/whatsapp-queue" label="WhatsApp Kuyruğu" icon={Icon.whatsapp} isActive={pathname.startsWith("/whatsapp-queue")} collapsed={collapsed} onClick={closeMobile} />
 
-        {role === "agency_user" && can("users.manage") && (
-          <NavLink href="/team" label="Ekip Üyeleri" icon={Icon.team}
-            isActive={pathname === "/team"} collapsed={collapsed} onClick={closeMobile} />
-        )}
 
         {role === "super_admin" && (
           <>
