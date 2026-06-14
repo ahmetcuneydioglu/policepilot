@@ -1,82 +1,89 @@
 "use client";
 
+/**
+ * Ekip Yönetimi — acente sahibinin kendi personelini yönettiği ekran.
+ * Süper admin panelinin acente-içi karşılığı: üye listele, rol/durum/yetki
+ * düzenle, davet et, yeniden davet, sil. Tümü /api/team (kendi acentesiyle sınırlı).
+ * Yalnız users.manage yetkisi olanlar (owner/manager) erişir.
+ */
+
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
-import { needsOnboarding } from "@/lib/tenant";
+import {
+  AGENCY_ROLES, PERMISSIONS, PERMISSION_GROUPS, resolvePermissions, agencyRoleLabel,
+  type AgencyRole, type PermissionKey,
+} from "@/lib/permissions";
+import {
+  Users, UserPlus, X, Mail, Phone, Clock, ChevronDown, ShieldCheck, RotateCcw, ShieldAlert,
+} from "lucide-react";
 
 type Member = {
   id: string;
   full_name: string | null;
+  email: string | null;
+  phone: string | null;
   role: string;
+  agency_role: string | null;
+  status: string | null;
+  last_login_at: string | null;
+  permissions: Record<string, boolean> | null;
   created_at: string;
 };
 
-type AgencyInfo = {
-  name: string;
-  slug: string;
-  plan: string | null;
-  max_users: number | null;
-  is_active: boolean | null;
-};
+const INPUT = "w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40 bg-slate-50";
 
-const PLAN_LABELS: Record<string, string> = {
-  starter: "Starter",
-  pro: "Pro",
-  enterprise: "Enterprise",
-};
-
-function CopyButton({ text, label = "Kopyala" }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-        copied
-          ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-          : "bg-blue-600 text-white hover:bg-blue-700"
-      }`}
-    >
-      {copied ? (
-        <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>Kopyalandı!</>
-      ) : (
-        <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>{label}</>
-      )}
-    </button>
-  );
+function timeAgo(iso: string | null): string {
+  if (!iso) return "Hiç giriş yok";
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "Az önce";
+  if (mins < 60) return `${mins} dk önce`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} sa önce`;
+  return `${Math.floor(hrs / 24)} gün önce`;
 }
 
+const STATUS_BADGE: Record<string, string> = {
+  active: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  suspended: "bg-rose-50 text-rose-700 border-rose-200",
+  invited: "bg-amber-50 text-amber-700 border-amber-200",
+};
+const STATUS_LABEL: Record<string, string> = { active: "Aktif", suspended: "Askıda", invited: "Davetli" };
+
 export default function TeamPage() {
-  const { agencyId, loading: authLoading, role } = useAuth();
-  const [members, setMembers]   = useState<Member[]>([]);
-  const [agency, setAgency]     = useState<AgencyInfo | null>(null);
-  const [loading, setLoading]   = useState(true);
+  const { can, loading: authLoading } = useAuth();
+  const [members, setMembers] = useState<Member[]>([]);
+  const [selfId, setSelfId]   = useState<string>("");
+  const [callerRole, setCallerRole] = useState<string>("owner");
+  const [usage, setUsage]     = useState<{ used: number; max: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [inviting, setInviting] = useState(false);
+
+  const canManage = can("users.manage");
 
   const load = useCallback(async () => {
-    if (!agencyId) return;
     setLoading(true);
-
-    const [{ data: ag }, { data: mb }] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase.from("agencies") as any)
-        .select("name, slug, plan, max_users, is_active")
-        .eq("id", agencyId)
-        .maybeSingle(),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase.from("profiles") as any)
-        .select("id, full_name, role, created_at")
-        .eq("agency_id", agencyId)
-        .order("created_at", { ascending: true }),
-    ]);
-
-    if (ag) setAgency(ag as AgencyInfo);
-    if (mb) setMembers(mb as Member[]);
-    setLoading(false);
-  }, [agencyId]);
+    try {
+      const [teamRes, usageRes] = await Promise.all([
+        fetch("/api/team"),
+        fetch("/api/usage"),
+      ]);
+      const team = await teamRes.json();
+      if (teamRes.ok) {
+        setMembers(team.members ?? []);
+        setSelfId(team.selfId ?? "");
+        setCallerRole(team.callerRole ?? "owner");
+      }
+      const usageJson = await usageRes.json().catch(() => null);
+      if (usageRes.ok && usageJson?.agency) setUsage(usageJson.agency.limits.users);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!authLoading) load();
-  }, [authLoading, load]);
+    if (!authLoading && canManage) load();
+    else if (!authLoading) setLoading(false);
+  }, [authLoading, canManage, load]);
 
   if (authLoading || loading) {
     return (
@@ -86,157 +93,356 @@ export default function TeamPage() {
     );
   }
 
-  if (needsOnboarding(role, agencyId, authLoading)) {
+  if (!canManage) {
     return (
-      <div className="text-center py-20">
-        <p className="text-gray-400 text-sm">Acenteye bağlı değilsiniz.</p>
+      <div className="max-w-md mx-auto text-center py-20">
+        <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
+          <ShieldAlert className="w-7 h-7 text-amber-600" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900 mb-1">Ekip yönetimine erişiminiz yok</h2>
+        <p className="text-sm text-slate-500">
+          Bu ekran yalnız acente sahibi ve yöneticilere açıktır. Yetki için acente sahibinizle görüşün.
+        </p>
       </div>
     );
   }
 
-  const maxUsers    = agency?.max_users ?? 10;
-  const currentCount = members.length;
-  const atLimit     = currentCount >= maxUsers;
-  const pct         = Math.min((currentCount / maxUsers) * 100, 100);
-  const planLabel   = PLAN_LABELS[agency?.plan ?? "starter"] ?? "Starter";
-  const origin      = typeof window !== "undefined" ? window.location.origin : "";
-  const inviteUrl   = agency?.slug ? `${origin}/register?invite=${agency.slug}` : "";
+  const atLimit = usage ? usage.used >= usage.max : false;
+  const pct = usage && usage.max > 0 ? Math.min(100, Math.round((usage.used / usage.max) * 100)) : 0;
+  const callerIsOwner = callerRole === "owner";
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Ekip Üyeleri</h1>
-        <p className="text-gray-500 mt-0.5 text-sm">
-          {agency?.name ?? "Acenteniz"} — ekip yönetimi
-        </p>
+    <div className="space-y-5 max-w-4xl">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2.5 mb-1">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center shadow-md shadow-indigo-500/30">
+              <Users className="w-[18px] h-[18px] text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">Ekip Yönetimi</h1>
+          </div>
+          <p className="text-gray-500 text-sm pl-[46px]">Personelinizi, rollerini ve yetkilerini yönetin</p>
+        </div>
+        <button onClick={() => setInviting((v) => !v)} disabled={atLimit}
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-bold hover:from-indigo-500 hover:to-violet-500 transition-all shadow-sm disabled:opacity-50">
+          {inviting ? <X className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+          {inviting ? "Kapat" : "Üye Davet Et"}
+        </button>
       </div>
 
-      {/* Usage card */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Plan Kullanımı</p>
-            <div className="flex items-center gap-2">
-              <span className={`text-2xl font-extrabold ${atLimit ? "text-red-600" : "text-slate-900"}`}>
-                {currentCount}
-              </span>
-              <span className="text-gray-400 text-sm font-medium">/ {maxUsers} kullanıcı</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
-                {planLabel}
-              </span>
-            </div>
+      {/* Kullanım kartı */}
+      {usage && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Kullanıcı Limiti</p>
+            <span className={`text-sm font-bold ${atLimit ? "text-rose-600" : pct >= 80 ? "text-amber-600" : "text-slate-700"}`}>
+              {usage.used} / {usage.max} {atLimit && "· dolu"}
+            </span>
+          </div>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${atLimit ? "bg-rose-500" : pct >= 80 ? "bg-amber-500" : "bg-indigo-500"}`} style={{ width: `${pct}%` }} />
           </div>
           {atLimit && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-xl">
-              <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <span className="text-xs text-red-700 font-semibold">Paket limitine ulaşıldı</span>
-            </div>
+            <p className="text-[11px] text-rose-600 mt-2">Limit doldu. Yeni üye eklemek için planınızı yükseltin (platform yöneticisiyle görüşün).</p>
           )}
         </div>
+      )}
 
-        {/* Progress bar */}
-        <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
-          <div
-            className={`h-full rounded-full transition-all ${atLimit ? "bg-red-500" : pct > 70 ? "bg-amber-500" : "bg-blue-500"}`}
-            style={{ width: `${pct}%` }}
+      {/* Davet formu */}
+      {inviting && <InviteForm callerIsOwner={callerIsOwner} onDone={() => { setInviting(false); load(); }} />}
+
+      {/* Üye listesi */}
+      <div className="space-y-3">
+        {members.map((m) => (
+          <TeamMemberCard
+            key={m.id}
+            member={m}
+            isSelf={m.id === selfId}
+            callerIsOwner={callerIsOwner}
+            onChanged={load}
           />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Davet formu ─────────────────────────────────────────────────────────────
+function InviteForm({ callerIsOwner, onDone }: { callerIsOwner: boolean; onDone: () => void }) {
+  const [email, setEmail] = useState("");
+  const [name, setName]   = useState("");
+  const [role, setRole]   = useState<AgencyRole>("sales");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg]     = useState<{ ok: boolean; text: string } | null>(null);
+  const [link, setLink]   = useState<string | null>(null);
+
+  const roleOptions = AGENCY_ROLES.filter((r) => callerIsOwner || r.value !== "owner");
+
+  async function invite() {
+    setSaving(true); setMsg(null); setLink(null);
+    try {
+      const res = await fetch("/api/team", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, full_name: name, agency_role: role }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Davet başarısız.");
+      setMsg({ ok: true, text: "Üye davet edildi ✓" });
+      setLink(json.inviteLink ?? null);
+      setEmail(""); setName("");
+      onDone();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Davet başarısız." });
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5 space-y-3">
+      <p className="text-sm font-bold text-indigo-700">Yeni Ekip Üyesi Davet Et</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="E-posta" className={INPUT} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad Soyad (opsiyonel)" className={INPUT} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {roleOptions.map((r) => (
+          <button key={r.value} type="button" onClick={() => setRole(r.value)} title={r.description}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+              role === r.value ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+            }`}>
+            {r.label}
+          </button>
+        ))}
+      </div>
+      {msg && (
+        <p className={`text-xs rounded-xl px-3 py-2 border ${msg.ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"}`}>{msg.text}</p>
+      )}
+      {link && (
+        <div className="text-[11px] bg-white border border-slate-200 rounded-xl p-2.5 space-y-1">
+          <p className="font-semibold text-slate-500">Davet linki (üyeye iletin):</p>
+          <p className="break-all text-indigo-600">{link}</p>
+          <button onClick={() => navigator.clipboard?.writeText(link)} className="text-indigo-600 font-semibold hover:underline">Kopyala</button>
         </div>
-        <p className="text-[11px] text-gray-400">
-          {atLimit
-            ? "Yeni üye eklemek için plan limitini artırmanız gerekiyor. Destek için yöneticinizle iletişime geçin."
-            : `${maxUsers - currentCount} kullanıcı ekleyebilirsiniz.`}
-        </p>
+      )}
+      <button onClick={invite} disabled={saving}
+        className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-bold hover:from-indigo-500 hover:to-violet-500 transition-all shadow-sm disabled:opacity-50">
+        {saving ? "Davet ediliyor…" : "Davet Et"}
+      </button>
+    </div>
+  );
+}
+
+// ─── Üye kartı ───────────────────────────────────────────────────────────────
+function TeamMemberCard({ member, isSelf, callerIsOwner, onChanged }: {
+  member: Member; isSelf: boolean; callerIsOwner: boolean; onChanged: () => void;
+}) {
+  const [role, setRole]     = useState<AgencyRole>((member.agency_role as AgencyRole) ?? "viewer");
+  const [status, setStatus] = useState(member.status ?? "active");
+  const [phone, setPhone]   = useState(member.phone ?? "");
+  const [eff, setEff]       = useState<Record<PermissionKey, boolean>>(
+    resolvePermissions(member.agency_role, member.permissions)
+  );
+  const [open, setOpen]     = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [busy, setBusy]     = useState<"resend" | "delete" | null>(null);
+  const [resendLink, setResendLink] = useState<string | null>(null);
+  const [msg, setMsg]       = useState<{ ok: boolean; text: string } | null>(null);
+
+  const isSuperAdmin = member.role === "super_admin";
+  const isOwnerMember = (member.agency_role ?? "") === "owner";
+  // owner üyeyi yalnız owner düzenler; super_admin hiç düzenlenmez; kişi kendini owner-rol değiştiremez kuralı backend'de
+  const locked = isSuperAdmin || (isOwnerMember && !callerIsOwner);
+
+  function changeRole(next: AgencyRole) {
+    setRole(next);
+    setEff(resolvePermissions(next, null)); // rol değişince şablona dön
+  }
+  function resetToTemplate() {
+    setEff(resolvePermissions(role, null));
+  }
+
+  async function save() {
+    setSaving(true); setMsg(null);
+    // override = yalnız şablondan farklı anahtarlar
+    const template = resolvePermissions(role, null);
+    const override: Partial<Record<PermissionKey, boolean>> = {};
+    (Object.keys(eff) as PermissionKey[]).forEach((k) => { if (eff[k] !== template[k]) override[k] = eff[k]; });
+    const permissions = Object.keys(override).length ? override : null;
+    try {
+      const res = await fetch(`/api/team/${member.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agency_role: role, status, phone, permissions }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Kaydedilemedi.");
+      setMsg({ ok: true, text: "Kaydedildi ✓" });
+      onChanged();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Kaydedilemedi." });
+    } finally { setSaving(false); }
+  }
+
+  async function resend() {
+    setBusy("resend"); setMsg(null); setResendLink(null);
+    try {
+      const res = await fetch(`/api/team/${member.id}`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Link üretilemedi.");
+      setResendLink(json.inviteLink ?? null);
+      setMsg({ ok: true, text: "Yeni davet/parola linki üretildi ✓" });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Link üretilemedi." });
+    } finally { setBusy(null); }
+  }
+
+  async function remove() {
+    if (!confirm(`${member.full_name ?? member.email ?? "Bu üye"} silinecek. Onaylıyor musunuz?`)) return;
+    setBusy("delete"); setMsg(null);
+    try {
+      const res = await fetch(`/api/team/${member.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Silinemedi.");
+      onChanged();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Silinemedi." });
+      setBusy(null);
+    }
+  }
+
+  const initials = (member.full_name ?? member.email ?? "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="p-4 flex items-start gap-3 flex-wrap">
+        <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold flex-shrink-0">{initials}</div>
+        <div className="flex-1 min-w-[160px]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold text-slate-800">{member.full_name ?? "İsimsiz"}</p>
+            {isSelf && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">Siz</span>}
+            {isSuperAdmin && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700">Platform Yöneticisi</span>}
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${STATUS_BADGE[member.status ?? "active"] ?? "bg-slate-50 text-slate-500 border-slate-200"}`}>
+              {STATUS_LABEL[member.status ?? "active"] ?? member.status}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-1 flex-wrap text-[11px] text-slate-400">
+            {member.email && <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" />{member.email}</span>}
+            {member.phone && <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" />{member.phone}</span>}
+            <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{timeAgo(member.last_login_at)}</span>
+            <span className="font-semibold text-slate-500">{agencyRoleLabel(member.agency_role)}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Team members list */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-slate-800">Mevcut Üyeler</h2>
+      {locked ? (
+        <div className="px-4 pb-4">
+          <p className="text-[11px] text-slate-400">
+            {isSuperAdmin ? "Platform yöneticisi bu ekrandan düzenlenemez." : "Acente sahibini yalnız bir acente sahibi düzenleyebilir."}
+          </p>
         </div>
-        <div className="divide-y divide-gray-50">
-          {members.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-gray-400">
-              Henüz ekip üyesi yok.
+      ) : (
+        <div className="px-4 pb-4 space-y-3 border-t border-slate-50 pt-3">
+          {/* Rol */}
+          <div>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Rol</p>
+            <div className="flex flex-wrap gap-2">
+              {AGENCY_ROLES.filter((r) => callerIsOwner || r.value !== "owner").map((r) => (
+                <button key={r.value} type="button" onClick={() => changeRole(r.value)} title={r.description}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                    role === r.value ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+                  }`}>
+                  {r.label}
+                </button>
+              ))}
             </div>
-          ) : (
-            members.map((m, i) => (
-              <div key={m.id} className="px-5 py-3.5 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                  {(m.full_name ?? "?").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate">{m.full_name ?? "İsimsiz"}</p>
-                  <p className="text-[11px] text-gray-400 capitalize">{m.role === "agency_user" ? "Acente Kullanıcısı" : m.role}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {i === 0 && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
-                      Owner
-                    </span>
-                  )}
-                  <span className="text-[10px] text-gray-400">
-                    {new Date(m.created_at).toLocaleDateString("tr-TR")}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* Invite section */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-slate-800 mb-1">Ekip Üyesi Davet Et</h2>
-        <p className="text-xs text-gray-500 mb-4">
-          Davet linkini ekibinizle paylaşın. Linki alan kişi kayıt olduğunda otomatik olarak acentenize eklenir.
-        </p>
-
-        {atLimit ? (
-          <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-            <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+          {/* Durum + Telefon */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <p className="text-sm font-semibold text-red-800">Paket limitine ulaşıldı</p>
-              <p className="text-xs text-red-600 mt-0.5">
-                Mevcut planınızda maksimum <strong>{maxUsers} kullanıcı</strong> hakkınız bulunmaktadır.
-                Daha fazla kullanıcı eklemek için plan yükseltmesi gereklidir.
-                Destek için yöneticinizle iletişime geçin.
-              </p>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Durum</p>
+              <div className="flex gap-2">
+                {(["active", "suspended"] as const).map((s) => (
+                  <button key={s} type="button" onClick={() => setStatus(s)}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                      status === s ? (s === "active" ? "bg-emerald-600 text-white border-emerald-600" : "bg-rose-600 text-white border-rose-600") : "bg-white text-slate-600 border-slate-200"
+                    }`}>
+                    {s === "active" ? "Aktif" : "Askıya Al"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">Telefon</p>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="905XXXXXXXXX" className={INPUT} />
             </div>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {/* Link preview */}
-            <div className="flex items-center gap-2 p-3 bg-slate-50 border border-gray-200 rounded-xl">
-              <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-              <span className="flex-1 text-xs font-mono text-slate-700 truncate">{inviteUrl}</span>
-              <CopyButton text={inviteUrl} label="Linki Kopyala" />
-            </div>
 
-            {/* WhatsApp share */}
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(`PoliçePilot ekibimize katılmak için bu linki kullan: ${inviteUrl}`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-colors"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-              </svg>
-              WhatsApp ile Paylaş
-            </a>
-
-            <p className="text-[11px] text-gray-400">
-              💡 Link geçersiz kılmak için yöneticinizle iletişime geçin.
-            </p>
+          {/* Yetkiler */}
+          <div>
+            <button onClick={() => setOpen((v) => !v)} className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700">
+              <ShieldCheck className="w-3.5 h-3.5" /> Yetkiler
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+            {open && (
+              <div className="mt-2 rounded-xl border border-slate-200 p-3 space-y-3">
+                <div className="flex justify-end">
+                  <button onClick={resetToTemplate} className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700">
+                    <RotateCcw className="w-3 h-3" /> Rol varsayılanına dön
+                  </button>
+                </div>
+                {PERMISSION_GROUPS.map((group) => {
+                  const items = PERMISSIONS.filter((p) => p.group === group);
+                  if (!items.length) return null;
+                  return (
+                    <div key={group}>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{group}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {items.map((p) => (
+                          <label key={p.key} className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                            <input type="checkbox" checked={eff[p.key] ?? false}
+                              onChange={(e) => setEff((prev) => ({ ...prev, [p.key]: e.target.checked }))}
+                              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400/40" />
+                            {p.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+
+          {msg && (
+            <p className={`text-xs rounded-xl px-3 py-2 border ${msg.ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"}`}>{msg.text}</p>
+          )}
+          {resendLink && (
+            <div className="text-[11px] bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1">
+              <p className="font-semibold text-slate-500">Aktivasyon linki (üyeye iletin):</p>
+              <p className="break-all text-indigo-600">{resendLink}</p>
+              <button onClick={() => navigator.clipboard?.writeText(resendLink)} className="text-indigo-600 font-semibold hover:underline">Kopyala</button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <button onClick={resend} disabled={busy !== null}
+                className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all disabled:opacity-50">
+                {busy === "resend" ? "Üretiliyor…" : "Daveti Yenile"}
+              </button>
+              {!isSelf && (
+                <button onClick={remove} disabled={busy !== null}
+                  className="px-3 py-2 rounded-xl border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-50 transition-all disabled:opacity-50">
+                  {busy === "delete" ? "Siliniyor…" : "Sil"}
+                </button>
+              )}
+            </div>
+            <button onClick={save} disabled={saving}
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-bold hover:from-indigo-500 hover:to-violet-500 transition-all shadow-sm disabled:opacity-50">
+              {saving ? "Kaydediliyor…" : "Kaydet"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
