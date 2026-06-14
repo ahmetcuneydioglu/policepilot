@@ -9,6 +9,7 @@ import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canAddCustomer, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
+import { logActivity } from "@/lib/activity";
 
 export async function POST(request: NextRequest) {
   try {
@@ -93,6 +94,7 @@ export async function POST(request: NextRequest) {
       policy_end_date:policy_end_date || null,
       extra_data:     extra_data ?? {},
       agency_id:      resolvedAgencyId,
+      created_by:     user.id,
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -120,10 +122,24 @@ export async function POST(request: NextRequest) {
         insurance_company: insurance_company?.trim() || null,
         premium:           premium != null && premium !== "" ? Number(premium) : null,
         source:            "manual",
+        created_by:        user.id,
       }).select("id").single();
       if (polErr) console.error("[API /api/customers] policy insert error:", polErr.message);
       policyId = pol?.id ?? null;
+      if (policyId) {
+        await logActivity({
+          agencyId: resolvedAgencyId, actorId: user.id,
+          action: "create", entityType: "policy", entityId: policyId,
+          summary: `Poliçe kaydı: ${insurance_type}${policy_no ? ` (${policy_no})` : ""}`,
+        });
+      }
     }
+
+    await logActivity({
+      agencyId: resolvedAgencyId, actorId: user.id,
+      action: "create", entityType: "customer", entityId: customer?.id ?? null,
+      summary: `Müşteri eklendi: ${name.trim()}`,
+    });
 
     return NextResponse.json({ ok: true, customerId: customer?.id, policyId });
   } catch (err: unknown) {

@@ -16,9 +16,16 @@ import { supabase } from "@/lib/supabase";
 export type Profile = {
   id: string;
   full_name: string | null;
-  role: string; // 'super_admin' | 'agency_user'
+  role: string; // 'super_admin' | 'agency_user' (sistem rolü)
   agency_id: string | null;
   created_at: string;
+  // Kullanıcı yönetimi (Faz 1) — opsiyonel; select("*") ile otomatik gelir
+  email?: string | null;
+  phone?: string | null;
+  status?: string | null;          // 'active' | 'suspended' | 'invited'
+  last_login_at?: string | null;
+  agency_role?: string | null;     // 'owner'|'manager'|'sales'|'operations'|'viewer'
+  permissions?: Record<string, boolean> | null;
 };
 
 type AuthCtxType = {

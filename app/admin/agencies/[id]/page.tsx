@@ -12,11 +12,17 @@ import Link from "next/link";
 import {
   Building2, ChevronLeft, RefreshCw, Users, UserSquare2, Zap, FileText,
   MessageCircle, CreditCard, ScrollText, Bot, LayoutDashboard,
+  ChevronDown, ShieldCheck, RotateCcw, Mail, Phone, Clock,
 } from "lucide-react";
 import {
   PlanBadge, SectionCard, KpiCard, LoadingGrid, ErrorBox,
   fmtMoney, fmtNum, fmtDate, fmtDateTime, timeAgo,
 } from "@/components/admin/ui";
+import {
+  AGENCY_ROLES, PERMISSIONS, PERMISSION_GROUPS, ROLE_TEMPLATES,
+  resolvePermissions, agencyRoleLabel,
+  type AgencyRole, type PermissionKey,
+} from "@/lib/permissions";
 
 type TabKey = "general" | "users" | "customers" | "quotes" | "policies" | "whatsapp" | "subscription" | "logs" | "ai";
 
@@ -128,14 +134,7 @@ export default function AdminAgencyDetailPage() {
 
       {/* ── Kullanıcılar ── */}
       {tab === "users" && (
-        <SectionCard title="Kullanıcılar" subtitle={`${data.users.length} kullanıcı`}>
-          <SimpleTable
-            headers={["Ad Soyad", "Rol", "Kayıt"]}
-            rows={data.users.map((u: { id: string; full_name: string; role: string; created_at: string }) => [
-              u.full_name, u.role, fmtDate(u.created_at),
-            ])}
-          />
-        </SectionCard>
+        <UsersPanel agencyId={a.id} users={data.users} onSaved={load} />
       )}
 
       {/* ── Müşteriler ── */}
@@ -397,6 +396,253 @@ function SubscriptionEditor({ agency, onSaved }: {
         </button>
       </div>
     </SectionCard>
+  );
+}
+
+// ─── Kullanıcılar paneli (rol, durum, telefon, granular yetki) ────────────────
+
+type AgencyUser = {
+  id: string;
+  full_name: string | null;
+  role: string;                 // sistem rolü (salt-okunur)
+  agency_role: string | null;   // SaaS rolü (düzenlenebilir)
+  status: string | null;
+  phone: string | null;
+  email: string | null;
+  last_login_at: string | null;
+  permissions: Record<string, boolean> | null;
+  created_at: string;
+};
+
+function UsersPanel({ agencyId, users, onSaved }: {
+  agencyId: string;
+  users: AgencyUser[];
+  onSaved: () => void;
+}) {
+  if (!users || users.length === 0) {
+    return (
+      <SectionCard title="Kullanıcılar" subtitle="0 kullanıcı">
+        <p className="px-5 py-8 text-center text-xs text-slate-400">Bu acentede kullanıcı yok</p>
+      </SectionCard>
+    );
+  }
+  return (
+    <SectionCard title="Kullanıcılar" subtitle={`${users.length} kullanıcı · rol, durum ve yetkiler`}>
+      <div className="p-4 space-y-3">
+        {users.map((u) => (
+          <UserCard key={u.id} agencyId={agencyId} user={u} onSaved={onSaved} />
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
+function UserCard({ agencyId, user, onSaved }: {
+  agencyId: string;
+  user: AgencyUser;
+  onSaved: () => void;
+}) {
+  const initialRole = (AGENCY_ROLES.some(r => r.value === user.agency_role) ? user.agency_role : "owner") as AgencyRole;
+
+  const [agencyRole, setAgencyRole] = useState<AgencyRole>(initialRole);
+  const [status, setStatus]   = useState<string>(user.status ?? "active");
+  const [phone, setPhone]     = useState<string>(user.phone ?? "");
+  const [perms, setPerms]     = useState<Record<PermissionKey, boolean>>(
+    () => resolvePermissions(initialRole, user.permissions)
+  );
+  const [open, setOpen]       = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [msg, setMsg]         = useState<{ ok: boolean; text: string } | null>(null);
+
+  const isSuperAdmin = user.role === "super_admin";
+  const enabledCount = Object.values(perms).filter(Boolean).length;
+
+  function pickRole(r: AgencyRole) {
+    setAgencyRole(r);
+    setPerms({ ...ROLE_TEMPLATES[r] }); // role seçimi → o rolün varsayılan yetkileri
+    setMsg(null);
+  }
+
+  function togglePerm(k: PermissionKey) {
+    setPerms(p => ({ ...p, [k]: !p[k] }));
+    setMsg(null);
+  }
+
+  function resetToRoleDefault() {
+    setPerms({ ...ROLE_TEMPLATES[agencyRole] });
+    setMsg(null);
+  }
+
+  // Şablondan farklı anahtarları override olarak hesapla
+  function computeOverride(): Record<string, boolean> | null {
+    const template = ROLE_TEMPLATES[agencyRole];
+    const diff: Record<string, boolean> = {};
+    for (const k of Object.keys(perms) as PermissionKey[]) {
+      if (perms[k] !== template[k]) diff[k] = perms[k];
+    }
+    return Object.keys(diff).length ? diff : null;
+  }
+
+  async function save() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/admin/agencies/${agencyId}/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agency_role: agencyRole,
+          status,
+          phone: phone.trim(),
+          permissions: computeOverride(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Kaydedilemedi.");
+      setMsg({ ok: true, text: "Kaydedildi ✓" });
+      onSaved();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Kaydedilemedi." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const INPUT = "w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40 bg-slate-50";
+  const initials = (user.full_name ?? user.email ?? "?").slice(0, 2).toUpperCase();
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      {/* Üst satır: kimlik + meta */}
+      <div className="flex items-start gap-3 p-4">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white shadow-sm flex-shrink-0">
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold text-slate-800 truncate">{user.full_name ?? "İsimsiz"}</p>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ring-1 ${
+              isSuperAdmin ? "bg-violet-50 text-violet-700 ring-violet-200" : "bg-slate-100 text-slate-600 ring-slate-200"
+            }`}>
+              {isSuperAdmin ? "Platform Yöneticisi" : "Acente Kullanıcısı"}
+            </span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ring-1 ${
+              status === "active" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" :
+              status === "invited" ? "bg-amber-50 text-amber-700 ring-amber-200" :
+              "bg-rose-50 text-rose-600 ring-rose-200"
+            }`}>
+              {status === "active" ? "Aktif" : status === "invited" ? "Davetli" : "Askıda"}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-1 flex-wrap text-[11px] text-slate-400">
+            <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" />{user.email ?? "—"}</span>
+            <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" />{phone || "—"}</span>
+            <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />Son giriş: {user.last_login_at ? timeAgo(user.last_login_at) : "—"}</span>
+            <span>· {agencyRoleLabel(agencyRole)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Düzenleme alanı */}
+      <div className="px-4 pb-4 space-y-3">
+        {/* Rol */}
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">Acente Rolü</label>
+          <div className="flex flex-wrap gap-2">
+            {AGENCY_ROLES.map(r => (
+              <button key={r.value} type="button" onClick={() => pickRole(r.value)}
+                title={r.description}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                  agencyRole === r.value
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+                }`}>
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Durum + Telefon */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">Durum</label>
+            <button type="button" onClick={() => { setStatus(s => s === "active" ? "suspended" : "active"); setMsg(null); }}
+              className={`w-full px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+                status === "active"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-rose-50 text-rose-600 border-rose-200"
+              }`}>
+              {status === "active" ? "🟢 Aktif" : "🔴 Askıda"}
+            </button>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">Telefon</label>
+            <input value={phone} onChange={e => { setPhone(e.target.value); setMsg(null); }}
+              placeholder="5xx xxx xx xx" className={INPUT} />
+          </div>
+        </div>
+
+        {/* Yetkiler (collapse) */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <button type="button" onClick={() => setOpen(o => !o)}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50/60 hover:bg-slate-50 transition-colors">
+            <span className="inline-flex items-center gap-2 text-xs font-bold text-slate-600">
+              <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" /> Yetkiler
+              <span className="text-[10px] font-semibold text-slate-400">{enabledCount}/{PERMISSIONS.length} açık</span>
+            </span>
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+          {open && (
+            <div className="p-3 space-y-3">
+              <div className="flex justify-end">
+                <button type="button" onClick={resetToRoleDefault}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700">
+                  <RotateCcw className="w-3 h-3" /> Rol varsayılanına dön
+                </button>
+              </div>
+              {PERMISSION_GROUPS.map(group => {
+                const items = PERMISSIONS.filter(p => p.group === group);
+                if (items.length === 0) return null;
+                return (
+                  <div key={group}>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{group}</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {items.map(p => (
+                        <button key={p.key} type="button" onClick={() => togglePerm(p.key)}
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all text-left ${
+                            perms[p.key]
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                              : "bg-white text-slate-400 border-slate-200 hover:border-slate-300"
+                          }`}>
+                          <span className="truncate">{p.label}</span>
+                          <span className={`ml-2 w-7 h-4 rounded-full flex items-center px-0.5 flex-shrink-0 transition-colors ${perms[p.key] ? "bg-indigo-500 justify-end" : "bg-slate-200 justify-start"}`}>
+                            <span className="w-3 h-3 rounded-full bg-white shadow-sm" />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {msg && (
+          <p className={`text-xs rounded-xl px-3 py-2 border ${
+            msg.ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"
+          }`}>{msg.text}</p>
+        )}
+
+        <div className="flex justify-end">
+          <button onClick={save} disabled={saving}
+            className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-bold hover:from-indigo-500 hover:to-violet-500 transition-all shadow-sm disabled:opacity-50">
+            {saving ? "Kaydediliyor…" : "Kaydet"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

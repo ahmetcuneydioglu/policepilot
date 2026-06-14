@@ -11,6 +11,7 @@ import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canAddCustomer, canAddPolicy, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
 import { KNOWN_POLICY_TYPES } from "@/lib/ocr/validation";
+import { logActivity } from "@/lib/activity";
 import { resolveCaller } from "../../whatsapp/_lib/auth";
 
 // Müşteri+poliçe+dosya+OCR kaydı zinciri; storage yüklemesi dahil süre payı
@@ -69,6 +70,7 @@ async function insertDocumentMetadata(input: {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
+  uploadedBy: string | null;
 }) {
   const admin = getSupabaseAdmin();
 
@@ -83,6 +85,7 @@ async function insertDocumentMetadata(input: {
     file_type: input.mimeType,
     file_size: input.sizeBytes,
     bucket: BUCKET,
+    uploaded_by: input.uploadedBy,
   });
 
   return error;
@@ -300,6 +303,7 @@ export async function POST(request: NextRequest) {
           vehicle_plate: vehiclePlate,
           policy_end_date: policyEndDate,
           extra_data: extraData,
+          created_by: caller.userId,
         })
         .select("id")
         .single();
@@ -309,6 +313,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: customerErr?.message ?? "Müşteri oluşturulamadı." }, { status: 500 });
       }
       customer = created;
+      await logActivity({
+        agencyId: resolvedAgencyId, actorId: caller.userId,
+        action: "create", entityType: "customer", entityId: customer.id,
+        summary: `Müşteri eklendi (OCR): ${name}`,
+      });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -324,6 +333,7 @@ export async function POST(request: NextRequest) {
         insurance_company: optionalText(form, "insurance_company"),
         premium: premiumNumber,
         source: "ocr_upload",
+        created_by: caller.userId,
       })
       .select("id")
       .single();
@@ -332,6 +342,12 @@ export async function POST(request: NextRequest) {
       console.error("[customers/from-policy] policy insert:", policyErr);
       return NextResponse.json({ error: policyErr?.message ?? "Poliçe oluşturulamadı.", customerId: customer.id }, { status: 500 });
     }
+
+    await logActivity({
+      agencyId: resolvedAgencyId, actorId: caller.userId,
+      action: "create", entityType: "policy", entityId: policy.id,
+      summary: `Poliçe kaydı (OCR): ${insuranceType}${policyNo ? ` (${policyNo})` : ""}`,
+    });
 
     const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-80);
     const path = `${resolvedAgencyId}/${policy.id}/${Date.now()}-${safeName}`;
@@ -367,6 +383,7 @@ export async function POST(request: NextRequest) {
       fileName: file.name,
       mimeType: file.type,
       sizeBytes: file.size,
+      uploadedBy: caller.userId,
     });
 
     if (docErr) {

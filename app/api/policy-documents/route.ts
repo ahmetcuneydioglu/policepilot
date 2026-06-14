@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { logActivity } from "@/lib/activity";
 import { resolveCaller } from "../whatsapp/_lib/auth";
 
 const BUCKET    = "policy-documents";
@@ -43,6 +44,7 @@ async function insertDocumentMetadata(input: {
   policy: PolicyRow;
   path: string;
   file: File;
+  uploadedBy: string | null;
 }) {
   const admin = getSupabaseAdmin();
 
@@ -57,6 +59,7 @@ async function insertDocumentMetadata(input: {
     file_type: input.file.type,
     file_size: input.file.size,
     bucket: BUCKET,
+    uploaded_by: input.uploadedBy,
   });
 
   return error;
@@ -110,11 +113,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updErr.message }, { status: 500 });
     }
 
-    const docErr = await insertDocumentMetadata({ policy, path, file });
+    const docErr = await insertDocumentMetadata({ policy, path, file, uploadedBy: caller.userId });
     if (docErr) {
       console.error("[policy-documents] document metadata insert:", docErr.message);
       return NextResponse.json({ error: `Evrak kaydı oluşturulamadı: ${docErr.message}` }, { status: 500 });
     }
+
+    await logActivity({
+      agencyId: policy.agency_id, actorId: caller.userId,
+      action: "upload", entityType: "document", entityId: policy.id,
+      summary: `Evrak yüklendi: ${file.name}`,
+    });
 
     return NextResponse.json({ ok: true, path, documentSaved: true });
   } catch (err) {

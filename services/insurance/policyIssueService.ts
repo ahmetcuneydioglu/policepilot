@@ -11,6 +11,7 @@
  */
 
 import { getSupabaseAdmin }       from "@/lib/supabase-admin";
+import { logActivity }            from "@/lib/activity";
 import type { PaymentResult }     from "@/services/payment/paymentService";
 import type { QuoteIssueContext } from "@/services/insurance/quoteService";
 
@@ -109,6 +110,8 @@ export async function issuePolicy(input: IssuePolicyInput): Promise<IssuePolicyR
       source:          sourceType,   // "demo" | "manual" | "api" | …
       // Yenileme ilişkisi: bu poliçe eski bir poliçenin yenilemesi mi?
       renewed_from_policy_id: run.renewal_of_policy_id ?? null,
+      // Kişi bazlı performans/audit izi
+      created_by: agentUserId,
       // Notlar
       note: isDemo
         ? `Demo poliçe. Gerçek poliçe değildir. İşlem: ${paymentResult.transactionId}`
@@ -121,6 +124,13 @@ export async function issuePolicy(input: IssuePolicyInput): Promise<IssuePolicyR
     console.error("[policyIssueService] policy insert error:", polErr);
     throw new Error(`Poliçe kaydı oluşturulamadı: ${polErr.message}`);
   }
+
+  await logActivity({
+    agencyId: run.agency_id, actorId: agentUserId,
+    action: "create", entityType: "policy", entityId: policy.id,
+    summary: `Poliçe kesildi: ${policyNo} (${result.company_name})`,
+    metadata: { source: sourceType, premium: result.price },
+  });
 
   // ── 2. quote_results güncelle ─────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -58,13 +58,29 @@ export async function POST(request: NextRequest) {
     // ── Profil → acente ──────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: prof } = await (admin.from("profiles") as any)
-      .select("agency_id, role")
+      .select("agency_id, role, email")
       .eq("id", user.id)
       .maybeSingle();
 
+    // ── Profil snapshot senkronu: email + last_login_at ──────────────────
+    // auth.users PostgREST'ten join edilemediği için panelin tek sorguyla
+    // okuyabilmesi adına profiles'a yazılır. Best-effort; tüm kullanıcılar için
+    // (super_admin dahil) çalışır, agency erken dönüşünden ÖNCE.
+    if (prof) {
+      const sync: Record<string, unknown> = {
+        last_login_at: user.last_sign_in_at ?? new Date().toISOString(),
+      };
+      if (!prof.email && user.email) sync.email = user.email;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: syncErr } = await (admin.from("profiles") as any)
+        .update(sync)
+        .eq("id", user.id);
+      if (syncErr) console.warn("[auth/bootstrap] profile sync:", syncErr.message);
+    }
+
     const agencyId: string | null = prof?.agency_id ?? null;
     if (!agencyId) {
-      // super_admin veya profili henüz oluşmamış kullanıcı — yapılacak iş yok
+      // super_admin veya profili henüz oluşmamış kullanıcı — agency işi yok
       return NextResponse.json({ ok: true, skipped: "no_agency" });
     }
 

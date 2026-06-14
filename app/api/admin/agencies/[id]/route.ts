@@ -25,7 +25,7 @@ export async function GET(
 
     const [agRes, usersRes, custRes, runsRes, polRes, waRes, setRes] = await Promise.all([
       t("agencies").select("*").eq("id", id).maybeSingle(),
-      t("profiles").select("id, full_name, role, created_at").eq("agency_id", id).order("created_at"),
+      t("profiles").select("id, full_name, role, agency_role, status, phone, email, last_login_at, permissions, created_at").eq("agency_id", id).order("created_at"),
       t("customers").select("id, name, phone, insurance_type, created_at").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
       t("quote_runs").select("id, customer_name, product_type, status, created_at, quote_results(id, price)").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
       t("policies").select("id, policy_type, status, premium, commission, insurance_company, policy_no, start_date, end_date, created_at, renewal_status").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),

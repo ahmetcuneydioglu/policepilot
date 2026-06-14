@@ -8,6 +8,7 @@ import { NextResponse }          from "next/server";
 import type { NextRequest }      from "next/server";
 import { createServerClient }    from "@supabase/ssr";
 import { getSupabaseAdmin }      from "@/lib/supabase-admin";
+import { logActivity }           from "@/lib/activity";
 
 function sessionClient(request: NextRequest) {
   const cookieHeader = request.headers.get("cookie") ?? "";
@@ -154,6 +155,7 @@ export async function POST(request: NextRequest) {
           phone:          customer_phone?.trim() || "",
           insurance_type: product_type,
           note:           null,
+          created_by:     user.id,
         })
         .select("id")
         .single();
@@ -187,6 +189,7 @@ export async function POST(request: NextRequest) {
         run_finished_at: new Date().toISOString(),
         // Yenileme ilişkisi
         renewal_of_policy_id: renewal_of_policy_id ?? null,
+        created_by:      user.id,
       })
       .select("id")
       .single();
@@ -195,6 +198,12 @@ export async function POST(request: NextRequest) {
       console.error("[api/quote-runs] run insert error:", runErr);
       return NextResponse.json({ error: runErr.message }, { status: 500 });
     }
+
+    await logActivity({
+      agencyId: resolvedAgencyId, actorId: user.id,
+      action: "create", entityType: "quote_run", entityId: run.id,
+      summary: `Teklif çalışıldı: ${product_type}${customer_name ? ` — ${customer_name}` : ""}`,
+    });
 
     // ── Yenileme akışı: eski poliçeyi "quoted" işaretle ───────────────────
     if (renewal_of_policy_id) {
