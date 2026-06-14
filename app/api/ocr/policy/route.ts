@@ -8,9 +8,11 @@
  * anahtarları client'a sızmaz, UI değişmez.
  */
 
+import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { extractPolicyData, getOcrProvider } from "@/lib/ocr";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveCaller } from "../../whatsapp/_lib/auth";
 
 // OCR (OpenAI Vision) tek dosyada birkaç saniye sürebilir; varsayılan limiti aş
@@ -37,15 +39,57 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Dosya 8MB'dan büyük olamaz." }, { status: 400 });
     }
 
+    const buffer = await file.arrayBuffer();
+
+    // ── SHA256 önbellek: aynı dosya tekrar yüklenince OCR'ı atla ──────────────
+    // Acente bazlı (agency_id + file_hash) → gizlilik korunur, token israfı önlenir.
+    const fileHash = createHash("sha256").update(Buffer.from(buffer)).digest("hex");
+    const admin = getSupabaseAdmin();
+    const agencyId = caller.agencyId; // super_admin'de null olabilir → cache atlanır
+
+    if (agencyId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: cached } = await (admin.from("ocr_cache") as any)
+        .select("fields, provider, mode")
+        .eq("agency_id", agencyId)
+        .eq("file_hash", fileHash)
+        .maybeSingle();
+      if (cached?.fields) {
+        return NextResponse.json({
+          ok: true,
+          cached: true,
+          provider: cached.provider ?? "cache",
+          providerLabel: "Önbellek (OCR atlandı)",
+          mode: cached.mode ?? "cache",
+          fields: cached.fields,
+          raw_response: { cached: true },
+        });
+      }
+    }
+
     const provider = getOcrProvider();
     const result   = await extractPolicyData({
-      buffer:   await file.arrayBuffer(),
+      buffer,
       mimeType: file.type,
       name:     file.name,
     });
 
+    // Sonucu önbelleğe yaz (hata gönderimi engellemesin)
+    if (agencyId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: cacheErr } = await (admin.from("ocr_cache") as any).upsert({
+        agency_id: agencyId,
+        file_hash: fileHash,
+        fields:    result.fields,
+        provider:  provider.name,
+        mode:      result.mode,
+      }, { onConflict: "agency_id,file_hash" });
+      if (cacheErr) console.warn("[api/ocr/policy] cache write:", cacheErr.message);
+    }
+
     return NextResponse.json({
       ok: true,
+      cached: false,
       provider: provider.name,
       providerLabel: result.providerLabel,
       mode: result.mode,

@@ -19,7 +19,7 @@ import { KNOWN_POLICY_TYPES } from "@/lib/ocr/validation";
 const ALLOWED = ["application/pdf", "image/jpeg", "image/png"];
 const MAX_BYTES = 8 * 1024 * 1024;
 
-type RowStatus = "queued" | "reading" | "ready" | "ocr_error" | "saving" | "saved" | "save_error";
+type RowStatus = "queued" | "reading" | "ready" | "ocr_error" | "saving" | "saved" | "save_error" | "duplicate";
 
 // Satır verisi — OCR alanları düz string olarak tutulur, tabloda düzenlenir
 type RowData = {
@@ -112,7 +112,7 @@ export default function BulkPolicyImport({
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [summary, setSummary] = useState<{ saved: number; matched: number; failed: number } | null>(null);
+  const [summary, setSummary] = useState<{ saved: number; matched: number; failed: number; duplicate: number } | null>(null);
 
   // Super admin için acente listesi (lazy)
   const loadAgencies = useCallback(async () => {
@@ -191,7 +191,7 @@ export default function BulkPolicyImport({
     setSaving(true);
     setError("");
 
-    let saved = 0, matched = 0, failed = 0;
+    let saved = 0, matched = 0, failed = 0, duplicate = 0;
     for (const row of valid) {
       setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: "saving" } : r));
       try {
@@ -233,7 +233,15 @@ export default function BulkPolicyImport({
 
         const res = await fetch("/api/customers/from-policy", { method: "POST", body: fd });
         const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Kayıt başarısız");
+        if (!res.ok) {
+          // Mükerrer poliçe → işaretle + atla (hata sayma)
+          if (json.code === "duplicate_policy") {
+            duplicate++;
+            setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: "duplicate", error: json.error } : r));
+            continue;
+          }
+          throw new Error(json.error ?? "Kayıt başarısız");
+        }
         saved++;
         if (json.customerMatched) matched++;
         setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: "saved", matched: json.customerMatched } : r));
@@ -243,12 +251,13 @@ export default function BulkPolicyImport({
       }
     }
     setSaving(false);
-    setSummary({ saved, matched, failed });
+    setSummary({ saved, matched, failed, duplicate });
     setPhase("done");
     onDone();
   }
 
-  const readyCount = rows.filter(r => r.status === "ready" || r.status === "saved" || r.status === "save_error").length;
+  const readyCount = rows.filter(r => ["ready", "saved", "save_error", "duplicate"].includes(r.status)).length;
+  // Kayda hazır: ready/save_error + geçerli; duplicate (zaten kayıtlı) hariç
   const validCount = rows.filter(r => (r.status === "ready" || r.status === "save_error") && isValidRow(r)).length;
 
   const INPUT = "w-full px-2 py-1 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white";
@@ -280,6 +289,7 @@ export default function BulkPolicyImport({
               <b className="text-emerald-600">{summary.saved}</b> poliçe kaydedildi
               {summary.matched > 0 && <> · <b className="text-blue-600">{summary.matched}</b> mevcut müşteriye eklendi</>}
             </p>
+            {summary.duplicate > 0 && <p className="text-sm text-amber-600 mb-1">{summary.duplicate} poliçe zaten kayıtlıydı (atlandı)</p>}
             {summary.failed > 0 && <p className="text-sm text-rose-600 mb-3">{summary.failed} satır kaydedilemedi (tabloda işaretli)</p>}
             <div className="flex gap-2 justify-center mt-4">
               <button onClick={onClose} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">Kapat</button>
@@ -373,13 +383,14 @@ export default function BulkPolicyImport({
                         r.status === "ocr_error" ? <span className="text-rose-600" title={r.error}>❌ OCR</span> :
                         r.status === "saving" ? <span className="text-blue-600">💾 kaydediliyor</span> :
                         r.status === "saved" ? <span className="text-emerald-600">{r.matched ? "✓ eklendi" : "✓ kaydedildi"}</span> :
+                        r.status === "duplicate" ? <span className="text-amber-600" title={r.error}>⊘ zaten kayıtlı</span> :
                         r.status === "save_error" ? <span className="text-rose-600" title={r.error}>❌ kayıt</span> :
                         r.status === "queued" ? <span className="text-slate-400">bekliyor</span> :
                         valid ? <span className="text-emerald-600">● hazır</span> : <span className="text-amber-600">● eksik</span>;
 
-                      const disabled = r.status === "saving" || r.status === "saved" || r.status === "reading";
+                      const disabled = r.status === "saving" || r.status === "saved" || r.status === "reading" || r.status === "duplicate";
                       return (
-                        <tr key={r.id} className={`${!valid && r.status === "ready" ? "bg-amber-50/40" : ""} ${r.status === "ocr_error" || r.status === "save_error" ? "bg-rose-50/40" : ""}`}>
+                        <tr key={r.id} className={`${!valid && r.status === "ready" ? "bg-amber-50/40" : ""} ${r.status === "duplicate" ? "bg-amber-50/40 opacity-70" : ""} ${r.status === "ocr_error" || r.status === "save_error" ? "bg-rose-50/40" : ""}`}>
                           <td className="px-2.5 py-1.5 whitespace-nowrap text-[11px] font-semibold">{statusUI}</td>
                           <td className="px-2.5 py-1.5 min-w-[140px]"><input value={r.data.name} disabled={disabled} onChange={e => updateCell(r.id, "name", e.target.value)} className={INPUT} placeholder="Zorunlu" /></td>
                           <td className="px-2.5 py-1.5 min-w-[120px]">

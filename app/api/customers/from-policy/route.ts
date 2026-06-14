@@ -218,6 +218,26 @@ export async function POST(request: NextRequest) {
     const premium = optionalText(form, "premium");
     const premiumNumber = premium && Number.isFinite(Number(premium.replace(",", "."))) ? Number(premium.replace(",", ".")) : null;
 
+    // ── Mükerrer poliçe kontrolü: aynı acentede aynı poliçe no varsa engelle ──
+    // Müşteri/dosya OLUŞTURULMADAN önce — boş poliçe no'da kontrol atlanır.
+    const policyNo = optionalText(form, "policy_no");
+    if (policyNo) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: dup } = await (admin.from("policies") as any)
+        .select("id, customer_id")
+        .eq("agency_id", resolvedAgencyId)
+        .eq("policy_no", policyNo)
+        .limit(1)
+        .maybeSingle();
+      if (dup?.id) {
+        return NextResponse.json({
+          error: `Bu poliçe numarası (${policyNo}) zaten kayıtlı — yeni kayıt oluşturulmadı.`,
+          code: "duplicate_policy",
+          existingPolicyId: dup.id,
+        }, { status: 409 });
+      }
+    }
+
     const validationErrors = validateCriticalFields({
       tcIdentityNo,
       phone,
