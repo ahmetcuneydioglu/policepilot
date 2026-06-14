@@ -14,7 +14,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildCustomerInsights } from "@/lib/customerInsights";
-import { resolveCaller } from "../../whatsapp/_lib/auth";
+import { resolveCaller, requirePermission } from "../../whatsapp/_lib/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -206,6 +206,8 @@ export async function PATCH(
 
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    const denied = requirePermission(caller, "customer.edit");
+    if (denied) return denied;
 
     const customer = await getAuthorizedCustomer(id, caller.role, caller.agencyId);
     if (!customer) {

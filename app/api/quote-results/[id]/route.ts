@@ -7,6 +7,7 @@ import { NextResponse }       from "next/server";
 import type { NextRequest }   from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin }   from "@/lib/supabase-admin";
+import { resolveCaller, requirePermission } from "../../whatsapp/_lib/auth";
 
 function sessionClient(request: NextRequest) {
   const cookieHeader = request.headers.get("cookie") ?? "";
@@ -39,6 +40,9 @@ export async function PATCH(
     const { data: { user } } = await sessionClient(request).auth.getUser();
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
+    const caller = await resolveCaller(request);
+    if (caller) { const denied = requirePermission(caller, "quote.edit"); if (denied) return denied; }
+
     const admin = getSupabaseAdmin();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,6 +66,9 @@ export async function DELETE(
 
     const { data: { user } } = await sessionClient(request).auth.getUser();
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+
+    const caller = await resolveCaller(request);
+    if (caller) { const denied = requirePermission(caller, "quote.delete"); if (denied) return denied; }
 
     const admin = getSupabaseAdmin();
 

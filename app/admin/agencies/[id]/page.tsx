@@ -13,6 +13,7 @@ import {
   Building2, ChevronLeft, RefreshCw, Users, UserSquare2, Zap, FileText,
   MessageCircle, CreditCard, ScrollText, Bot, LayoutDashboard,
   ChevronDown, ShieldCheck, RotateCcw, Mail, Phone, Clock,
+  Trophy, TrendingUp, Crown, Activity, UserPlus, X,
 } from "lucide-react";
 import {
   PlanBadge, SectionCard, KpiCard, LoadingGrid, ErrorBox,
@@ -24,18 +25,19 @@ import {
   type AgencyRole, type PermissionKey,
 } from "@/lib/permissions";
 
-type TabKey = "general" | "users" | "customers" | "quotes" | "policies" | "whatsapp" | "subscription" | "logs" | "ai";
+type TabKey = "general" | "users" | "performance" | "customers" | "quotes" | "policies" | "whatsapp" | "subscription" | "logs" | "ai";
 
 const TABS: { key: TabKey; label: string; Icon: typeof Users }[] = [
-  { key: "general",      label: "Genel",       Icon: LayoutDashboard },
-  { key: "users",        label: "Kullanıcılar",Icon: Users },
-  { key: "customers",    label: "Müşteriler",  Icon: UserSquare2 },
-  { key: "quotes",       label: "Teklifler",   Icon: Zap },
-  { key: "policies",     label: "Poliçeler",   Icon: FileText },
-  { key: "whatsapp",     label: "WhatsApp",    Icon: MessageCircle },
-  { key: "subscription", label: "Abonelik",    Icon: CreditCard },
-  { key: "logs",         label: "Loglar",      Icon: ScrollText },
-  { key: "ai",           label: "AI Analizi",  Icon: Bot },
+  { key: "general",      label: "Genel",        Icon: LayoutDashboard },
+  { key: "users",        label: "Kullanıcılar", Icon: Users },
+  { key: "performance",  label: "Personel Performansı", Icon: Trophy },
+  { key: "customers",    label: "Müşteriler",   Icon: UserSquare2 },
+  { key: "quotes",       label: "Teklifler",    Icon: Zap },
+  { key: "policies",     label: "Poliçeler",    Icon: FileText },
+  { key: "whatsapp",     label: "WhatsApp",     Icon: MessageCircle },
+  { key: "subscription", label: "Abonelik",     Icon: CreditCard },
+  { key: "logs",         label: "Loglar",       Icon: ScrollText },
+  { key: "ai",           label: "AI Analizi",   Icon: Bot },
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,6 +46,7 @@ type Bundle = any;
 export default function AdminAgencyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [data,    setData]    = useState<Bundle | null>(null);
+  const [perf,    setPerf]    = useState<Bundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState("");
   const [tab,     setTab]     = useState<TabKey>("general");
@@ -52,10 +55,16 @@ export default function AdminAgencyDetailPage() {
     setLoading(true);
     setError("");
     try {
-      const res  = await fetch(`/api/admin/agencies/${id}`);
+      const [res, perfRes] = await Promise.all([
+        fetch(`/api/admin/agencies/${id}`),
+        fetch(`/api/admin/agencies/${id}/performance`),
+      ]);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Acente yüklenemedi.");
       setData(json);
+      // Performans best-effort: hata olsa da sayfa açılır
+      const perfJson = await perfRes.json().catch(() => null);
+      setPerf(perfRes.ok ? perfJson : null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Acente yüklenemedi.");
     } finally {
@@ -120,17 +129,23 @@ export default function AdminAgencyDetailPage() {
 
       {/* ── Genel ── */}
       {tab === "general" && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard label="Kullanıcı" value={fmtNum(data.users.length)} Icon={Users} tone="blue" index={0} />
-          <KpiCard label="Müşteri" value={fmtNum(data.customers.length)} Icon={UserSquare2} tone="violet" index={1} />
-          <KpiCard label="Teklif" value={fmtNum(data.quotes.length)} Icon={Zap} tone="amber" index={2} />
-          <KpiCard label="Poliçe" value={fmtNum(data.policies.length)} Icon={FileText} tone="indigo" index={3} />
-          <KpiCard label="Aktif Poliçe" value={fmtNum(data.policies.filter((p: { status: string }) => p.status === "Aktif").length)} tone="emerald" index={4} />
-          <KpiCard label="Toplam Prim" value={fmtMoney(data.policies.reduce((s: number, p: { premium: number | null }) => s + (p.premium ?? 0), 0))} tone="indigo" index={5} />
-          <KpiCard label="WhatsApp" value={fmtNum(data.whatsapp.length)} Icon={MessageCircle} tone="emerald" index={6} />
-          <KpiCard label="Aylık Gelir" value={fmtMoney(data.subscription.monthly_revenue)} sub="Plan bazlı" tone="violet" index={7} />
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KpiCard label="Kullanıcı" value={fmtNum(data.users.length)} Icon={Users} tone="blue" index={0} />
+            <KpiCard label="Müşteri" value={fmtNum(data.customers.length)} Icon={UserSquare2} tone="violet" index={1} />
+            <KpiCard label="Teklif" value={fmtNum(data.quotes.length)} Icon={Zap} tone="amber" index={2} />
+            <KpiCard label="Poliçe" value={fmtNum(data.policies.length)} Icon={FileText} tone="indigo" index={3} />
+            <KpiCard label="Aktif Poliçe" value={fmtNum(data.policies.filter((p: { status: string }) => p.status === "Aktif").length)} tone="emerald" index={4} />
+            <KpiCard label="Toplam Prim" value={fmtMoney(data.policies.reduce((s: number, p: { premium: number | null }) => s + (p.premium ?? 0), 0))} tone="indigo" index={5} />
+            <KpiCard label="WhatsApp" value={fmtNum(data.whatsapp.length)} Icon={MessageCircle} tone="emerald" index={6} />
+            <KpiCard label="Aylık Gelir" value={fmtMoney(data.subscription.monthly_revenue)} sub="Plan bazlı" tone="violet" index={7} />
+          </div>
+          <LeaderBoard perf={perf} onSeeAll={() => setTab("performance")} />
         </div>
       )}
+
+      {/* ── Personel Performansı ── */}
+      {tab === "performance" && <PerformancePanel perf={perf} />}
 
       {/* ── Kullanıcılar ── */}
       {tab === "users" && (
@@ -229,7 +244,7 @@ export default function AdminAgencyDetailPage() {
           <div className="divide-y divide-slate-50 max-h-[480px] overflow-y-auto">
             {data.logs.map((l: { date: string; type: string; text: string }, i: number) => (
               <div key={i} className="flex items-center gap-3 px-5 py-2.5">
-                <span className="text-base">{{ customer: "👤", quote: "⚡", policy: "🛡️", whatsapp: "💬" }[l.type] ?? "•"}</span>
+                <span className="text-base">{{ customer: "👤", quote: "⚡", quote_run: "⚡", policy: "🛡️", document: "📎", whatsapp: "💬", user: "🔑" }[l.type] ?? "•"}</span>
                 <p className="text-xs text-slate-600 flex-1">{l.text}</p>
                 <p className="text-[10px] text-slate-400 whitespace-nowrap">{timeAgo(l.date)}</p>
               </div>
@@ -419,21 +434,96 @@ function UsersPanel({ agencyId, users, onSaved }: {
   users: AgencyUser[];
   onSaved: () => void;
 }) {
-  if (!users || users.length === 0) {
-    return (
-      <SectionCard title="Kullanıcılar" subtitle="0 kullanıcı">
-        <p className="px-5 py-8 text-center text-xs text-slate-400">Bu acentede kullanıcı yok</p>
-      </SectionCard>
-    );
-  }
+  const [inviting, setInviting] = useState(false);
   return (
-    <SectionCard title="Kullanıcılar" subtitle={`${users.length} kullanıcı · rol, durum ve yetkiler`}>
+    <SectionCard
+      title="Kullanıcılar"
+      subtitle={`${users?.length ?? 0} kullanıcı · rol, durum ve yetkiler`}
+      actions={
+        <button onClick={() => setInviting((v) => !v)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 transition-colors">
+          {inviting ? <X className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
+          {inviting ? "Kapat" : "Yeni Kullanıcı"}
+        </button>
+      }
+    >
       <div className="p-4 space-y-3">
-        {users.map((u) => (
-          <UserCard key={u.id} agencyId={agencyId} user={u} onSaved={onSaved} />
-        ))}
+        {inviting && <InviteUserForm agencyId={agencyId} onDone={() => { setInviting(false); onSaved(); }} />}
+        {(!users || users.length === 0) ? (
+          <p className="px-1 py-6 text-center text-xs text-slate-400">Bu acentede kullanıcı yok</p>
+        ) : (
+          users.map((u) => (
+            <UserCard key={u.id} agencyId={agencyId} user={u} onSaved={onSaved} />
+          ))
+        )}
       </div>
     </SectionCard>
+  );
+}
+
+function InviteUserForm({ agencyId, onDone }: { agencyId: string; onDone: () => void }) {
+  const [email, setEmail]   = useState("");
+  const [name, setName]     = useState("");
+  const [role, setRole]     = useState<AgencyRole>("sales");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg]       = useState<{ ok: boolean; text: string } | null>(null);
+  const [link, setLink]     = useState<string | null>(null);
+
+  const INPUT = "w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40 bg-slate-50";
+
+  async function invite() {
+    setSaving(true); setMsg(null); setLink(null);
+    try {
+      const res = await fetch(`/api/admin/agencies/${agencyId}/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, full_name: name, agency_role: role }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Davet başarısız.");
+      setMsg({ ok: true, text: "Kullanıcı davet edildi ✓" });
+      setLink(json.inviteLink ?? null);
+      setEmail(""); setName("");
+      onDone();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Davet başarısız." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
+      <p className="text-xs font-bold text-indigo-700">Yeni Personel Davet Et</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="E-posta" className={INPUT} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad Soyad (opsiyonel)" className={INPUT} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {AGENCY_ROLES.map((r) => (
+          <button key={r.value} type="button" onClick={() => setRole(r.value)}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+              role === r.value ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+            }`}>
+            {r.label}
+          </button>
+        ))}
+      </div>
+      {msg && (
+        <p className={`text-xs rounded-xl px-3 py-2 border ${msg.ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"}`}>{msg.text}</p>
+      )}
+      {link && (
+        <div className="text-[11px] bg-white border border-slate-200 rounded-xl p-2.5 space-y-1">
+          <p className="font-semibold text-slate-500">Davet linki (personele iletin):</p>
+          <p className="break-all text-indigo-600">{link}</p>
+          <button onClick={() => navigator.clipboard?.writeText(link)} className="text-indigo-600 font-semibold hover:underline">Kopyala</button>
+        </div>
+      )}
+      <button onClick={invite} disabled={saving}
+        className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-bold hover:from-indigo-500 hover:to-violet-500 transition-all shadow-sm disabled:opacity-50">
+        {saving ? "Davet ediliyor…" : "Davet Et"}
+      </button>
+    </div>
   );
 }
 
@@ -642,6 +732,169 @@ function UserCard({ agencyId, user, onSaved }: {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Performans: liderlik tablosu + personel kartları ─────────────────────────
+
+type PerfUser = {
+  id: string; name: string; role_label: string;
+  customers: number; quotes_total: number; quotes_month: number; quotes_won: number;
+  policies_total: number; policies_month: number; total_premium: number;
+  conversion: number; last_activity: string | null;
+};
+
+function LeaderCard({ label, name, value, Icon, tone }: {
+  label: string; name: string | null; value: string; Icon: typeof Trophy;
+  tone: "amber" | "indigo" | "emerald" | "violet" | "blue";
+}) {
+  const tones: Record<string, string> = {
+    amber: "from-amber-500 to-orange-600", indigo: "from-indigo-500 to-violet-600",
+    emerald: "from-emerald-500 to-teal-600", violet: "from-violet-500 to-purple-600",
+    blue: "from-blue-500 to-indigo-600",
+  };
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${tones[tone]} flex items-center justify-center shadow-sm`}>
+          <Icon className="w-3.5 h-3.5 text-white" />
+        </div>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
+      </div>
+      {name ? (
+        <>
+          <p className="text-sm font-bold text-slate-800 truncate">{name}</p>
+          <p className="text-lg font-black text-slate-900 leading-tight mt-0.5">{value}</p>
+        </>
+      ) : (
+        <p className="text-xs text-slate-300 py-2">Henüz veri yok</p>
+      )}
+    </div>
+  );
+}
+
+function LeaderBoard({ perf, onSeeAll }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  perf: any;
+  onSeeAll: () => void;
+}) {
+  const L = perf?.leaders;
+  const hasAny = L && (L.most_active || L.top_quotes || L.top_policies || L.top_premium || L.top_conversion);
+  return (
+    <SectionCard
+      title="Personel Liderliği"
+      subtitle="created_by + aktivite verisinden"
+      actions={
+        <button onClick={onSeeAll} className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700">
+          Tümünü gör →
+        </button>
+      }
+    >
+      <div className="p-4">
+        {!hasAny ? (
+          <p className="text-xs text-slate-400 py-4 text-center">
+            Henüz kişiye atfedilmiş işlem yok. Bu özellik, kullanıcılar müşteri/teklif/poliçe oluşturdukça dolar
+            (Faz 1 öncesi kayıtlar atfedilemez).
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <LeaderCard label="En Aktif" Icon={Activity} tone="blue"
+              name={L.most_active?.name ?? null}
+              value={L.most_active?.last_activity ? timeAgo(L.most_active.last_activity) : "—"} />
+            <LeaderCard label="En Çok Teklif" Icon={Zap} tone="amber"
+              name={L.top_quotes?.name ?? null}
+              value={`${fmtNum(L.top_quotes?.quotes_total ?? 0)} teklif`} />
+            <LeaderCard label="En Çok Poliçe" Icon={FileText} tone="indigo"
+              name={L.top_policies?.name ?? null}
+              value={`${fmtNum(L.top_policies?.policies_total ?? 0)} poliçe`} />
+            <LeaderCard label="En Çok Prim" Icon={Crown} tone="violet"
+              name={L.top_premium?.name ?? null}
+              value={fmtMoney(L.top_premium?.total_premium ?? 0)} />
+            <LeaderCard label="En Yüksek Dönüşüm" Icon={TrendingUp} tone="emerald"
+              name={L.top_conversion?.name ?? null}
+              value={`%${L.top_conversion?.conversion ?? 0}`} />
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
+function Last7Chart({ last7 }: { last7: { date: string; count: number }[] }) {
+  const max = Math.max(1, ...last7.map((d) => d.count));
+  return (
+    <SectionCard title="Son 7 Gün Aktivitesi" subtitle="Acente geneli işlem sayısı">
+      <div className="p-5 flex items-end gap-2 h-40">
+        {last7.map((d) => {
+          const h = Math.round((d.count / max) * 100);
+          const label = new Date(`${d.date}T00:00:00+03:00`).toLocaleDateString("tr-TR", { weekday: "short" });
+          return (
+            <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+              <span className="text-[10px] font-bold text-slate-500">{d.count}</span>
+              <div className="w-full rounded-t-lg bg-gradient-to-t from-indigo-500 to-violet-500 transition-all"
+                style={{ height: `${Math.max(4, h)}%` }} />
+              <span className="text-[9px] text-slate-400 capitalize">{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </SectionCard>
+  );
+}
+
+function PerformancePanel({ perf }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  perf: any;
+}) {
+  if (!perf) {
+    return <SectionCard title="Personel Performansı"><p className="px-5 py-8 text-center text-xs text-slate-400">Performans verisi yüklenemedi. Migration çalıştırıldı mı?</p></SectionCard>;
+  }
+  const users = ([...(perf.users ?? [])] as PerfUser[])
+    .sort((a, b) => b.total_premium - a.total_premium);
+
+  return (
+    <div className="space-y-5">
+      <LeaderBoard perf={perf} onSeeAll={() => {}} />
+      <Last7Chart last7={perf.last7 ?? []} />
+      <SectionCard title="Personel Detayı" subtitle={`${users.length} kullanıcı · bu ay teklif/poliçe, toplam prim, dönüşüm`}>
+        {users.length === 0 ? (
+          <p className="px-5 py-8 text-center text-xs text-slate-400">Kullanıcı yok</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr className="border-b border-slate-100">
+                  {["Personel", "Rol", "Müşteri", "Teklif (Bu Ay/Top)", "Poliçe (Bu Ay/Top)", "Toplam Prim", "Dönüşüm", "Son Aktivite"].map(h => (
+                    <th key={h} className="text-left px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {users.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-4 py-2.5 text-xs font-semibold text-slate-700 whitespace-nowrap">{u.name}</td>
+                    <td className="px-4 py-2.5 text-[11px] text-slate-500 whitespace-nowrap">{u.role_label}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-600">{fmtNum(u.customers)}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap"><span className="font-bold text-indigo-600">{fmtNum(u.quotes_month)}</span> / {fmtNum(u.quotes_total)}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap"><span className="font-bold text-indigo-600">{fmtNum(u.policies_month)}</span> / {fmtNum(u.policies_total)}</td>
+                    <td className="px-4 py-2.5 text-xs font-bold text-slate-800 whitespace-nowrap">{fmtMoney(u.total_premium)}</td>
+                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                      <span className={u.conversion >= 50 ? "text-emerald-600 font-bold" : u.conversion >= 20 ? "text-amber-600 font-semibold" : "text-slate-400"}>%{u.conversion}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-[11px] text-slate-400 whitespace-nowrap">{u.last_activity ? timeAgo(u.last_activity) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {perf.unattributed > 0 && (
+          <p className="px-5 py-3 text-[11px] text-slate-400 border-t border-slate-50">
+            ℹ️ {fmtNum(perf.unattributed)} müşteri kişiye atfedilemedi (Faz 1 öncesi, created_by yok).
+          </p>
+        )}
+      </SectionCard>
     </div>
   );
 }

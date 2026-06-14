@@ -14,7 +14,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { logActivity } from "@/lib/activity";
-import { resolveCaller } from "../whatsapp/_lib/auth";
+import { resolveCaller, requirePermission } from "../whatsapp/_lib/auth";
 
 const BUCKET    = "policy-documents";
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -69,6 +69,8 @@ export async function POST(request: NextRequest) {
   try {
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    const denied = requirePermission(caller, "document.upload");
+    if (denied) return denied;
 
     const form     = await request.formData();
     const policyId = form.get("policy_id");

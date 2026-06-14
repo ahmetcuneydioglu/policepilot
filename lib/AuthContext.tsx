@@ -11,6 +11,7 @@ import {
 import { type User } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { hasPermission, type PermissionKey } from "@/lib/permissions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Profile = {
@@ -40,6 +41,8 @@ type AuthCtxType = {
   profileError: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  /** Granular yetki kontrolü (UI buton gizleme). super_admin daima true. */
+  can: (key: PermissionKey) => boolean;
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -52,6 +55,7 @@ const AuthContext = createContext<AuthCtxType>({
   profileError: null,
   loading: true,
   signOut: async () => {},
+  can: () => false,
 });
 
 export function useAuth() {
@@ -171,10 +175,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const agencyId = profile?.agency_id ?? null;
 
+  // ── Granular yetki: super_admin daima true; agency_role yoksa 'owner' (legacy) ──
+  const can = useCallback((key: PermissionKey): boolean => {
+    if (role === "super_admin") return true;
+    return hasPermission(profile?.agency_role ?? "owner", profile?.permissions ?? null, key);
+  }, [role, profile?.agency_role, profile?.permissions]);
+
   console.log("[AuthContext] role:", role, "source:", roleSource, "agencyId:", agencyId);
 
   return (
-    <AuthContext.Provider value={{ user, profile, role, agencyId, roleSource, profileError, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, role, agencyId, roleSource, profileError, loading, signOut, can }}>
       {children}
     </AuthContext.Provider>
   );

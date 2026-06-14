@@ -10,6 +10,7 @@ import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canAddCustomer, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
 import { logActivity } from "@/lib/activity";
+import { resolveCaller, requirePermission } from "../whatsapp/_lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,6 +47,13 @@ export async function POST(request: NextRequest) {
 
     const { data: { user } } = await supabaseSession.auth.getUser();
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+
+    // ── Yetki kontrolü ───────────────────────────────────────────────────────
+    const caller = await resolveCaller(request);
+    if (caller) {
+      const denied = requirePermission(caller, "customer.edit");
+      if (denied) return denied;
+    }
 
     // ── Admin client ───────────────────────────────────────────────────────
     const admin = getSupabaseAdmin();

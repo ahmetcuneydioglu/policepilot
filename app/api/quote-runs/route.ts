@@ -9,6 +9,7 @@ import type { NextRequest }      from "next/server";
 import { createServerClient }    from "@supabase/ssr";
 import { getSupabaseAdmin }      from "@/lib/supabase-admin";
 import { logActivity }           from "@/lib/activity";
+import { resolveCaller, requirePermission } from "../whatsapp/_lib/auth";
 
 function sessionClient(request: NextRequest) {
   const cookieHeader = request.headers.get("cookie") ?? "";
@@ -106,6 +107,13 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabaseSession.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    }
+
+    // ── Yetki kontrolü ────────────────────────────────────────────────────
+    const caller = await resolveCaller(request);
+    if (caller) {
+      const denied = requirePermission(caller, "quote.create");
+      if (denied) return denied;
     }
 
     // ── Service role client (RLS bypass) ──────────────────────────────────

@@ -143,7 +143,7 @@ function SkeletonRow({ delay = 0 }: { delay?: number }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function QuoteCenterPage() {
   const router = useRouter();
-  const { agencyId } = useAuth();
+  const { agencyId, can } = useAuth();
 
   const [runs,    setRuns]    = useState<QuoteRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,13 +230,15 @@ export default function QuoteCenterPage() {
           </p>
         </div>
 
-        <Link
-          href="/quote-center/new"
-          className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold shadow-md shadow-blue-500/25 hover:shadow-lg hover:shadow-blue-500/35 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200"
-        >
-          <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-200" />
-          Yeni Teklif Çalışması
-        </Link>
+        {can("quote.create") && (
+          <Link
+            href="/quote-center/new"
+            className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold shadow-md shadow-blue-500/25 hover:shadow-lg hover:shadow-blue-500/35 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200"
+          >
+            <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-200" />
+            Yeni Teklif Çalışması
+          </Link>
+        )}
       </div>
 
       {/* ── KPI Cards ── */}
@@ -429,15 +431,17 @@ export default function QuoteCenterPage() {
                       >
                         <FileText className="w-3.5 h-3.5" />
                       </Link>
-                      <button
-                        onClick={e => { e.stopPropagation(); deleteRun(run.id); }}
-                        disabled={deleting === run.id}
-                        className="w-7 h-7 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        {deleting === run.id
-                          ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          : <Trash2 className="w-3.5 h-3.5" />}
-                      </button>
+                      {can("quote.delete") && (
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteRun(run.id); }}
+                          disabled={deleting === run.id}
+                          className="w-7 h-7 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          {deleting === run.id
+                            ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            : <Trash2 className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
                       <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all duration-150" />
                     </div>
                   </div>

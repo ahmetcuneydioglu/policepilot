@@ -18,6 +18,7 @@ import { getQuoteIssueContext, checkIfAlreadyIssued } from "@/services/insurance
 import { processMockPayment }  from "@/services/payment/paymentService";
 import { issuePolicy }         from "@/services/insurance/policyIssueService";
 import type { PaymentResult }  from "@/services/payment/paymentService";
+import { resolveCaller, requirePermission } from "../../whatsapp/_lib/auth";
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 function getSessionClient(request: NextRequest) {
@@ -95,6 +96,9 @@ export async function POST(
 
     const { data: { user } } = await getSessionClient(request).auth.getUser();
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+
+    const caller = await resolveCaller(request);
+    if (caller) { const denied = requirePermission(caller, "policy.create"); if (denied) return denied; }
 
     // Body: yalnızca tutar + açıklama — kart bilgisi ASLA burada beklenmez
     const body = await request.json();

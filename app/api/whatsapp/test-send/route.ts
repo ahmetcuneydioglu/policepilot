@@ -16,12 +16,14 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getProvider } from "@/services/whatsapp/providerFactory";
 import { getAgencySettings } from "@/services/whatsapp/queueService";
 import { getPlatformWhatsAppConfig } from "@/services/whatsapp/platformConfig";
-import { resolveCaller } from "../_lib/auth";
+import { resolveCaller, requirePermission } from "../_lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    const denied = requirePermission(caller, "whatsapp.send");
+    if (denied) return denied;
 
     const body = await request.json().catch(() => ({}));
     const requestedAgency = typeof body.agency_id === "string" ? body.agency_id : null;

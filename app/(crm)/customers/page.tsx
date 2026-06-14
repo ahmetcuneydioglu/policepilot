@@ -9,7 +9,7 @@ import AddCustomerModal from "@/components/AddCustomerModal";
 import BulkPolicyImport from "@/components/BulkPolicyImport";
 
 export default function CustomersPage() {
-  const { role, agencyId } = useAuth();
+  const { role, agencyId, can } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
@@ -64,22 +64,26 @@ export default function CustomersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowBulk(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 transition-all"
-            title="Birden çok poliçeyi OCR ile toplu yükle"
-          >
-            📦 Toplu Poliçe Yükle
-          </button>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow-md transition-all"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Yeni Müşteri
-          </button>
+          {can("policy.create") && (
+            <button
+              onClick={() => setShowBulk(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 transition-all"
+              title="Birden çok poliçeyi OCR ile toplu yükle"
+            >
+              📦 Toplu Poliçe Yükle
+            </button>
+          )}
+          {can("customer.edit") && (
+            <button
+              onClick={() => setShowAdd(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow-md transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Yeni Müşteri
+            </button>
+          )}
         </div>
       </div>
 

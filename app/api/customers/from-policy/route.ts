@@ -12,7 +12,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canAddCustomer, canAddPolicy, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
 import { KNOWN_POLICY_TYPES } from "@/lib/ocr/validation";
 import { logActivity } from "@/lib/activity";
-import { resolveCaller } from "../../whatsapp/_lib/auth";
+import { resolveCaller, requirePermission } from "../../whatsapp/_lib/auth";
 
 // Müşteri+poliçe+dosya+OCR kaydı zinciri; storage yüklemesi dahil süre payı
 export const maxDuration = 60;
@@ -120,6 +120,8 @@ export async function POST(request: NextRequest) {
   try {
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    const denied = requirePermission(caller, "policy.create");
+    if (denied) return denied;
 
     const form = await request.formData();
     const file = form.get("file");

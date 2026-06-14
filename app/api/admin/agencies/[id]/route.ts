@@ -23,7 +23,7 @@ export async function GET(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const t = (table: string) => admin.from(table) as any;
 
-    const [agRes, usersRes, custRes, runsRes, polRes, waRes, setRes] = await Promise.all([
+    const [agRes, usersRes, custRes, runsRes, polRes, waRes, setRes, actRes] = await Promise.all([
       t("agencies").select("*").eq("id", id).maybeSingle(),
       t("profiles").select("id, full_name, role, agency_role, status, phone, email, last_login_at, permissions, created_at").eq("agency_id", id).order("created_at"),
       t("customers").select("id, name, phone, insurance_type, created_at").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
@@ -31,6 +31,7 @@ export async function GET(
       t("policies").select("id, policy_type, status, premium, commission, insurance_company, policy_no, start_date, end_date, created_at, renewal_status").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
       t("whatsapp_queue").select("id, phone, status, template_key, message, created_at, sent_at, error_message").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
       t("agency_settings").select("whatsapp_enabled, whatsapp_phone, daily_summary_enabled").eq("agency_id", id).maybeSingle(),
+      t("activity_log").select("actor_name, action, entity_type, summary, created_at").eq("agency_id", id).order("created_at", { ascending: false }).limit(100),
     ]);
 
     if (!agRes.data) return NextResponse.json({ error: "Acente bulunamadı." }, { status: 404 });
@@ -39,14 +40,25 @@ export async function GET(
     const quotes   = runsRes.data ?? [];
     const wa       = waRes.data ?? [];
 
-    // ── Loglar: tüm varlıklardan birleşik zaman akışı ─────────────────────
+    // ── Loglar: gerçek activity_log (varsa) — kim/ne/ne zaman ──────────────
     type Log = { date: string; type: string; text: string };
-    const logs: Log[] = [
-      ...(custRes.data ?? []).map((c: { created_at: string; name: string }) => ({ date: c.created_at, type: "customer", text: `Müşteri eklendi: ${c.name}` })),
-      ...quotes.map((r: { created_at: string; product_type: string; customer_name: string | null }) => ({ date: r.created_at, type: "quote", text: `Teklif çalışıldı: ${r.product_type}${r.customer_name ? ` — ${r.customer_name}` : ""}` })),
-      ...policies.map((p: { created_at: string; policy_type: string }) => ({ date: p.created_at, type: "policy", text: `Poliçe kaydı: ${p.policy_type}` })),
-      ...wa.map((w: { created_at: string; status: string; template_key: string | null }) => ({ date: w.created_at, type: "whatsapp", text: `WhatsApp (${w.template_key ?? "mesaj"}): ${w.status}` })),
-    ].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 80);
+    const activity = (actRes.data ?? []) as { actor_name: string | null; action: string; entity_type: string; summary: string | null; created_at: string }[];
+    let logs: Log[];
+    if (activity.length > 0) {
+      logs = activity.map((a) => ({
+        date: a.created_at,
+        type: a.entity_type,
+        text: `${a.actor_name ? `${a.actor_name} · ` : ""}${a.summary ?? `${a.entity_type} ${a.action}`}`,
+      }));
+    } else {
+      // Fallback: activity_log boşsa (migration/eski veri) varlıklardan türet
+      logs = [
+        ...(custRes.data ?? []).map((c: { created_at: string; name: string }) => ({ date: c.created_at, type: "customer", text: `Müşteri eklendi: ${c.name}` })),
+        ...quotes.map((r: { created_at: string; product_type: string; customer_name: string | null }) => ({ date: r.created_at, type: "quote_run", text: `Teklif çalışıldı: ${r.product_type}${r.customer_name ? ` — ${r.customer_name}` : ""}` })),
+        ...policies.map((p: { created_at: string; policy_type: string }) => ({ date: p.created_at, type: "policy", text: `Poliçe kaydı: ${p.policy_type}` })),
+        ...wa.map((w: { created_at: string; status: string; template_key: string | null }) => ({ date: w.created_at, type: "whatsapp", text: `WhatsApp (${w.template_key ?? "mesaj"}): ${w.status}` })),
+      ].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 80);
+    }
 
     // ── AI analizi (kural motoru) — skor + risk + öneriler ────────────────
     const activePol  = policies.filter((p: { status: string }) => p.status === "Aktif").length;
