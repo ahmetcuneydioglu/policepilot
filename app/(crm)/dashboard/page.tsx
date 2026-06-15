@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useNotifications } from "@/lib/NotificationContext";
 import NotifPermissionButton from "@/components/NotifPermissionButton";
 import { useAuth } from "@/lib/AuthContext";
-import { withAgencyFilter, withScopeFilter, needsOnboarding } from "@/lib/tenant";
+import { withScopeFilter, withRequestScope, isManagerial, needsOnboarding } from "@/lib/tenant";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity, Car, Home,
@@ -227,14 +227,16 @@ export default function DashboardPage() {
       //         requests (gelen lead) acente-geneli kalır — paylaşımlı, created_by'sız.
       const uid = profile?.id; const arole = profile?.agency_role;
       const scope = (q: unknown) => withScopeFilter(q, role, agencyId, uid, arole);
+      // requests: müşteri created_by üzerinden scope (customers!inner şart)
+      const reqScope = (q: unknown) => withRequestScope(q, role, agencyId, uid, arole);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const results = await Promise.all([
         scope(supabase.from("customers").select("*", { count: "exact", head: true })),
-        withAgencyFilter(supabase.from("requests").select("*", { count: "exact", head: true }).in("status", ["Yeni", "İşlemde"]), role, agencyId),
+        reqScope(supabase.from("requests").select("*, customers!inner(id)", { count: "exact", head: true }).in("status", ["Yeni", "İşlemde"])),
         scope(supabase.from("policies").select("*", { count: "exact", head: true }).eq("status", "Aktif").lte("end_date", in30).gte("end_date", today)),
         scope(supabase.from("customers").select("*", { count: "exact", head: true }).gte("created_at", today)),
         scope(supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4)),
-        withAgencyFilter(supabase.from("requests").select("id, request_type, status, created_at, customers(name)").order("created_at", { ascending: false }).limit(6), role, agencyId),
+        reqScope(supabase.from("requests").select("id, request_type, status, created_at, customers!inner(name, created_by)").order("created_at", { ascending: false }).limit(6)),
         scope(supabase.from("policies").select("policy_type, premium").eq("status", "Aktif").lte("end_date", in30).gte("end_date", today)),
         scope(supabase.from("policies").select("end_date").eq("status", "Aktif").gte("end_date", new Date(Date.now() - 60 * 864e5).toISOString().split("T")[0]).lte("end_date", new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0])),
         scope(supabase.from("policies").select("*", { count: "exact", head: true }).eq("renewal_status", "completed").gte("renewed_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())),
@@ -529,8 +531,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ══ WHATSAPP OPERASYON KARTLARI ═════════════════════════════════════ */}
-      {waStats && (
+      {/* ══ WHATSAPP OPERASYON KARTLARI (yalnız owner/yönetici) ════════════ */}
+      {waStats && isManagerial(profile?.agency_role) && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { label: "Bugün Gönderilecek WhatsApp", value: waStats.pending, Icon: Clock,        ring: "ring-amber-200",   iconBg: "bg-amber-100 text-amber-600",     accent: "text-amber-700" },

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
+import { withScopeFilter, withRequestScope } from "@/lib/tenant";
 import type { Request, Customer } from "@/lib/database.types";
 import AddRequestModal from "@/components/AddRequestModal";
 
@@ -16,25 +17,25 @@ const statusStyles: Record<string, string> = {
 type RequestWithCustomer = Request & { customers: { name: string } | null };
 
 export default function RequestsPage() {
-  const { role, agencyId } = useAuth();
+  const { role, agencyId, profile } = useAuth();
   const [requests, setRequests] = useState<RequestWithCustomer[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
 
   async function load() {
+    // requests'te created_by yok → bağlı müşterinin created_by'si üzerinden scope.
+    // Non-managerial: yalnız kendi müşterilerinin talepleri görünür.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let reqQuery = (supabase.from("requests") as any)
-      .select("*, customers(name)")
+      .select("*, customers!inner(name, created_by)")
       .order("created_at", { ascending: false });
+    reqQuery = withRequestScope(reqQuery, role, agencyId, profile?.id, profile?.agency_role);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let custQuery = (supabase.from("customers") as any)
       .select("id, name, phone, insurance_type, note, created_at")
       .order("name");
-    if (role === "agency_user" && agencyId) {
-      reqQuery  = reqQuery.eq("agency_id", agencyId);
-      custQuery = custQuery.eq("agency_id", agencyId);
-    }
+    custQuery = withScopeFilter(custQuery, role, agencyId, profile?.id, profile?.agency_role);
     const [{ data: reqs }, { data: custs }] = await Promise.all([reqQuery, custQuery]);
     setRequests((reqs as RequestWithCustomer[]) ?? []);
     setCustomers((custs as Customer[]) ?? []);
@@ -43,7 +44,7 @@ export default function RequestsPage() {
 
   // re-fetch when auth resolves (role/agencyId may be null on first render)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [role, agencyId]);
+  useEffect(() => { load(); }, [role, agencyId, profile?.id, profile?.agency_role]);
 
   async function updateStatus(id: string, status: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

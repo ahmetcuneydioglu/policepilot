@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
+import { isManagerial } from "@/lib/tenant";
 import { useNotifications } from "@/lib/NotificationContext";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -197,7 +198,9 @@ export default function Sidebar() {
         <NavLink href="/policies"     label="Poliçeler"        icon={Icon.policies}   isActive={pathname.startsWith("/policies") && !pathname.startsWith("/policies/issue")} collapsed={collapsed} onClick={closeMobile} />
         <NavLink href="/renewals"     label="Yenilemeler"      icon={Icon.renewals}   isActive={pathname.startsWith("/renewals")} collapsed={collapsed} onClick={closeMobile} />
         <NavLink href="/ai-assistant" label="AI Asistan"       icon={Icon.ai}         isActive={pathname.startsWith("/ai-assistant")} collapsed={collapsed} onClick={closeMobile} />
-        <NavLink href="/whatsapp-queue" label="WhatsApp Kuyruğu" icon={Icon.whatsapp} isActive={pathname.startsWith("/whatsapp-queue")} collapsed={collapsed} onClick={closeMobile} />
+        {isManagerial(profile?.agency_role) && (
+          <NavLink href="/whatsapp-queue" label="WhatsApp Kuyruğu" icon={Icon.whatsapp} isActive={pathname.startsWith("/whatsapp-queue")} collapsed={collapsed} onClick={closeMobile} />
+        )}
 
 
         {role === "super_admin" && (

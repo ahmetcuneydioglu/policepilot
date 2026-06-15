@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveCaller } from "../_lib/auth";
+import { scopeByUser } from "@/lib/tenant";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,6 +23,10 @@ export async function GET(request: NextRequest) {
     if (caller.role !== "super_admin" && !caller.agencyId) {
       return NextResponse.json({ error: "Acente bilgisi bulunamadı." }, { status: 403 });
     }
+
+    // WhatsApp kuyruğu acente-düzeyi operasyon (günlük özet, test gönderim) —
+    // yalnız owner/manager görür. Satış/operasyon/görüntüleyici → boş.
+    if (scopeByUser(caller)) return NextResponse.json({ items: [] });
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");

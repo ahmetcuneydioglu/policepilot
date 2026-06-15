@@ -70,6 +70,31 @@ export function scopeByUser(caller: { role: string; agencyRole?: string | null }
   return caller.role === "agency_user" && !isManagerial(caller.agencyRole);
 }
 
+/**
+ * requests (Teklif Talepleri) kapsamı — requests'te created_by YOK; bağlı
+ * müşterinin (customers!inner) created_by'si üzerinden scope'lanır.
+ * Çağıran sorgu select'inde `customers!inner(...)` embed etmelidir.
+ *  • super_admin            → filtre yok
+ *  • agency_user managerial → yalnız agency_id
+ *  • agency_user diğer      → agency_id + müşterinin created_by = userId
+ *    (gelen public lead'lerin müşterisi created_by'sız → non-managerial'a görünmez)
+ */
+export function withRequestScope(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  role: string | null,
+  agencyId: string | null,
+  userId: string | null | undefined,
+  agencyRole: string | null | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  if (role !== "agency_user") return query;
+  const IMPOSSIBLE = "00000000-0000-0000-0000-000000000000";
+  let q = query.eq("agency_id", agencyId ?? IMPOSSIBLE);
+  if (!isManagerial(agencyRole)) q = q.eq("customers.created_by", userId ?? IMPOSSIBLE);
+  return q;
+}
+
 /** True when the user is a super-admin. */
 export function isSuperAdmin(role: string | null): boolean {
   return role === "super_admin";
