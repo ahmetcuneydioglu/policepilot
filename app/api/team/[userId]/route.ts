@@ -117,7 +117,7 @@ export async function POST(
     const admin = getSupabaseAdmin();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: linkData, error: linkErr } = await (admin.auth.admin as any).generateLink({
-      type: "recovery", email: target.email, options: { redirectTo: `${origin}/login` },
+      type: "recovery", email: target.email, options: { redirectTo: `${origin}/davet` },
     });
     if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 400 });
 

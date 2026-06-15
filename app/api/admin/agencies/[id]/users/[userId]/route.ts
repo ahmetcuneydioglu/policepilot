@@ -123,7 +123,7 @@ export async function POST(
     const { data: linkData, error: linkErr } = await (admin.auth.admin as any).generateLink({
       type: "recovery",
       email: prof.email,
-      options: { redirectTo: `${origin}/login` },
+      options: { redirectTo: `${origin}/davet` },
     });
     if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 400 });
 

@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     const { data: linkData, error: linkErr } = await (admin.auth.admin as any).generateLink({
       type: "invite",
       email,
-      options: { data: { full_name: fullName, agency_id: agencyId }, redirectTo: `${origin}/login` },
+      options: { data: { full_name: fullName, agency_id: agencyId }, redirectTo: `${origin}/davet` },
     });
     if (linkErr || !linkData?.user?.id) {
       const msg = linkErr?.message ?? "Davet oluşturulamadı.";

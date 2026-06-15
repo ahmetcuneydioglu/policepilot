@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     // ── Profil → acente ──────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: prof } = await (admin.from("profiles") as any)
-      .select("agency_id, role, email")
+      .select("agency_id, role, email, status")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -71,6 +71,8 @@ export async function POST(request: NextRequest) {
         last_login_at: user.last_sign_in_at ?? new Date().toISOString(),
       };
       if (!prof.email && user.email) sync.email = user.email;
+      // Davetli kullanıcı ilk girişinde aktive olur (şifre belirleyip giriş yaptı)
+      if (prof.status === "invited") sync.status = "active";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: syncErr } = await (admin.from("profiles") as any)
         .update(sync)

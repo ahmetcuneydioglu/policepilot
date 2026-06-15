@@ -218,10 +218,17 @@ function InviteForm({ callerIsOwner, onDone }: { callerIsOwner: boolean; onDone:
         <p className={`text-xs rounded-xl px-3 py-2 border ${msg.ok ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"}`}>{msg.text}</p>
       )}
       {link && (
-        <div className="text-[11px] bg-white border border-slate-200 rounded-xl p-2.5 space-y-1">
-          <p className="font-semibold text-slate-500">Davet linki (üyeye iletin):</p>
-          <p className="break-all text-indigo-600">{link}</p>
-          <button onClick={() => navigator.clipboard?.writeText(link)} className="text-indigo-600 font-semibold hover:underline">Kopyala</button>
+        <div className="bg-white border border-amber-200 rounded-xl p-3 space-y-2">
+          <p className="text-[11px] text-amber-700 font-semibold flex items-center gap-1">
+            ⚠️ Otomatik e-posta gönderilmez — bu linki kişiye siz iletin.
+          </p>
+          <p className="text-[10px] text-slate-400">Kişi linke tıklayıp şifresini belirleyince hesabı aktive olur ve giriş yapabilir.</p>
+          <p className="break-all text-[11px] text-indigo-600 bg-slate-50 rounded-lg p-2">{link}</p>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => navigator.clipboard?.writeText(link)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-bold hover:bg-indigo-500 transition-colors">Linki Kopyala</button>
+            <a href={`https://wa.me/?text=${encodeURIComponent(`PolicePilot ekibimize katılmak için şifrenizi belirleyin: ${link}`)}`} target="_blank" rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-[11px] font-bold hover:bg-emerald-600 transition-colors">WhatsApp ile Gönder</a>
+          </div>
         </div>
       )}
       <button onClick={invite} disabled={saving}

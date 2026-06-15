@@ -53,7 +53,7 @@ export async function POST(
       email,
       options: {
         data: { full_name: fullName, agency_id: agencyId },
-        redirectTo: `${origin}/login`,
+        redirectTo: `${origin}/davet`,
       },
     });
 
