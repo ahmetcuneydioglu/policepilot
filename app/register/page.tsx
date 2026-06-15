@@ -147,10 +147,11 @@ export default function RegisterPage() {
   const [showPwd,  setShowPwd]  = useState(false);
 
   // ── ui
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState("");
-  const [done,      setDone]      = useState(false);
-  const [finalSlug, setFinalSlug] = useState("");
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState("");
+  const [done,       setDone]       = useState(false);
+  const [finalSlug,  setFinalSlug]  = useState("");
+  const [autoSignedIn, setAutoSignedIn] = useState(false); // e-posta onayı kapalıysa true (mail gitmez)
 
   // Detect ?invite= param
   useEffect(() => {
@@ -179,6 +180,23 @@ export default function RegisterPage() {
     setAgencySlug(slugify(val) || val.toLowerCase());
   }
 
+  /**
+   * signUp sonucunu yorumla.
+   *  - data.user.identities === []  → e-posta ZATEN kayıtlı (Supabase sahte başarı
+   *    döner, mail GÖNDERMEZ). Kullanıcıya "zaten kayıtlı" hatası göster.
+   *  - data.session var             → e-posta onayı kapalı, anında giriş (mail yok).
+   *  - aksi (session yok, identity var) → doğrulama maili gönderildi.
+   * Dönüş: { duplicate, autoSignedIn } | error fırlatmaz, çağıran karar verir.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function interpretSignUp(data: any): { duplicate: boolean; autoSignedIn: boolean } {
+    const identities = data?.user?.identities;
+    const duplicate = Array.isArray(identities) && identities.length === 0;
+    return { duplicate, autoSignedIn: Boolean(data?.session) };
+  }
+
+  const DUPLICATE_MSG = "Bu e-posta zaten kayıtlı. Lütfen giriş yapın veya şifrenizi sıfırlayın.";
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password.length < 6) { setError("Şifre en az 6 karakter olmalı."); return; }
@@ -186,11 +204,14 @@ export default function RegisterPage() {
     if (isInvite) {
       if (!inviteAgency) { setError("Geçersiz davet linki."); return; }
       setError(""); setLoading(true);
-      const { error: authError } = await supabase.auth.signUp({
+      const { data, error: authError } = await supabase.auth.signUp({
         email: email.trim(), password,
         options: { data: { full_name: fullName.trim(), agency_invite_slug: inviteAgency.slug } },
       });
       if (authError) { setError(authError.message); setLoading(false); return; }
+      const { duplicate, autoSignedIn } = interpretSignUp(data);
+      if (duplicate) { setError(DUPLICATE_MSG); setLoading(false); return; }
+      setAutoSignedIn(autoSignedIn);
       setFinalSlug(inviteAgency.slug);
       setDone(true); setLoading(false);
       return;
@@ -213,7 +234,7 @@ export default function RegisterPage() {
       setLoading(false); return;
     }
 
-    const { error: authError } = await supabase.auth.signUp({
+    const { data, error: authError } = await supabase.auth.signUp({
       email: email.trim(), password,
       options: {
         data: {
@@ -225,6 +246,9 @@ export default function RegisterPage() {
       },
     });
     if (authError) { setError(authError.message); setLoading(false); return; }
+    const { duplicate, autoSignedIn } = interpretSignUp(data);
+    if (duplicate) { setError(DUPLICATE_MSG); setLoading(false); return; }
+    setAutoSignedIn(autoSignedIn);
     setFinalSlug(agencySlug.trim());
     setDone(true); setLoading(false);
   }
@@ -359,7 +383,9 @@ export default function RegisterPage() {
                 </div>
                 <h2 className="text-2xl font-extrabold text-slate-900 mb-2">Hesabınız Oluşturuldu!</h2>
                 <p className="text-slate-500 text-sm leading-relaxed mb-6">
-                  E-posta adresinize doğrulama linki gönderildi. Aktive ettikten sonra giriş yapabilirsiniz.
+                  {autoSignedIn
+                    ? "Hesabınız hazır — hemen giriş yapabilirsiniz."
+                    : <><strong>{email}</strong> adresine doğrulama linki gönderildi. Linke tıklayıp aktive ettikten sonra giriş yapabilirsiniz. (Gelmediyse spam/gereksiz klasörünü kontrol edin.)</>}
                 </p>
 
                 {finalSlug && (
