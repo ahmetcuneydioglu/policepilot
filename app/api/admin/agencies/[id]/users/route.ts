@@ -14,7 +14,7 @@ import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { AGENCY_ROLES } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
-import { getAppOrigin } from "@/lib/appUrl";
+import { getAppOrigin, buildDavetLink } from "@/lib/appUrl";
 import { requireSuperAdmin } from "../../../_lib/auth";
 
 export async function POST(
@@ -65,7 +65,7 @@ export async function POST(
     }
 
     const newUserId: string = linkData.user.id;
-    const inviteLink: string | null = linkData.properties?.action_link ?? null;
+    const inviteLink: string | null = buildDavetLink(origin, linkData.properties, "invite");
 
     // ── profiles satırını acenteye bağla (trigger oluşturduysa da upsert düzeltir) ──
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

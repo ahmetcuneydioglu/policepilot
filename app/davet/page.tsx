@@ -57,26 +57,42 @@ function AcceptInvite() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: any) => finish(session));
 
-    (async () => {
-      // 1) Zaten oturum var mı?
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) return finish(session);
+    const tokenHash    = sp.get("token_hash");
+    const otpType      = sp.get("type");
+    const access_token = hp.get("access_token");
+    const refreshToken = hp.get("refresh_token");
+    const code         = sp.get("code");
+    const hasUrlToken  = Boolean(tokenHash || access_token || code);
 
-      // 2) Hash token'ları (verify endpoint implicit redirect)
-      const access_token = hp.get("access_token");
-      const refresh_token = hp.get("refresh_token");
-      if (access_token && refresh_token) {
-        const { data } = await supabase.auth.setSession({ access_token, refresh_token });
+    (async () => {
+      // 1) token_hash (bizim WhatsApp-güvenli linkimiz) — DAVETLİNİN oturumunu kurar
+      //    (mevcut owner oturumunu değiştirir; doğru kişinin şifresi değişir)
+      if (tokenHash && otpType) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: otpType as any });
+        if (data?.session) return finish(data.session);
+        if (error) setError(error.message);
+      }
+
+      // 2) Hash token'ları (eski verify endpoint redirect)
+      if (access_token && refreshToken) {
+        const { data } = await supabase.auth.setSession({ access_token, refresh_token: refreshToken });
         if (data.session) return finish(data.session);
       }
 
       // 3) PKCE code param
-      const code = sp.get("code");
       if (code) {
         try {
           const { data } = await supabase.auth.exchangeCodeForSession(code);
           if (data.session) return finish(data.session);
-        } catch { /* verifier yoksa atla; listener/grace devreye girer */ }
+        } catch { /* verifier yoksa atla */ }
+      }
+
+      // 4) URL'de token YOKSA mevcut oturuma düş (sayfa yenileme / zaten girişli).
+      //    Token VARSA owner'ın oturumunu KULLANMA — yanlış kişinin şifresi değişmesin.
+      if (!hasUrlToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) return finish(session);
       }
     })();
 

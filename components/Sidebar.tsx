@@ -105,6 +105,8 @@ export default function Sidebar() {
   const displayName = profile?.full_name || user?.email || "Kullanıcı";
   const initials    = displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
   const roleLabel   = role === "super_admin" ? "Süper Admin" : role === "agency_user" ? "Acente" : "—";
+  // Alt satır: ismi olan kullanıcıda e-posta, ismi yoksa rol (displayName zaten e-posta)
+  const subLabel    = profile?.full_name && user?.email ? user.email : roleLabel;
 
   const closeMobile = () => setMobileOpen(false);
 
@@ -269,7 +271,7 @@ export default function Sidebar() {
               <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">{initials}</div>
               <div className="min-w-0 flex-1">
                 <p className="text-white text-xs font-medium truncate">{displayName}</p>
-                <p className="text-slate-500 text-[10px] truncate">{roleLabel}</p>
+                <p className="text-slate-500 text-[10px] truncate">{subLabel}</p>
               </div>
               <span className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 transition-colors">{Icon.signout}</span>
             </>

@@ -18,7 +18,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { AGENCY_ROLES } from "@/lib/permissions";
 import { canAddUser, limitMessage } from "@/lib/limits";
 import { logActivity } from "@/lib/activity";
-import { getAppOrigin } from "@/lib/appUrl";
+import { getAppOrigin, buildDavetLink } from "@/lib/appUrl";
 import { resolveCaller, requirePermission } from "../whatsapp/_lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     }
 
     const newUserId: string = linkData.user.id;
-    const inviteLink: string | null = linkData.properties?.action_link ?? null;
+    const inviteLink: string | null = buildDavetLink(origin, linkData.properties, "invite");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: profErr } = await (admin.from("profiles") as any).upsert({

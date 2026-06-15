@@ -16,7 +16,7 @@ import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { AGENCY_ROLES } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
-import { getAppOrigin } from "@/lib/appUrl";
+import { getAppOrigin, buildDavetLink } from "@/lib/appUrl";
 import { requireSuperAdmin } from "../../../../_lib/auth";
 
 const STATUSES = ["active", "suspended", "invited"];
@@ -134,7 +134,7 @@ export async function POST(
       summary: `Davet/parola linki yeniden üretildi: ${prof.email}`,
     });
 
-    return NextResponse.json({ ok: true, inviteLink: linkData?.properties?.action_link ?? null });
+    return NextResponse.json({ ok: true, inviteLink: buildDavetLink(origin, linkData?.properties, "recovery") });
   } catch (err) {
     console.error("[api/admin/agencies/[id]/users/[userId] POST]", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
