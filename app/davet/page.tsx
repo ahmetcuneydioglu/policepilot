@@ -34,45 +34,56 @@ function AcceptInvite() {
 
   // ── Oturumu davet linkinden kur ────────────────────────────────────────────
   useEffect(() => {
+    // URL parçalarını HEMEN yakala — client (detectSessionInUrl) hash'i tüketip
+    // temizlemeden önce. Aksi halde yarış oluşur, token kaybolur.
+    const rawHash   = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
+    const rawSearch = typeof window !== "undefined" ? window.location.search : "";
+    const hp = new URLSearchParams(rawHash);
+    const sp = new URLSearchParams(rawSearch);
+    const errDesc = hp.get("error_description") || sp.get("error_description");
+
+    let done = false;
+    const finish = (session: { user?: { email?: string | null } } | null) => {
+      if (done || !session?.user) return;
+      done = true;
+      setEmail(session.user.email ?? null);
+      setPhase("ready");
+      if (typeof window !== "undefined") window.history.replaceState(null, "", "/davet");
+    };
+
+    if (errDesc) { setError(decodeURIComponent(errDesc)); setPhase("invalid"); return; }
+
+    // Oturum otomatik kurulunca (detectSessionInUrl / recovery) yakala
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: any) => finish(session));
+
     (async () => {
-      try {
-        // 1) Client URL'i otomatik işlemiş olabilir (detectSessionInUrl)
-        let { data: { session } } = await supabase.auth.getSession();
+      // 1) Zaten oturum var mı?
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) return finish(session);
 
-        // 2) Hash token'ları (verify endpoint implicit redirect): #access_token=...
-        if (!session && typeof window !== "undefined" && window.location.hash) {
-          const hp = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-          const errDesc = hp.get("error_description");
-          if (errDesc) { setError(decodeURIComponent(errDesc)); setPhase("invalid"); return; }
-          const access_token  = hp.get("access_token");
-          const refresh_token = hp.get("refresh_token");
-          if (access_token && refresh_token) {
-            const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
-            if (!error) session = data.session;
-          }
-        }
+      // 2) Hash token'ları (verify endpoint implicit redirect)
+      const access_token = hp.get("access_token");
+      const refresh_token = hp.get("refresh_token");
+      if (access_token && refresh_token) {
+        const { data } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (data.session) return finish(data.session);
+      }
 
-        // 3) PKCE code param: ?code=...
-        if (!session && typeof window !== "undefined") {
-          const code = new URLSearchParams(window.location.search).get("code");
-          if (code) {
-            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-            if (!error) session = data.session;
-          }
-        }
-
-        if (session?.user) {
-          setEmail(session.user.email ?? null);
-          setPhase("ready");
-          // URL'i temizle (token'lar adres çubuğunda kalmasın)
-          if (typeof window !== "undefined") window.history.replaceState(null, "", "/davet");
-        } else {
-          setPhase("invalid");
-        }
-      } catch {
-        setPhase("invalid");
+      // 3) PKCE code param
+      const code = sp.get("code");
+      if (code) {
+        try {
+          const { data } = await supabase.auth.exchangeCodeForSession(code);
+          if (data.session) return finish(data.session);
+        } catch { /* verifier yoksa atla; listener/grace devreye girer */ }
       }
     })();
+
+    // Otomatik işleme + listener'a süre tanı; hâlâ oturum yoksa geçersiz say
+    const timer = setTimeout(() => { if (!done) setPhase("invalid"); }, 3500);
+
+    return () => { subscription.unsubscribe(); clearTimeout(timer); };
   }, []);
 
   async function submit(e: React.FormEvent) {
