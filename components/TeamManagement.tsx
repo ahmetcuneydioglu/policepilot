@@ -154,7 +154,7 @@ export default function TeamManagement({ embedded = false }: { embedded?: boolea
         </button>
       </div>
 
-      {inviting && <InviteForm callerIsOwner={callerIsOwner} onDone={() => { setInviting(false); load(); }} />}
+      {inviting && <InviteForm callerIsOwner={callerIsOwner} onInvited={load} />}
 
       <div className="space-y-3">
         {members.map((m) => (
@@ -169,7 +169,7 @@ export default function TeamManagement({ embedded = false }: { embedded?: boolea
 }
 
 // ─── Davet formu ─────────────────────────────────────────────────────────────
-function InviteForm({ callerIsOwner, onDone }: { callerIsOwner: boolean; onDone: () => void }) {
+function InviteForm({ callerIsOwner, onInvited }: { callerIsOwner: boolean; onInvited: () => void }) {
   const [email, setEmail] = useState("");
   const [name, setName]   = useState("");
   const [role, setRole]   = useState<AgencyRole>("sales");
@@ -188,10 +188,10 @@ function InviteForm({ callerIsOwner, onDone }: { callerIsOwner: boolean; onDone:
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Davet başarısız.");
-      setMsg({ ok: true, text: "Üye davet edildi ✓" });
+      setMsg({ ok: true, text: "Üye davet edildi ✓ — aşağıdaki linki kişiye iletin." });
       setLink(json.inviteLink ?? null);
       setEmail(""); setName("");
-      onDone();
+      onInvited(); // listeyi yenile; FORMU KAPATMA — link görünür kalsın
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "Davet başarısız." });
     } finally { setSaving(false); }

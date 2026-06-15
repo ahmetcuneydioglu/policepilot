@@ -448,7 +448,7 @@ function UsersPanel({ agencyId, users, onSaved }: {
       }
     >
       <div className="p-4 space-y-3">
-        {inviting && <InviteUserForm agencyId={agencyId} onDone={() => { setInviting(false); onSaved(); }} />}
+        {inviting && <InviteUserForm agencyId={agencyId} onInvited={onSaved} />}
         {(!users || users.length === 0) ? (
           <p className="px-1 py-6 text-center text-xs text-slate-400">Bu acentede kullanıcı yok</p>
         ) : (
@@ -461,7 +461,7 @@ function UsersPanel({ agencyId, users, onSaved }: {
   );
 }
 
-function InviteUserForm({ agencyId, onDone }: { agencyId: string; onDone: () => void }) {
+function InviteUserForm({ agencyId, onInvited }: { agencyId: string; onInvited: () => void }) {
   const [email, setEmail]   = useState("");
   const [name, setName]     = useState("");
   const [role, setRole]     = useState<AgencyRole>("sales");
@@ -481,10 +481,10 @@ function InviteUserForm({ agencyId, onDone }: { agencyId: string; onDone: () => 
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Davet başarısız.");
-      setMsg({ ok: true, text: "Kullanıcı davet edildi ✓" });
+      setMsg({ ok: true, text: "Kullanıcı davet edildi ✓ — aşağıdaki linki kişiye iletin." });
       setLink(json.inviteLink ?? null);
       setEmail(""); setName("");
-      onDone();
+      onInvited(); // listeyi yenile; formu KAPATMA — link görünür kalsın
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "Davet başarısız." });
     } finally {
