@@ -29,6 +29,47 @@ export function withAgencyFilter(query: any, role: string | null, agencyId: stri
   return query; // super_admin: unfiltered global view
 }
 
+// ─── Kişi-bazlı veri kapsamı ────────────────────────────────────────────────
+// Owner + Yönetici tüm acente verisini görür; Satış/Operasyon/Görüntüleyici
+// yalnız kendi oluşturduğunu (created_by). agency_role null → legacy owner sayılır.
+
+const MANAGERIAL_ROLES = new Set(["owner", "manager"]);
+
+/** Rol acente verisinin tümünü görebilir mi? (null → owner kabul, görür) */
+export function isManagerial(agencyRole: string | null | undefined): boolean {
+  return agencyRole == null || MANAGERIAL_ROLES.has(agencyRole);
+}
+
+/**
+ * Acente filtresi + (gerekiyorsa) kişi-bazlı (created_by) filtresi uygular.
+ *  • super_admin            → filtre yok (global)
+ *  • agency_user managerial → yalnız agency_id
+ *  • agency_user diğer      → agency_id + created_by = userId
+ * created_by'sı olan tablolar (customers/policies/quote_runs) için kullanılır.
+ */
+export function withScopeFilter(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  role: string | null,
+  agencyId: string | null,
+  userId: string | null | undefined,
+  agencyRole: string | null | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  if (role !== "agency_user") return query; // super_admin: global
+  const IMPOSSIBLE = "00000000-0000-0000-0000-000000000000";
+  let q = query.eq("agency_id", agencyId ?? IMPOSSIBLE);
+  if (!isManagerial(agencyRole)) {
+    q = q.eq("created_by", userId ?? IMPOSSIBLE);
+  }
+  return q;
+}
+
+/** Server tarafı: çağıran kendi verisiyle mi sınırlı? (agency_user + non-managerial) */
+export function scopeByUser(caller: { role: string; agencyRole?: string | null }): boolean {
+  return caller.role === "agency_user" && !isManagerial(caller.agencyRole);
+}
+
 /** True when the user is a super-admin. */
 export function isSuperAdmin(role: string | null): boolean {
   return role === "super_admin";

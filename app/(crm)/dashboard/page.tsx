@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useNotifications } from "@/lib/NotificationContext";
 import NotifPermissionButton from "@/components/NotifPermissionButton";
 import { useAuth } from "@/lib/AuthContext";
-import { withAgencyFilter, needsOnboarding } from "@/lib/tenant";
+import { withAgencyFilter, withScopeFilter, needsOnboarding } from "@/lib/tenant";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity, Car, Home,
@@ -131,7 +131,7 @@ function OnboardingScreen() {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { notifications, newNotifAt } = useNotifications();
-  const { role, agencyId, loading: authLoading } = useAuth();
+  const { role, agencyId, profile, loading: authLoading } = useAuth();
 
   const [cardHighlighted, setCardHighlighted] = useState(false);
   const [isDemo, setIsDemo]         = useState(false);
@@ -223,17 +223,21 @@ export default function DashboardPage() {
       const today = new Date().toISOString().split("T")[0];
       const in30  = new Date(Date.now() + 30 * 864e5).toISOString().split("T")[0];
 
+      // Kapsam: müşteri/poliçe kişi-bazlı (owner/manager tümü, diğerleri kendi);
+      //         requests (gelen lead) acente-geneli kalır — paylaşımlı, created_by'sız.
+      const uid = profile?.id; const arole = profile?.agency_role;
+      const scope = (q: unknown) => withScopeFilter(q, role, agencyId, uid, arole);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const results = await Promise.all([
-        withAgencyFilter(supabase.from("customers").select("*", { count: "exact", head: true }), role, agencyId),
+        scope(supabase.from("customers").select("*", { count: "exact", head: true })),
         withAgencyFilter(supabase.from("requests").select("*", { count: "exact", head: true }).in("status", ["Yeni", "İşlemde"]), role, agencyId),
-        withAgencyFilter(supabase.from("policies").select("*", { count: "exact", head: true }).eq("status", "Aktif").lte("end_date", in30).gte("end_date", today), role, agencyId),
-        withAgencyFilter(supabase.from("customers").select("*", { count: "exact", head: true }).gte("created_at", today), role, agencyId),
-        withAgencyFilter(supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4), role, agencyId),
+        scope(supabase.from("policies").select("*", { count: "exact", head: true }).eq("status", "Aktif").lte("end_date", in30).gte("end_date", today)),
+        scope(supabase.from("customers").select("*", { count: "exact", head: true }).gte("created_at", today)),
+        scope(supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4)),
         withAgencyFilter(supabase.from("requests").select("id, request_type, status, created_at, customers(name)").order("created_at", { ascending: false }).limit(6), role, agencyId),
-        withAgencyFilter(supabase.from("policies").select("policy_type, premium").eq("status", "Aktif").lte("end_date", in30).gte("end_date", today), role, agencyId),
-        withAgencyFilter(supabase.from("policies").select("end_date").eq("status", "Aktif").gte("end_date", new Date(Date.now() - 60 * 864e5).toISOString().split("T")[0]).lte("end_date", new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0]), role, agencyId),
-        withAgencyFilter(supabase.from("policies").select("*", { count: "exact", head: true }).eq("renewal_status", "completed").gte("renewed_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()), role, agencyId),
+        scope(supabase.from("policies").select("policy_type, premium").eq("status", "Aktif").lte("end_date", in30).gte("end_date", today)),
+        scope(supabase.from("policies").select("end_date").eq("status", "Aktif").gte("end_date", new Date(Date.now() - 60 * 864e5).toISOString().split("T")[0]).lte("end_date", new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0])),
+        scope(supabase.from("policies").select("*", { count: "exact", head: true }).eq("renewal_status", "completed").gte("renewed_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ]) as any[];
 
@@ -322,7 +326,7 @@ export default function DashboardPage() {
 
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, role, agencyId]);
+  }, [authLoading, role, agencyId, profile?.id, profile?.agency_role]);
 
   // ── Highlight "Yeni Gelen Talepler" card for 3 s on new realtime notif ───
   useEffect(() => {

@@ -7,9 +7,10 @@ import type { Customer } from "@/lib/database.types";
 import CustomersTable from "@/components/CustomersTable";
 import AddCustomerModal from "@/components/AddCustomerModal";
 import BulkPolicyImport from "@/components/BulkPolicyImport";
+import { withScopeFilter } from "@/lib/tenant";
 
 export default function CustomersPage() {
-  const { role, agencyId, can } = useAuth();
+  const { role, agencyId, can, profile } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
@@ -22,10 +23,8 @@ export default function CustomersPage() {
     let query = (supabase.from("customers") as any)
       .select("*")
       .order("created_at", { ascending: false });
-    // agency_user sees only their own agency's customers
-    if (role === "agency_user" && agencyId) {
-      query = query.eq("agency_id", agencyId);
-    }
+    // Kapsam: super_admin tümü; owner/manager acente; diğerleri yalnız kendi (created_by)
+    query = withScopeFilter(query, role, agencyId, profile?.id, profile?.agency_role);
     const { data, error } = await query;
 
     if (error) {
@@ -47,7 +46,7 @@ export default function CustomersPage() {
 
   // re-fetch whenever auth resolves (role/agencyId may be null on first render)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [role, agencyId]);
+  useEffect(() => { load(); }, [role, agencyId, profile?.id, profile?.agency_role]);
 
   function handleClose() {
     setShowAdd(false);

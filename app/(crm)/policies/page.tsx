@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
+import { withScopeFilter } from "@/lib/tenant";
 import type { Policy, PolicyStatus, Customer } from "@/lib/database.types";
 import WhatsAppModal from "@/components/WhatsAppModal";
 
@@ -988,7 +989,7 @@ function PolicyRow({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PoliciesPage() {
-  const { role, agencyId } = useAuth();
+  const { role, agencyId, profile, can } = useAuth();
   const [policies, setPolicies] = useState<PolicyWithCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -1003,14 +1004,13 @@ export default function PoliciesPage() {
     let q = (supabase.from("policies") as any)
       .select("*, customers(name, phone)")
       .order("end_date", { ascending: true });
-    if (role === "agency_user" && agencyId) {
-      q = q.eq("agency_id", agencyId);
-    }
+    // Kapsam: owner/manager acente; satış/operasyon/görüntüleyici yalnız kendi
+    q = withScopeFilter(q, role, agencyId, profile?.id, profile?.agency_role);
     const { data, error } = await q;
     if (error) console.error("[policies] fetch error:", error.message);
     setPolicies((data ?? []) as PolicyWithCustomer[]);
     setLoading(false);
-  }, [role, agencyId]);
+  }, [role, agencyId, profile?.id, profile?.agency_role]);
 
   useEffect(() => {
     setLoading(true);
@@ -1070,15 +1070,17 @@ export default function PoliciesPage() {
             {loading ? "Yükleniyor..." : `${policies.length} poliçe`}
           </p>
         </div>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow-md transition-all"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Poliçe Ekle
-        </button>
+        {can("policy.create") && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow-md transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Poliçe Ekle
+          </button>
+        )}
       </div>
 
       {/* Kritik / Uyarı bannerlar */}
@@ -1159,7 +1161,7 @@ export default function PoliciesPage() {
           <p className="text-sm font-medium text-gray-500">
             {search || filter !== "Tümü" ? "Sonuç bulunamadı" : "Henüz poliçe yok"}
           </p>
-          {!search && filter === "Tümü" && (
+          {!search && filter === "Tümü" && can("policy.create") && (
             <button
               onClick={() => setAddOpen(true)}
               className="mt-4 px-4 py-2 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"

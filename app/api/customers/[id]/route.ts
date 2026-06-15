@@ -14,7 +14,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildCustomerInsights } from "@/lib/customerInsights";
-import { resolveCaller, requirePermission } from "../../whatsapp/_lib/auth";
+import { resolveCaller, requirePermission, type ApiCaller } from "../../whatsapp/_lib/auth";
+import { scopeByUser } from "@/lib/tenant";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ type CustomerRow = {
   extra_data: Record<string, string> | null;
 };
 
-async function getAuthorizedCustomer(customerId: string, role: string, agencyId: string | null) {
+async function getAuthorizedCustomer(customerId: string, caller: ApiCaller) {
   const admin = getSupabaseAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (admin.from("customers") as any)
@@ -43,7 +44,12 @@ async function getAuthorizedCustomer(customerId: string, role: string, agencyId:
     .maybeSingle();
 
   if (!data) return null;
-  if (role !== "super_admin" && data.agency_id !== agencyId) return null;
+  if (caller.role !== "super_admin") {
+    // Acente sınırı
+    if (data.agency_id !== caller.agencyId) return null;
+    // Kişi-bazlı kapsam: satış/operasyon/görüntüleyici yalnız kendi müşterisini açabilir
+    if (scopeByUser(caller) && data.created_by !== caller.userId) return null;
+  }
   return data as CustomerRow;
 }
 
@@ -59,7 +65,7 @@ export async function GET(
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
-    const customer = await getAuthorizedCustomer(id, caller.role, caller.agencyId);
+    const customer = await getAuthorizedCustomer(id, caller);
     if (!customer) {
       return NextResponse.json({ error: "Müşteri bulunamadı veya erişim yetkiniz yok." }, { status: 404 });
     }
@@ -209,7 +215,7 @@ export async function PATCH(
     const denied = requirePermission(caller, "customer.edit");
     if (denied) return denied;
 
-    const customer = await getAuthorizedCustomer(id, caller.role, caller.agencyId);
+    const customer = await getAuthorizedCustomer(id, caller);
     if (!customer) {
       return NextResponse.json({ error: "Müşteri bulunamadı veya erişim yetkiniz yok." }, { status: 404 });
     }

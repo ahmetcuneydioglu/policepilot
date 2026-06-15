@@ -10,6 +10,7 @@ import { createServerClient }    from "@supabase/ssr";
 import { getSupabaseAdmin }      from "@/lib/supabase-admin";
 import { logActivity }           from "@/lib/activity";
 import { resolveCaller, requirePermission } from "../whatsapp/_lib/auth";
+import { scopeByUser } from "@/lib/tenant";
 
 function sessionClient(request: NextRequest) {
   const cookieHeader = request.headers.get("cookie") ?? "";
@@ -32,12 +33,11 @@ function sessionClient(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { data: { user } } = await sessionClient(request).auth.getUser();
-    if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    const caller = await resolveCaller(request);
+    if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const admin = getSupabaseAdmin();
     const { searchParams } = new URL(request.url);
-    const agency_id            = searchParams.get("agency_id");
     const renewal_of_policy_id = searchParams.get("renewal_of_policy_id");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,8 +45,14 @@ export async function GET(request: NextRequest) {
       .select("*, quote_results(id, price)")
       .order("created_at", { ascending: false });
 
-    if (agency_id) {
-      query = query.eq("agency_id", agency_id);
+    // Kapsam: agency_user kendi acentesi; non-managerial yalnız kendi created_by.
+    // super_admin acente parametresine göre filtreleyebilir.
+    if (caller.role === "agency_user") {
+      query = query.eq("agency_id", caller.agencyId ?? "00000000-0000-0000-0000-000000000000");
+      if (scopeByUser(caller)) query = query.eq("created_by", caller.userId);
+    } else {
+      const agency_id = searchParams.get("agency_id");
+      if (agency_id) query = query.eq("agency_id", agency_id);
     }
     if (renewal_of_policy_id) {
       query = query.eq("renewal_of_policy_id", renewal_of_policy_id);

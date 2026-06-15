@@ -11,6 +11,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
+import { withScopeFilter } from "@/lib/tenant";
 import {
   RefreshCw, Search, CalendarClock, CalendarDays,
   CalendarRange, AlertTriangle, Mail, Zap, Award,
@@ -131,7 +132,7 @@ function SkeletonRow({ delay = 0 }: { delay?: number }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function RenewalsPage() {
   const router = useRouter();
-  const { role, agencyId } = useAuth();
+  const { role, agencyId, profile } = useAuth();
 
   const [policies, setPolicies] = useState<RenewalPolicy[]>([]);
   const [runs,     setRuns]     = useState<Record<string, ActiveRun>>({});
@@ -159,7 +160,7 @@ export default function RenewalsPage() {
       .gte("end_date", from)
       .lte("end_date", to)
       .order("end_date", { ascending: true });
-    if (role === "agency_user" && agencyId) q = q.eq("agency_id", agencyId);
+    q = withScopeFilter(q, role, agencyId, profile?.id, profile?.agency_role);
 
     const { data, error } = await q;
     if (error) console.error("[renewals] fetch error:", error.message);
@@ -200,7 +201,7 @@ export default function RenewalsPage() {
       setRuns({});
     }
     setLoading(false);
-  }, [role, agencyId]);
+  }, [role, agencyId, profile?.id, profile?.agency_role]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
