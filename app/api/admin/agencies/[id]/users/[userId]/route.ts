@@ -16,6 +16,7 @@ import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { AGENCY_ROLES } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
+import { getAppOrigin } from "@/lib/appUrl";
 import { requireSuperAdmin } from "../../../../_lib/auth";
 
 const STATUSES = ["active", "suspended", "invited"];
@@ -117,7 +118,7 @@ export async function POST(
     if (!prof) return NextResponse.json({ error: "Kullanıcı bulunamadı." }, { status: 404 });
     if (!prof.email) return NextResponse.json({ error: "Kullanıcının e-postası kayıtlı değil." }, { status: 400 });
 
-    const origin = new URL(request.url).origin;
+    const origin = getAppOrigin(request);
     // recovery: mevcut kullanıcı için parola belirleme/sıfırlama linki (aktivasyon)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: linkData, error: linkErr } = await (admin.auth.admin as any).generateLink({

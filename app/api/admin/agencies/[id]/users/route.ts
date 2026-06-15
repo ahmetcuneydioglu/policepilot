@@ -14,6 +14,7 @@ import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { AGENCY_ROLES } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
+import { getAppOrigin } from "@/lib/appUrl";
 import { requireSuperAdmin } from "../../../_lib/auth";
 
 export async function POST(
@@ -46,7 +47,7 @@ export async function POST(
     if (!agency) return NextResponse.json({ error: "Acente bulunamadı." }, { status: 404 });
 
     // ── Davet linki üret (kullanıcıyı da oluşturur) ───────────────────────────
-    const origin = new URL(request.url).origin;
+    const origin = getAppOrigin(request);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: linkData, error: linkErr } = await (admin.auth.admin as any).generateLink({
       type: "invite",

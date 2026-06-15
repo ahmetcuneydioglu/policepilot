@@ -18,6 +18,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { AGENCY_ROLES } from "@/lib/permissions";
 import { canAddUser, limitMessage } from "@/lib/limits";
 import { logActivity } from "@/lib/activity";
+import { getAppOrigin } from "@/lib/appUrl";
 import { resolveCaller, requirePermission } from "../whatsapp/_lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Davet linki üret (kullanıcıyı oluşturur) ──────────────────────────────
-    const origin = new URL(request.url).origin;
+    const origin = getAppOrigin(request);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: linkData, error: linkErr } = await (admin.auth.admin as any).generateLink({
       type: "invite",

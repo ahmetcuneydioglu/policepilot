@@ -18,6 +18,7 @@ import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { AGENCY_ROLES } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
+import { getAppOrigin } from "@/lib/appUrl";
 import { resolveCaller, requirePermission } from "../../whatsapp/_lib/auth";
 
 const STATUSES = ["active", "suspended", "invited"];
@@ -113,7 +114,7 @@ export async function POST(
     if (!target) return NextResponse.json({ error: "Üye bulunamadı." }, { status: 404 });
     if (!target.email) return NextResponse.json({ error: "Üyenin e-postası kayıtlı değil." }, { status: 400 });
 
-    const origin = new URL(request.url).origin;
+    const origin = getAppOrigin(request);
     const admin = getSupabaseAdmin();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: linkData, error: linkErr } = await (admin.auth.admin as any).generateLink({
