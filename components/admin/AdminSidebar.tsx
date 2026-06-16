@@ -10,12 +10,13 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Building2, Wallet, TrendingUp, MessageCircle,
-  Target, Bot, ServerCog, Settings, LogOut, ArrowLeftRight,
+  Target, Bot, ServerCog, Settings, LogOut, ArrowLeftRight, Layers,
 } from "lucide-react";
 
 const NAV = [
   { href: "/admin",          label: "Operasyon Merkezi", Icon: LayoutDashboard, exact: true },
   { href: "/admin/agencies", label: "Acenteler",          Icon: Building2 },
+  { href: "/admin/plans",    label: "Planlar",            Icon: Layers },
   { href: "/admin/revenue",  label: "Gelir Merkezi",      Icon: Wallet },
   { href: "/admin/analytics",label: "Analitik",           Icon: TrendingUp },
   { href: "/admin/whatsapp", label: "WhatsApp Merkezi",   Icon: MessageCircle },

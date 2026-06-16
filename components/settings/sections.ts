@@ -92,7 +92,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
     items: [
       { key: "paketim",           label: "Paketim",          Icon: CreditCard },
       { key: "kullanim-limitleri", label: "Kullanım Limitleri", Icon: Gauge },
-      { key: "faturalar",         label: "Faturalar",        Icon: Receipt, soon: true },
+      { key: "faturalar",         label: "Faturalar",        Icon: Receipt },
     ],
   },
   {

@@ -19,6 +19,7 @@ import CompanyProfile from "@/components/settings/CompanyProfile";
 import RolesMatrix from "@/components/settings/RolesMatrix";
 import WhatsAppSection from "@/components/settings/WhatsAppSection";
 import SubscriptionSection from "@/components/settings/SubscriptionSection";
+import InvoicesSection from "@/components/settings/InvoicesSection";
 import LoginHistory from "@/components/settings/LoginHistory";
 import { ALL_SECTIONS, DEFAULT_SECTION, type SectionKey } from "@/components/settings/sections";
 
@@ -32,7 +33,6 @@ const SOON_DESC: Partial<Record<SectionKey, string>> = {
   sms:               "SMS ile hatırlatma ve bilgilendirme gönderimleri.",
   "ai-asistanlar":   "Lead analizi, müşteri özeti, poliçe önerileri ve satış asistanı yapay zeka araçları.",
   otomasyonlar:      "Tetikleyici tabanlı otomatik iş akışları kurun.",
-  faturalar:         "Abonelik faturalarınızı görüntüleyin ve indirin.",
   "api-anahtarlari": "Kendi sistemlerinizi PolicePilot'a bağlamak için API anahtarları.",
   webhooklar:        "Olay tabanlı bildirimleri kendi sunucunuza iletin.",
 };
@@ -62,6 +62,7 @@ function SettingsCenter() {
       case "whatsapp":           return <WhatsAppSection />;
       case "paketim":            return <SubscriptionSection focus="plan" />;
       case "kullanim-limitleri": return <SubscriptionSection focus="usage" />;
+      case "faturalar":          return <InvoicesSection />;
       case "giris-gecmisi":      return <LoginHistory />;
       default:                   return <ComingSoon title={activeDef.label} Icon={activeDef.Icon} description="Bu bölüm yakında kullanıma açılacak." />;
     }
