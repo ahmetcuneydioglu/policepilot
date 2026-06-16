@@ -14,6 +14,8 @@ import type { NextRequest } from "next/server";
 import { extractPolicyData, getOcrProvider } from "@/lib/ocr";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolveCaller } from "../../whatsapp/_lib/auth";
+import { getEffectiveLimits } from "@/lib/billing/resolver";
+import { aiCreditAvailable, consumeAiCredit } from "@/lib/billing/usage";
 
 // OCR (OpenAI Vision) tek dosyada birkaç saniye sürebilir; varsayılan limiti aş
 export const maxDuration = 60;
@@ -65,6 +67,16 @@ export async function POST(request: NextRequest) {
           raw_response: { cached: true },
         });
       }
+
+      // ── AI kredi ön-kontrolü (önbellek MISS → gerçek OCR olacak) ──────────────
+      // Cache HIT yukarıda döndü (kredi yakmaz). super_admin'de agencyId yok → atlanır.
+      const eff = await getEffectiveLimits(admin, agencyId);
+      if (eff && !(await aiCreditAvailable(admin, agencyId, eff.limits.ai_credits))) {
+        return NextResponse.json(
+          { error: "AI kredi limitiniz doldu. Paketinizi yükseltin veya ek AI kredisi alın.", code: "ai_limit" },
+          { status: 403 }
+        );
+      }
     }
 
     const provider = getOcrProvider();
@@ -85,6 +97,13 @@ export async function POST(request: NextRequest) {
         mode:      result.mode,
       }, { onConflict: "agency_id,file_hash" });
       if (cacheErr) console.warn("[api/ocr/policy] cache write:", cacheErr.message);
+    }
+
+    // ── AI kredi tüketimi — TEK NOKTA: gerçek OCR çağrısı (cache MISS) anı ──────
+    // Yalnız "real" mod kredi yakar (mock/demo sağlayıcı yakmaz).
+    // agencyId yoksa (super_admin) atlanır (O3).
+    if (agencyId && result.mode === "real") {
+      await consumeAiCredit(admin, agencyId, 1);
     }
 
     return NextResponse.json({

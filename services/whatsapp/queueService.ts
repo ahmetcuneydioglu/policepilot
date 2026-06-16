@@ -11,6 +11,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { recordWhatsAppSent } from "@/lib/billing/usage";
 import { getProvider }      from "./providerFactory";
 import { inspectMetaToken } from "./metaToken";
 import { getPlatformWhatsAppConfig } from "./platformConfig";
@@ -233,6 +234,8 @@ export async function processQueue(limit = 50): Promise<ProcessResult> {
           error_message: null,
         });
         result.sent++;
+        // Dönemsel WhatsApp sayacı (yumuşak kota — yalnız başarılı gönderim)
+        await recordWhatsAppSent(admin, row.agency_id, 1);
       } else {
         const attempts = row.attempts + 1;
         await updateRow(row.id, {

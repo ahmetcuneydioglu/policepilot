@@ -12,7 +12,7 @@ export const PLAN_PRICING: Record<string, number> = {
 
 export const PLAN_LABELS: Record<string, string> = {
   starter:    "Starter",
-  pro:        "Pro",
+  pro:        "Growth",   // plan kodu 'pro' korunur; etiket Growth (abonelik spec'i)
   enterprise: "Enterprise",
 };
 

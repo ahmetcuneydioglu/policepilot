@@ -10,6 +10,9 @@
  *  { ok: boolean; current: number; max: number; isActive: boolean }
  */
 
+import { getEffectiveLimits } from "@/lib/billing/resolver";
+import type { MetricKey } from "@/lib/billing/types";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type LimitResult = {
   ok: boolean;
@@ -62,41 +65,28 @@ async function countRows(client: any, table: string, agencyId: string): Promise<
 }
 
 // ─── canAdd* ─────────────────────────────────────────────────────────────────
+// Etkin limit motoruna (lib/billing) bağlanır: plan tabanı + acente override +
+// aktif eklentiler + süre kapısı. LimitResult şekli KORUNUR → çağrı yerleri dokunulmaz.
+// Metrik eşleşmesi: customer→customers, request→requests (DEĞİŞMEZ), policy→policies, user→users.
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function canAddCustomer(client: any, agencyId: string): Promise<LimitResult> {
-  const limits = await getAgencyLimits(client, agencyId);
-  if (!limits) return { ok: false, current: 0, max: 0, isActive: false, reason: "agency_not_found" };
-  if (!limits.is_active) return { ok: false, current: 0, max: limits.max_customers, isActive: false, reason: "inactive" };
-  const current = await countRows(client, "customers", agencyId);
-  return { ok: current < limits.max_customers, current, max: limits.max_customers, isActive: true };
+async function checkLimit(client: any, agencyId: string, metric: MetricKey, table: string): Promise<LimitResult> {
+  const eff = await getEffectiveLimits(client, agencyId);
+  if (!eff)          return { ok: false, current: 0, max: 0, isActive: false, reason: "agency_not_found" };
+  const max = eff.limits[metric];
+  if (!eff.isActive) return { ok: false, current: 0, max, isActive: false, reason: eff.status };
+  const current = await countRows(client, table, agencyId);
+  return { ok: current < max, current, max, isActive: true };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function canAddRequest(client: any, agencyId: string): Promise<LimitResult> {
-  const limits = await getAgencyLimits(client, agencyId);
-  if (!limits) return { ok: false, current: 0, max: 0, isActive: false, reason: "agency_not_found" };
-  if (!limits.is_active) return { ok: false, current: 0, max: limits.max_requests, isActive: false, reason: "inactive" };
-  const current = await countRows(client, "requests", agencyId);
-  return { ok: current < limits.max_requests, current, max: limits.max_requests, isActive: true };
-}
-
+export const canAddCustomer = (client: any, agencyId: string) => checkLimit(client, agencyId, "customers", "customers");
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function canAddPolicy(client: any, agencyId: string): Promise<LimitResult> {
-  const limits = await getAgencyLimits(client, agencyId);
-  if (!limits) return { ok: false, current: 0, max: 0, isActive: false, reason: "agency_not_found" };
-  if (!limits.is_active) return { ok: false, current: 0, max: limits.max_policies, isActive: false, reason: "inactive" };
-  const current = await countRows(client, "policies", agencyId);
-  return { ok: current < limits.max_policies, current, max: limits.max_policies, isActive: true };
-}
-
+export const canAddRequest  = (client: any, agencyId: string) => checkLimit(client, agencyId, "requests",  "requests");
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function canAddUser(client: any, agencyId: string): Promise<LimitResult> {
-  const limits = await getAgencyLimits(client, agencyId);
-  if (!limits) return { ok: false, current: 0, max: 0, isActive: false, reason: "agency_not_found" };
-  if (!limits.is_active) return { ok: false, current: 0, max: limits.max_users, isActive: false, reason: "inactive" };
-  const current = await countRows(client, "profiles", agencyId);
-  return { ok: current < limits.max_users, current, max: limits.max_users, isActive: true };
-}
+export const canAddPolicy   = (client: any, agencyId: string) => checkLimit(client, agencyId, "policies",  "policies");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const canAddUser     = (client: any, agencyId: string) => checkLimit(client, agencyId, "users",     "profiles");
 
 // ─── User-friendly error messages ────────────────────────────────────────────
 export function limitMessage(entity: "customer" | "request" | "policy" | "user"): string {

@@ -11,13 +11,23 @@ import { AlertTriangle, Gauge } from "lucide-react";
 type Limit = { used: number; max: number };
 type Usage = {
   plan: string;
+  label?: string;
   is_active: boolean;
-  limits: { users: Limit; customers: Limit; requests: Limit; policies: Limit };
+  limits: Record<string, Limit>;
 };
 
 const LABELS: Record<string, string> = {
-  users: "Kullanıcı", customers: "Müşteri", requests: "Teklif", policies: "Poliçe",
+  users: "Kullanıcı", customers: "Müşteri", requests: "Teklif Talebi", policies: "Poliçe",
+  ai_credits: "AI Kredi", wa_monthly: "WhatsApp (aylık)", storage_mb: "Depolama",
 };
+
+/** Metrik değerini okunur biçimde göster (depolama MB→GB, diğerleri ham). */
+function fmtVal(key: string, n: number): string {
+  if (key === "storage_mb") {
+    return n >= 1024 ? `${(n / 1024).toFixed(n % 1024 === 0 ? 0 : 1)} GB` : `${n} MB`;
+  }
+  return n.toLocaleString("tr-TR");
+}
 
 export default function UsageLimits() {
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -52,7 +62,7 @@ export default function UsageLimits() {
           </div>
           <div>
             <p className="text-sm font-bold text-slate-900">Paket Kullanımı</p>
-            <p className="text-[11px] text-slate-400 capitalize">{usage.plan} paketi</p>
+            <p className="text-[11px] text-slate-400">{usage.label ?? usage.plan} paketi</p>
           </div>
         </div>
         {(full.length > 0 || nearLimit.length > 0) && (
@@ -82,7 +92,7 @@ export default function UsageLimits() {
             <div key={key}>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-semibold text-slate-600">{LABELS[key] ?? key}</span>
-                <span className={`text-xs font-semibold ${txt}`}>{v.used} / {v.max} (%{pct})</span>
+                <span className={`text-xs font-semibold ${txt}`}>{fmtVal(key, v.used)} / {fmtVal(key, v.max)} (%{pct})</span>
               </div>
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div className={`h-full rounded-full ${tone} transition-all duration-700`} style={{ width: `${pct}%` }} />

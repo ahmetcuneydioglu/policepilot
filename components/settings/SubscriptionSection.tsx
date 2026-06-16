@@ -20,16 +20,18 @@ const PLAN_PERKS: Record<string, string[]> = {
 export default function SubscriptionSection({ focus = "plan" }: { focus?: "plan" | "usage" }) {
   const [plan, setPlan] = useState<string | null>(null);
   const [active, setActive] = useState(true);
+  const [nextPayment, setNextPayment] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/usage").then((r) => r.json()).then((j) => {
-      if (j?.agency) { setPlan(j.agency.plan); setActive(j.agency.is_active); }
+      if (j?.agency) { setPlan(j.agency.plan); setActive(j.agency.is_active); setNextPayment(j.agency.next_payment ?? null); }
     }).catch(() => {});
   }, []);
 
   const planKey = plan ?? "starter";
   const price = PLAN_PRICING[planKey] ?? 0;
   const perks = PLAN_PERKS[planKey] ?? PLAN_PERKS.starter;
+  const nextDate = nextPayment ? new Date(nextPayment).toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" }) : null;
 
   return (
     <div className="space-y-5">
@@ -53,6 +55,9 @@ export default function SubscriptionSection({ focus = "plan" }: { focus?: "plan"
                 <span className="text-2xl font-extrabold text-slate-900">{price === 0 ? "Ücretsiz" : `${price.toLocaleString("tr-TR")} ₺`}</span>
                 {price > 0 && <span className="text-slate-400"> / ay</span>}
               </p>
+              {nextDate && (
+                <p className="text-[11px] text-slate-400 mt-1">Sonraki ödeme/yenileme: <span className="font-semibold text-slate-600">{nextDate}</span></p>
+              )}
               <ul className="mt-3 space-y-1.5">
                 {perks.map((p) => (
                   <li key={p} className="flex items-center gap-2 text-xs text-slate-600">
