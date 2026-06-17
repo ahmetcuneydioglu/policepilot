@@ -90,7 +90,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (unreadCount > 0 && document.visibilityState !== "visible") {
-      document.title = `(${unreadCount}) Yeni teklif - PoliçePilot`;
+      document.title = `(${unreadCount}) Yeni teklif - SigortaOS`;
     }
   }, [unreadCount]);
 
@@ -98,7 +98,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (typeof document === "undefined") return;
     function handleVis() {
       if (document.visibilityState === "visible") {
-        document.title = "PoliçePilot";
+        document.title = "SigortaOS";
       }
     }
     document.addEventListener("visibilitychange", handleVis);
@@ -187,7 +187,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setNewNotifAt(Date.now());
       if (soundEnabledRef.current) playBeep();
       if (typeof document !== "undefined" && document.visibilityState !== "visible") {
-        document.title = `Yeni teklif - PoliçePilot`;
+        document.title = `Yeni teklif - SigortaOS`;
       }
     },
     [addToast, sendBrowserNotif, triggerBellShake, playBeep]
@@ -366,7 +366,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             {
               id:             notif.id,
               request_type:   notif.type === "renewal" ? "Yenileme" : (notif.type ?? "Bildirim"),
-              customer_name:  notif.title ?? "PoliçePilot",
+              customer_name:  notif.title ?? "SigortaOS",
               customer_phone: "",
               created_at:     notif.created_at ?? new Date().toISOString(),
               isRead:         false,
@@ -382,7 +382,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
           if (perm === "granted") {
             console.log("[NOTIF] showing browser notification", { title: notif.title, body: notif.body, link: notif.link });
-            const n = new Notification(notif.title ?? "PoliçePilot", {
+            const n = new Notification(notif.title ?? "SigortaOS", {
               body: notif.body ?? "",
               icon: "/favicon.ico",
               tag:  `pp-notif-${notif.id}`, // aynı bildirim iki kez gösterilmez
@@ -414,7 +414,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    if (typeof document !== "undefined") document.title = "PoliçePilot";
+    if (typeof document !== "undefined") document.title = "SigortaOS";
   }, []);
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PolicePilot — Toplu Poliçe İçe Aktarma
+ * SigortaOS — Toplu Poliçe İçe Aktarma
  *
  * Acente onboarding'i için: çoklu PDF/JPG/PNG seç → her dosya sırayla
  * /api/ocr/policy ile okunur (ilerleme çubuğu) → düzenlenebilir tablo →

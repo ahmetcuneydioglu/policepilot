@@ -593,7 +593,7 @@ function PolicyDetailModal({
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px;color:#1e293b">
       ${isDemo ? `<div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-weight:700;color:#92400e;font-size:13px">⚠️ DEMO POLİÇE — Gerçek poliçe değildir, hukuki geçerliliği yoktur</div>` : ""}
       <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #0f172a;padding-bottom:16px;margin-bottom:24px">
-        <div><h1 style="margin:0;font-size:22px;font-weight:800">PoliçePilot</h1><p style="margin:4px 0 0;font-size:12px;color:#64748b">Sigorta CRM Sistemi</p></div>
+        <div><h1 style="margin:0;font-size:22px;font-weight:800">SigortaOS</h1><p style="margin:4px 0 0;font-size:12px;color:#64748b">Sigorta CRM Sistemi</p></div>
         <p style="font-size:11px;color:#94a3b8;margin:0">${new Date().toLocaleDateString("tr-TR")}</p>
       </div>
       <h2 style="margin:0 0 16px;font-size:16px">Poliçe Özeti</h2>
@@ -616,7 +616,7 @@ function PolicyDetailModal({
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">
         ${[["Plaka", pd.plaka], ["Marka", pd.marka], ["Model", pd.model], ["Yıl", pd.yil], ["Ruhsat Seri", pd.belge_seri]].filter(([,v]) => v).map(([k,v]) => `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 16px 8px 0;font-weight:600;color:#64748b;width:160px">${k}</td><td style="font-family:monospace">${v}</td></tr>`).join("")}
       </table>` : ""}
-      <p style="font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:16px;margin-top:24px;text-align:center">PoliçePilot Sigorta CRM • Otomatik oluşturulmuştur</p>
+      <p style="font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:16px;margin-top:24px;text-align:center">SigortaOS Sigorta CRM • Otomatik oluşturulmuştur</p>
     </div>
   `;
 

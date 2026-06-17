@@ -117,7 +117,7 @@ export default function DashboardScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Merhaba, {userName || 'Kullanıcı'} 👋</Text>
-            <Text style={styles.appTitle}>PolicePilot</Text>
+            <Text style={styles.appTitle}>SigortaOS</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity

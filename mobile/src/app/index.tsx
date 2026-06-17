@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native'
 export default function Dashboard() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>PolicePilot</Text>
+      <Text style={styles.title}>SigortaOS</Text>
 
       <View style={styles.card}>
         <Text style={styles.number}>0</Text>

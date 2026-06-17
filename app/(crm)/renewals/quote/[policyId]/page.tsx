@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PolicePilot — Tek Tıkla Yenileme Teklifi
+ * SigortaOS — Tek Tıkla Yenileme Teklifi
  *
  * Akış: Yenilemeler → Teklif Çalış → (bu sayfa) → Teklif Sonuçları
  *

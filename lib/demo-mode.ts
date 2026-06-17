@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Demo Mode
+ * SigortaOS — Demo Mode
  *
  * DEMO_MODE = true  → sistemi gerçek API olmadan tam deneyimle çalıştırır
  * DEMO_MODE = false → sadece manuel teklif girişi (production)

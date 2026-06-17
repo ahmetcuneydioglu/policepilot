@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Müşteri İçgörü Motoru (kural tabanlı)
+ * SigortaOS — Müşteri İçgörü Motoru (kural tabanlı)
  *
  * Müşteri Kontrol Merkezi'nin "akıllı" katmanı: AI özeti, sonraki aksiyon,
  * çapraz satış fırsatları, müşteri değeri skoru, son iletişim.

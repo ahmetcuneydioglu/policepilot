@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Manual Provider
+ * SigortaOS — Manual Provider
  *
  * API entegrasyonu olmadan, kullanıcı fiyatları elle girer.
  * runQuote() tüm şirketler için "pending" döner.

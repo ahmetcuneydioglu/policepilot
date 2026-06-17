@@ -55,7 +55,7 @@ export async function setupAndroidChannel(): Promise<void> {
   try {
     const Notifications = require('expo-notifications');
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'PolicePilot Bildirimleri',
+      name: 'SigortaOS Bildirimleri',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#2563EB',

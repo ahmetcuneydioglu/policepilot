@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PolicePilot — WhatsApp Kuyruğu
+ * SigortaOS — WhatsApp Kuyruğu
  *
  * whatsapp_queue tablosunun yönetim ekranı.
  * Multi-tenant: agency_user kendi kayıtlarını, super_admin hepsini görür

@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Payment Service (Mock)
+ * SigortaOS — Payment Service (Mock)
  *
  * ⚠️  GÜVENLİK KURALI: Kart bilgileri (kart no, CVV, son kullanma tarihi)
  *     ASLA veritabanına kaydedilmez. Bu servis yalnızca işlem ID'si ve

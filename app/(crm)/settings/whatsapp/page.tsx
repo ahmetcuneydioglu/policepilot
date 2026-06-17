@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PolicePilot — WhatsApp Ayarları (role bazlı iki görünüm)
+ * SigortaOS — WhatsApp Ayarları (role bazlı iki görünüm)
  *
  * agency_user  → yalnız ALICI tercihleri: bildirim aç/kapat, günlük özet,
  *                telefon numarası + Test Gönder. Meta kimlik bilgileri,

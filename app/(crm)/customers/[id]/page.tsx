@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PolicePilot — Müşteri Kontrol Merkezi
+ * SigortaOS — Müşteri Kontrol Merkezi
  *
  * /customers/[id] — müşteriye ait tüm operasyonların tam ekran merkezi.
  * Veri tek istekte /api/customers/[id] üzerinden gelir; sekmeler

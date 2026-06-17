@@ -255,7 +255,7 @@ export default function AgencyTeklifPage({
             {agency.name}
           </div>
           <p>© 2026 {agency.name} · Tüm hakları saklıdır.</p>
-          <p className="text-[10px] text-gray-300">PoliçePilot altyapısıyla çalışmaktadır</p>
+          <p className="text-[10px] text-gray-300">SigortaOS altyapısıyla çalışmaktadır</p>
         </div>
       </footer>
     </div>

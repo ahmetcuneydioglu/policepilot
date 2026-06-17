@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Quote Engine Types
+ * SigortaOS — Quote Engine Types
  * Tüm provider'ların ortak tipler ve interface'i.
  */
 

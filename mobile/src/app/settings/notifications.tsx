@@ -93,7 +93,7 @@ export default function NotificationSettingsScreen() {
     } else {
       Alert.alert(
         'İzin Reddedildi',
-        'Bildirim almak için Ayarlar > PolicePilot > Bildirimler yolundan izin verin.',
+        'Bildirim almak için Ayarlar > SigortaOS > Bildirimler yolundan izin verin.',
         [
           { text: 'İptal', style: 'cancel' },
           { text: 'Ayarları Aç', onPress: () => Linking.openSettings() },
@@ -111,7 +111,7 @@ export default function NotificationSettingsScreen() {
     await clearBadge();
     const id = await sendLocalNotification({
       title: '📋 Test Bildirimi',
-      body: 'PolicePilot çalışıyor! Ahmet Yılmaz — Kasko',
+      body: 'SigortaOS çalışıyor! Ahmet Yılmaz — Kasko',
       badge: 1,
       data: { test: true },
     });

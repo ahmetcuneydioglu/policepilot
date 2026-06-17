@@ -31,8 +31,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "PolicePilot müşteri evrakları için fotoğraf galerinize erişmek istiyor.",
-          "cameraPermission": "PolicePilot evrak fotoğrafı çekmek için kameraya erişmek istiyor."
+          "photosPermission": "SigortaOS müşteri evrakları için fotoğraf galerinize erişmek istiyor.",
+          "cameraPermission": "SigortaOS evrak fotoğrafı çekmek için kameraya erişmek istiyor."
         }
       ],
       "expo-document-picker",

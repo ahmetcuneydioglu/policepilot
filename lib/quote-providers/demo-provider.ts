@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Demo Provider
+ * SigortaOS — Demo Provider
  *
  * Gerçekçi demo sonuçlar üretir:
  * - Belirli şirketler deterministik hata döndürür

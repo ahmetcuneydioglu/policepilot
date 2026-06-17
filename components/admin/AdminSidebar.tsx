@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PolicePilot — Executive Command Center sol menüsü (yalnız super_admin).
+ * SigortaOS — Executive Command Center sol menüsü (yalnız super_admin).
  * Acente CRM menüsünden tamamen bağımsız; platform yönetimi odaklı.
  */
 
@@ -39,7 +39,7 @@ export default function AdminSidebar() {
           <span className="text-white font-black text-sm">P</span>
         </div>
         <div>
-          <p className="text-sm font-bold text-white leading-tight">PolicePilot</p>
+          <p className="text-sm font-bold text-white leading-tight">SigortaOS</p>
           <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-[0.2em]">Command Center</p>
         </div>
       </div>

@@ -63,8 +63,8 @@ export async function POST(request: NextRequest) {
     const message =
       (typeof body.message === "string" && body.message.trim()) ||
       (useTemplate
-        ? `📊 PolicePilot Günlük Operasyon Özeti (şablon testi)`
-        : `🔔 *PolicePilot Test Mesajı*\n\nWhatsApp entegrasyonunuz çalışıyor! 🎉\n\nBu mesaj ${new Date().toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })} tarihinde gönderildi.`);
+        ? `📊 SigortaOS Günlük Operasyon Özeti (şablon testi)`
+        : `🔔 *SigortaOS Test Mesajı*\n\nWhatsApp entegrasyonunuz çalışıyor! 🎉\n\nBu mesaj ${new Date().toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" })} tarihinde gönderildi.`);
 
     // ── Provider'ı PLATFORM config ile kur ve gönder (test_mode'dan bağımsız) ─
     let result: { success: boolean; providerId?: string; errorMessage?: string };

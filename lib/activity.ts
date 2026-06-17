@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Etkinlik (activity_log) kaydı.
+ * SigortaOS — Etkinlik (activity_log) kaydı.
  *
  * Server-only: getSupabaseAdmin() service role ile activity_log'a yazar.
  * Best-effort: ASLA throw etmez, ana akışı bloklamaz — hata yutulur (console.warn).

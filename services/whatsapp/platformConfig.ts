@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Platform WhatsApp Yapılandırması
+ * SigortaOS — Platform WhatsApp Yapılandırması
  *
  * WhatsApp hattının sahibi PLATFORMDUR; Meta kimlik bilgileri acente
  * seviyesinde değil burada yaşar. Kaynak önceliği:

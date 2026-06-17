@@ -1,5 +1,5 @@
 /**
- * PolicePilot — WhatsApp Queue Service
+ * SigortaOS — WhatsApp Queue Service
  *
  * Kuyruğa yazma (enqueue) ve kuyruğu işleme (processQueue) burada toplanır.
  * Cron endpoint'leri ve ileride mobil/diğer otomasyonlar bu servisi kullanır.

@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Quote Service
+ * SigortaOS — Quote Service
  *
  * Teklif verilerini poliçeleştirme akışı için hazırlar.
  * İleride: InsurGateway / şirket API entegrasyonları bu katmandan geçecek.

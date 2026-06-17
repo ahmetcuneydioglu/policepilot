@@ -40,7 +40,7 @@ function DashboardMockup() {
           <svg className="w-2.5 h-2.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
-          <span className="text-[10px] text-white/40 font-medium">app.policepilot.com</span>
+          <span className="text-[10px] text-white/40 font-medium">app.sigortaos.com</span>
         </div>
       </div>
 
@@ -253,7 +253,7 @@ export default function RegisterPage() {
     setDone(true); setLoading(false);
   }
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://policepilot.com";
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://sigortaos.com";
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -304,7 +304,7 @@ export default function RegisterPage() {
                   d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
-            <span className="font-bold text-white text-base tracking-tight">PoliçePilot</span>
+            <span className="font-bold text-white text-base tracking-tight">SigortaOS</span>
           </div>
 
           {/* Middle: tagline + mockup */}
@@ -366,7 +366,7 @@ export default function RegisterPage() {
                 d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </div>
-          <span className="font-bold text-slate-900 text-base">PoliçePilot</span>
+          <span className="font-bold text-slate-900 text-base">SigortaOS</span>
         </div>
 
         {/* Form area — vertically centered */}
@@ -591,7 +591,7 @@ export default function RegisterPage() {
                       Giriş Yap
                     </Link>
                   </p>
-                  <p className="text-[10px] text-gray-300">© 2026 PoliçePilot</p>
+                  <p className="text-[10px] text-gray-300">© 2026 SigortaOS</p>
                 </div>
               </>
             )}

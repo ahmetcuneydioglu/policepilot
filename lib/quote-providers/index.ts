@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Quote Providers Index
+ * SigortaOS — Quote Providers Index
  *
  * Tüm provider'ları bir arada dışa aktarır.
  * DEMO_MODE = true  → DemoProvider

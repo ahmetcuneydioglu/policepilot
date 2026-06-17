@@ -1,5 +1,5 @@
 /**
- * PolicePilot — WhatsApp Provider Abstraction
+ * SigortaOS — WhatsApp Provider Abstraction
  *
  * Tüm WhatsApp otomasyonlarının (günlük özet, yenileme uyarısı, teklif hazır,
  * poliçe kesildi, tahsilat, eksik evrak…) ortak gönderim katmanı.

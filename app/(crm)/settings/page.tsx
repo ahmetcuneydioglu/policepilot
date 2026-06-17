@@ -33,7 +33,7 @@ const SOON_DESC: Partial<Record<SectionKey, string>> = {
   sms:               "SMS ile hatırlatma ve bilgilendirme gönderimleri.",
   "ai-asistanlar":   "Lead analizi, müşteri özeti, poliçe önerileri ve satış asistanı yapay zeka araçları.",
   otomasyonlar:      "Tetikleyici tabanlı otomatik iş akışları kurun.",
-  "api-anahtarlari": "Kendi sistemlerinizi PolicePilot'a bağlamak için API anahtarları.",
+  "api-anahtarlari": "Kendi sistemlerinizi SigortaOS'a bağlamak için API anahtarları.",
   webhooklar:        "Olay tabanlı bildirimleri kendi sunucunuza iletin.",
 };
 

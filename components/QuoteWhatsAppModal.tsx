@@ -41,7 +41,7 @@ function getSuccessResults(results: WaQuoteResult[]): WaQuoteResult[] {
 }
 
 function buildDefaultMessage(run: WaQuoteRun, successResults: WaQuoteResult[], agencyName?: string): string {
-  const agency = agencyName ?? "PoliçePilot Sigorta";
+  const agency = agencyName ?? "SigortaOS Sigorta";
   if (successResults.length === 0) return "";
 
   const best = successResults[0];
@@ -66,7 +66,7 @@ ${agency}`;
 }
 
 function buildAiMessage(run: WaQuoteRun, successResults: WaQuoteResult[], agencyName?: string): string {
-  const agency = agencyName ?? "PoliçePilot Sigorta";
+  const agency = agencyName ?? "SigortaOS Sigorta";
   if (successResults.length === 0) return "";
 
   const firstName = (run.customer_name ?? "").split(" ")[0] || "Sayın Müşterimiz";

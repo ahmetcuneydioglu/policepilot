@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Yetki (permission) kataloğu ve rol şablonları.
+ * SigortaOS — Yetki (permission) kataloğu ve rol şablonları.
  *
  * Saf TS — hiçbir import yok. Hem client (UI toggle/buton gizleme) hem server
  * (Faz 2 backend guard) kullanır. Tek doğruluk kaynağı: ROLE_TEMPLATES.

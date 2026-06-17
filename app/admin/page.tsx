@@ -90,7 +90,7 @@ export default function AdminOverviewPage() {
     <div className="space-y-6">
       <PageHeader
         title="Operasyon Merkezi"
-        subtitle="PolicePilot platform genel durumu — canlı"
+        subtitle="SigortaOS platform genel durumu — canlı"
         Icon={LayoutDashboard}
         actions={
           <button onClick={load} className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-slate-600 transition-all shadow-sm">

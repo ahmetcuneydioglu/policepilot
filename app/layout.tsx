@@ -8,7 +8,7 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "PoliçePilot — Sigorta CRM AI",
+  title: "SigortaOS — Sigorta CRM AI",
   description: "Sigorta acenteleri için akıllı CRM paneli",
 };
 

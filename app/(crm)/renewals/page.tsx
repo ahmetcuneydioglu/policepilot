@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PolicePilot — Renewal Engine
+ * SigortaOS — Renewal Engine
  *
  * Poliçe bitiş tarihlerini takip eder, yenileme fırsatlarını yönetir.
  * Multi-tenant: agency_user yalnızca kendi kayıtlarını görür.

@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Günlük WhatsApp Operasyon Özeti
+ * SigortaOS — Günlük WhatsApp Operasyon Özeti
  *
  * Acente başına yenileme tablosunu hesaplar, whatsapp_templates'taki
  * daily_summary şablonunu doldurur ve kuyruğa yazar.
@@ -11,7 +11,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { enqueue } from "./queueService";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://policepilot.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sigortaos.com";
 
 // Meta'da onaylı günlük özet şablonu (24 saat penceresi gerektirmez).
 // İsim/dil env ile değiştirilebilir; varsayılan canlı şablonla aynı.
@@ -86,7 +86,7 @@ async function getTemplate(): Promise<string> {
 }
 
 export const DEFAULT_TEMPLATE =
-  "📊 *PolicePilot Günlük Operasyon Özeti*\n\n" +
+  "📊 *SigortaOS Günlük Operasyon Özeti*\n\n" +
   "Tarih: {{date}}\n\n" +
   "👥 Toplam Müşteri: *{{total_customers}}*\n" +
   "📄 Aktif Poliçe: *{{active_policies}}*\n" +
@@ -96,7 +96,7 @@ export const DEFAULT_TEMPLATE =
   "📨 Açık Teklif: *{{open_quotes}}*\n" +
   "🆕 Yeni Talep: *{{new_requests}}*\n\n" +
   "{{urgent_list}}\n" +
-  "PolicePilot'a giriş yap:\n{{app_url}}";
+  "SigortaOS'a giriş yap:\n{{app_url}}";
 
 function render(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? "");

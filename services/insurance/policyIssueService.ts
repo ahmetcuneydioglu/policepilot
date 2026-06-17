@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Policy Issue Service
+ * SigortaOS — Policy Issue Service
  *
  * Poliçe kaydını oluşturur. Kaynak türüne göre farklı davranır:
  *

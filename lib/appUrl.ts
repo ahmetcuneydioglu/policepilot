@@ -45,6 +45,6 @@ export function getAppOrigin(request: NextRequest): string {
   try {
     return new URL(request.url).origin;
   } catch {
-    return "https://policepilot.vercel.app";
+    return "https://sigortaos.com";
   }
 }

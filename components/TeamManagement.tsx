@@ -226,7 +226,7 @@ function InviteForm({ callerIsOwner, onInvited }: { callerIsOwner: boolean; onIn
           <p className="break-all text-[11px] text-indigo-600 bg-slate-50 rounded-lg p-2">{link}</p>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => navigator.clipboard?.writeText(link)} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-bold hover:bg-indigo-500 transition-colors">Linki Kopyala</button>
-            <a href={`https://wa.me/?text=${encodeURIComponent(`PolicePilot ekibimize katılmak için şifrenizi belirleyin: ${link}`)}`} target="_blank" rel="noopener noreferrer"
+            <a href={`https://wa.me/?text=${encodeURIComponent(`SigortaOS ekibimize katılmak için şifrenizi belirleyin: ${link}`)}`} target="_blank" rel="noopener noreferrer"
               className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-[11px] font-bold hover:bg-emerald-600 transition-colors">WhatsApp ile Gönder</a>
           </div>
         </div>

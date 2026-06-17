@@ -399,7 +399,7 @@ export default function ProductFormPage({
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-extrabold text-lg text-blue-700">
-            <span>🛡️</span>PoliçePilot
+            <span>🛡️</span>SigortaOS
           </Link>
           <Link
             href="/teklif-al"

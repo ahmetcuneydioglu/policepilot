@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PolicePilot — Poliçeleştirme Sayfası v3
+ * SigortaOS — Poliçeleştirme Sayfası v3
  *
  * Demo / Manuel modda poliçe oluşturmayı destekler.
  * Gerçek kart verisi sunucuya GÖNDERİLMEZ.
@@ -177,7 +177,7 @@ function PrintableSummary({ ctx, policy }: { ctx: IssueContext; policy: PolicyRe
       {/* Header */}
       <div className="border-b-2 border-slate-800 pb-4 mb-6 flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold">PoliçePilot</h1>
+          <h1 className="text-2xl font-bold">SigortaOS</h1>
           <p className="text-sm text-slate-500">Sigorta CRM Sistemi</p>
         </div>
         <div className="text-right">
@@ -257,7 +257,7 @@ function PrintableSummary({ ctx, policy }: { ctx: IssueContext; policy: PolicyRe
       )}
 
       <p className="text-xs text-slate-400 mt-8 text-center border-t border-slate-200 pt-4">
-        PoliçePilot Sigorta CRM • Bu belge otomatik oluşturulmuştur
+        SigortaOS Sigorta CRM • Bu belge otomatik oluşturulmuştur
       </p>
     </div>
   );

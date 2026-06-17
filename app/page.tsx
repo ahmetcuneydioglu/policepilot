@@ -73,7 +73,7 @@ const WORKFLOW = [
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 // ─── FAQs ─────────────────────────────────────────────────────────────────────
 const FAQS = [
-  { q: "Kurulum ne kadar sürer?", a: "PoliçePilot bulut tabanlıdır, kurulum gerektirmez. Kaydolduktan sonra 5 dakika içinde acentenizin teklif formunu müşterilerinizle paylaşabilirsiniz." },
+  { q: "Kurulum ne kadar sürer?", a: "SigortaOS bulut tabanlıdır, kurulum gerektirmez. Kaydolduktan sonra 5 dakika içinde acentenizin teklif formunu müşterilerinizle paylaşabilirsiniz." },
   { q: "Mevcut müşteri listemizi taşıyabilir miyiz?", a: "Evet. CSV veya Excel ile toplu müşteri aktarımı desteklenmektedir. Ayrıca Google Maps verilerini doğrudan içe aktarabilirsiniz." },
   { q: "WhatsApp entegrasyonu nasıl çalışır?", a: "Sistem hazır mesaj şablonları oluşturur. Tek tıkla WhatsApp Web açılır ve mesaj otomatik doldurulmuş olarak bekler." },
   { q: "AI Asistan ne tür görevler yapıyor?", a: "Teklif mesajı yazma, poliçe analizi, müşteri segmentasyonu ve operasyon özeti hazırlama. İnsan onayıyla çalışır, otomatik gönderim yapmaz." },
@@ -341,7 +341,7 @@ function BrowserChrome({ children }: { children: React.ReactNode }) {
         </div>
         <div className="flex-1 bg-white rounded-lg px-3 py-1 flex items-center gap-2">
           <ShieldCheck className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-          <span className="text-[11px] text-gray-500 font-medium truncate">app.policepilot.com/dashboard</span>
+          <span className="text-[11px] text-gray-500 font-medium truncate">app.sigortaos.com/dashboard</span>
         </div>
       </div>
       {/* Sidebar + content */}
@@ -385,7 +385,7 @@ export default function HomePage() {
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-md shadow-blue-200">
                 <ShieldCheck className="w-4 h-4 text-white" />
               </div>
-              <span className="font-bold text-slate-900 text-[17px] tracking-tight">PoliçePilot</span>
+              <span className="font-bold text-slate-900 text-[17px] tracking-tight">SigortaOS</span>
             </Link>
 
             {/* Desktop nav */}
@@ -593,7 +593,7 @@ export default function HomePage() {
             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3">
               Bir Acente Günü
             </h2>
-            <p className="text-slate-500 text-base">PoliçePilot ile tipik bir iş günü nasıl görünür?</p>
+            <p className="text-slate-500 text-base">SigortaOS ile tipik bir iş günü nasıl görünür?</p>
           </div>
 
           <div className="relative">
@@ -686,7 +686,7 @@ export default function HomePage() {
                 <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
                   <ShieldCheck className="w-3.5 h-3.5 text-white" />
                 </div>
-                <span className="font-bold text-white text-sm">PoliçePilot</span>
+                <span className="font-bold text-white text-sm">SigortaOS</span>
               </div>
               <p className="text-xs leading-relaxed text-slate-500 max-w-[200px]">
                 Sigorta acenteleri için yapay zeka destekli CRM ve operasyon platformu.
@@ -720,13 +720,13 @@ export default function HomePage() {
                 <li><a href="#sss" className="hover:text-white transition-colors">SSS</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">KVKK</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">Gizlilik Politikası</a></li>
-                <li><a href="mailto:info@policepilot.com" className="hover:text-white transition-colors">info@policepilot.com</a></li>
+                <li><a href="mailto:info@sigortaos.com" className="hover:text-white transition-colors">info@sigortaos.com</a></li>
               </ul>
             </div>
           </div>
 
           <div className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <p className="text-slate-500">© 2026 PoliçePilot. Tüm hakları saklıdır.</p>
+            <p className="text-slate-500">© 2026 SigortaOS. Tüm hakları saklıdır.</p>
             <div className="flex items-center gap-4">
               <Link href="/login" className="text-slate-400 hover:text-white transition-colors">
                 Acente Girişi

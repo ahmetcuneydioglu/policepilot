@@ -140,7 +140,7 @@ export default function WhatsAppModal({ customerName, phone, insuranceType = "",
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Mesaj Önizlemesi</p>
             <div className="relative bg-emerald-50 border border-emerald-100 rounded-2xl rounded-tl-none px-4 py-3.5">
               <p className="text-sm text-slate-700 leading-relaxed">{preview}</p>
-              <span className="block text-right text-[10px] text-emerald-400 mt-1.5">PoliçePilot</span>
+              <span className="block text-right text-[10px] text-emerald-400 mt-1.5">SigortaOS</span>
             </div>
           </div>
 

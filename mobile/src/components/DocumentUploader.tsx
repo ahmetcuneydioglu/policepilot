@@ -77,7 +77,7 @@ export default function DocumentUploader({
       // Daha önce reddedilmiş — sistem diyaloğu göstermez, direkt Ayarlar'a yönlendir
       openSettings(
         'Kamera İzni Gerekli',
-        'PolicePilot\'un kamerayı kullanabilmesi için Ayarlar > PolicePilot > Kamera iznini açın.'
+        'SigortaOS\'un kamerayı kullanabilmesi için Ayarlar > SigortaOS > Kamera iznini açın.'
       );
       return;
     }
@@ -125,7 +125,7 @@ export default function DocumentUploader({
     if (existing === 'denied') {
       openSettings(
         'Fotoğraf İzni Gerekli',
-        'PolicePilot\'un galeriye erişebilmesi için Ayarlar > PolicePilot > Fotoğraflar iznini açın.'
+        'SigortaOS\'un galeriye erişebilmesi için Ayarlar > SigortaOS > Fotoğraflar iznini açın.'
       );
       return;
     }

@@ -1,5 +1,5 @@
 /**
- * PolicePilot — Policy OCR types
+ * SigortaOS — Policy OCR types
  *
  * Provider-agnostic contract for extracting structured data from policy
  * PDFs/photos. Real OCR integrations should implement this shape so UI and

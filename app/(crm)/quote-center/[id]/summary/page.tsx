@@ -188,7 +188,7 @@ export default function QuoteSummaryPage() {
           {/* Header */}
           <div className="px-8 py-6 border-b border-slate-100 flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-xl font-bold text-slate-900">PoliçePilot</h1>
+              <h1 className="text-xl font-bold text-slate-900">SigortaOS</h1>
               <p className="text-sm text-slate-400 mt-0.5">Teklif Özeti</p>
             </div>
             <div className="text-right">
@@ -332,7 +332,7 @@ export default function QuoteSummaryPage() {
             </p>
             <div className="flex items-center justify-between mt-2">
               <p className="text-[11px] text-slate-400">{formatDate(run.created_at)}</p>
-              <p className="text-[11px] font-semibold text-slate-500">PoliçePilot Sigorta CRM</p>
+              <p className="text-[11px] font-semibold text-slate-500">SigortaOS Sigorta CRM</p>
             </div>
           </div>
         </div>

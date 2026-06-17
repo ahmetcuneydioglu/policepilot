@@ -54,7 +54,7 @@ export default function LoginScreen() {
             <View style={styles.logoCircle}>
               <Text style={styles.logoText}>PP</Text>
             </View>
-            <Text style={styles.appName}>PolicePilot</Text>
+            <Text style={styles.appName}>SigortaOS</Text>
             <Text style={styles.tagline}>Sigorta Acentesi Yönetim Sistemi</Text>
           </View>
 
