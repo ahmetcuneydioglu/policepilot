@@ -99,6 +99,21 @@ export async function setAddon(client: any, agencyId: string, addonKey: string, 
   return true;
 }
 
+/**
+ * Faz 3: ödeme sağlayıcı bildirimi geldiğinde faturayı 'paid' yap (idempotent).
+ * external_ref ile eşleşen 'pending_payment' olayı yoksa false döner (tekrar bildirimde no-op).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function markBillingEventPaid(client: any, reference: string): Promise<boolean> {
+  if (!reference) return false;
+  const { data } = await client.from("billing_events")
+    .select("id").eq("external_ref", reference).eq("status", "pending_payment").limit(1);
+  if (!data?.length) return false; // zaten işlenmiş veya bulunamadı → idempotent
+  await client.from("billing_events")
+    .update({ status: "paid" }).eq("external_ref", reference).eq("status", "pending_payment");
+  return true;
+}
+
 /** Acentenin aktif eklentileri (fiyat/limit hesabı için). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getActiveAddons(client: any, agencyId: string) {
