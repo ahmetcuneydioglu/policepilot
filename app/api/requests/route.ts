@@ -1,51 +1,48 @@
 /**
- * POST /api/requests
- * Server-side request creation with limit enforcement.
+ * POST /api/requests — talep oluşturma (limit + sahiplik kontrolü).
+ *
+ * Güvenlik: agency_id body'den ALINMAZ — talep, caller'ın erişebildiği müşterinin
+ * acentesine yazılır. Müşteri sahipliği (IDOR) doğrulanır.
  */
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canAddRequest, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
+import { resolveCaller } from "../whatsapp/_lib/auth";
+import { isManagerial } from "@/lib/tenant";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { customer_id, request_type, price_offer, agency_id } = body;
+    const { customer_id, request_type, price_offer } = body;
 
     if (!customer_id || !request_type) {
       return NextResponse.json({ error: "Müşteri ve talep türü zorunludur." }, { status: 400 });
     }
-    if (!agency_id) {
-      return NextResponse.json({ error: "agency_id gerekli." }, { status: 400 });
-    }
 
-    // ── Verify caller session ─────────────────────────────────────────────
-    const cookieHeader = request.headers.get("cookie") ?? "";
-    const supabaseSession = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieHeader.split(";").map((c) => {
-              const [name, ...rest] = c.trim().split("=");
-              return { name, value: rest.join("=") };
-            });
-          },
-          setAll() {/* read-only */},
-        },
-      }
-    );
+    const caller = await resolveCaller(request);
+    if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
-    const { data: { user } } = await supabaseSession.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
-
-    // ── Limit check ───────────────────────────────────────────────────────
     const admin = getSupabaseAdmin();
-    const limitCheck = await canAddRequest(admin, agency_id);
 
+    // ── Müşteri sahipliği (IDOR) + agency_id'yi müşteriden türet ───────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: cust } = await (admin.from("customers") as any)
+      .select("agency_id, created_by").eq("id", customer_id).maybeSingle();
+    if (!cust) return NextResponse.json({ error: "Müşteri bulunamadı." }, { status: 404 });
+    if (caller.role !== "super_admin") {
+      const sameAgency = cust.agency_id === caller.agencyId;
+      const ownsCustomer = isManagerial(caller.agencyRole) || cust.created_by === caller.userId;
+      if (!sameAgency || !ownsCustomer) {
+        return NextResponse.json({ error: "Müşteri bulunamadı." }, { status: 404 });
+      }
+    }
+    const agency_id: string | null = cust.agency_id ?? null;
+    if (!agency_id) return NextResponse.json({ error: "Müşterinin acentesi tanımsız." }, { status: 400 });
+
+    // ── Limit kontrolü (müşterinin acentesi üzerinden) ─────────────────────
+    const limitCheck = await canAddRequest(admin, agency_id);
     if (!limitCheck.isActive) {
       return NextResponse.json({ error: INACTIVE_MESSAGE, code: "inactive" }, { status: 403 });
     }
@@ -58,7 +55,7 @@ export async function POST(request: NextRequest) {
       }, { status: 403 });
     }
 
-    // ── Insert ────────────────────────────────────────────────────────────
+    // ── Insert ──────────────────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error: reqErr } = await (admin.from("requests") as any).insert({
       customer_id,

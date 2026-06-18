@@ -69,8 +69,15 @@ export async function GET(
     const { data: { user } } = await getSessionClient(request).auth.getUser();
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
+    const caller = await resolveCaller(request);
+    if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+
     const context = await getQuoteIssueContext(quote_result_id);
     if (!context) {
+      return NextResponse.json({ error: "Teklif bulunamadı." }, { status: 404 });
+    }
+    // Tenant izolasyonu (IDOR): başka acentenin teklifine erişim engellenir.
+    if (caller.role !== "super_admin" && context.run.agency_id !== caller.agencyId) {
       return NextResponse.json({ error: "Teklif bulunamadı." }, { status: 404 });
     }
 
@@ -98,7 +105,9 @@ export async function POST(
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const caller = await resolveCaller(request);
-    if (caller) { const denied = requirePermission(caller, "policy.create"); if (denied) return denied; }
+    if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    const denied = requirePermission(caller, "policy.create");
+    if (denied) return denied;
 
     // Body: yalnızca tutar + açıklama — kart bilgisi ASLA burada beklenmez
     const body = await request.json();
@@ -111,6 +120,10 @@ export async function POST(
     // ── Teklif bağlamı ────────────────────────────────────────────────────────
     const context = await getQuoteIssueContext(quote_result_id);
     if (!context) {
+      return NextResponse.json({ error: "Teklif bulunamadı." }, { status: 404 });
+    }
+    // Tenant izolasyonu (IDOR): başka acentenin teklifinden poliçe kesilemez.
+    if (caller.role !== "super_admin" && context.run.agency_id !== caller.agencyId) {
       return NextResponse.json({ error: "Teklif bulunamadı." }, { status: 404 });
     }
 

@@ -8,7 +8,16 @@ import { NextResponse }       from "next/server";
 import type { NextRequest }   from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin }   from "@/lib/supabase-admin";
-import { resolveCaller, requirePermission } from "../../whatsapp/_lib/auth";
+import { resolveCaller, requirePermission, type ApiCaller } from "../../whatsapp/_lib/auth";
+import { isManagerial } from "@/lib/tenant";
+
+// caller hedef quote_run'a sahip mi? (super_admin / aynı acente / kişi-scope created_by)
+function ownsRun(caller: ApiCaller, run: { agency_id: string | null; created_by?: string | null }): boolean {
+  if (caller.role === "super_admin") return true;
+  if (run.agency_id !== caller.agencyId) return false;
+  if (!isManagerial(caller.agencyRole) && run.created_by !== caller.userId) return false;
+  return true;
+}
 
 function sessionClient(request: NextRequest) {
   const cookieHeader = request.headers.get("cookie") ?? "";
@@ -39,6 +48,9 @@ export async function GET(
     const { data: { user } } = await sessionClient(request).auth.getUser();
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
+    const caller = await resolveCaller(request);
+    if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+
     const admin = getSupabaseAdmin();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,6 +61,8 @@ export async function GET(
 
     if (runError) return NextResponse.json({ error: runError.message }, { status: 500 });
     if (!run)     return NextResponse.json({ error: "Bulunamadı." }, { status: 404 });
+    // Tenant/kişi izolasyonu (IDOR): başka acentenin/personelin çalışması okunamaz.
+    if (!ownsRun(caller, run)) return NextResponse.json({ error: "Bulunamadı." }, { status: 404 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: results, error: resError } = await (admin.from("quote_results") as any)
@@ -77,9 +91,20 @@ export async function PATCH(
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const caller = await resolveCaller(request);
-    if (caller) { const denied = requirePermission(caller, "quote.edit"); if (denied) return denied; }
+    if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    const denied = requirePermission(caller, "quote.edit");
+    if (denied) return denied;
 
     const admin = getSupabaseAdmin();
+
+    // Sahiplik doğrulaması (IDOR) — güncellemeden ÖNCE; renewal alanını da burada al.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (admin.from("quote_runs") as any)
+      .select("agency_id, created_by, renewal_of_policy_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (!existing) return NextResponse.json({ error: "Bulunamadı." }, { status: 404 });
+    if (!ownsRun(caller, existing)) return NextResponse.json({ error: "Bulunamadı." }, { status: 404 });
 
     const update: Record<string, string | null> = {};
     if (status)         update.status         = status;
@@ -94,21 +119,13 @@ export async function PATCH(
 
     // ── Yenileme akışı: run iptal edildiyse eski poliçeyi "pending"e döndür ──
     // Acente aynı müşteri için yeniden teklif çalışabilir hale gelir.
-    if (status === "İptal") {
+    if (status === "İptal" && existing.renewal_of_policy_id) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: run } = await (admin.from("quote_runs") as any)
-        .select("renewal_of_policy_id")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (run?.renewal_of_policy_id) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: polErr } = await (admin.from("policies") as any)
-          .update({ renewal_status: "pending" })
-          .eq("id", run.renewal_of_policy_id)
-          .eq("renewal_status", "quoted"); // completed olanı geri alma
-        if (polErr) console.error("[api/quote-runs/[id]] renewal reset FAILED:", polErr.message);
-      }
+      const { error: polErr } = await (admin.from("policies") as any)
+        .update({ renewal_status: "pending" })
+        .eq("id", existing.renewal_of_policy_id)
+        .eq("renewal_status", "quoted"); // completed olanı geri alma
+      if (polErr) console.error("[api/quote-runs/[id]] renewal reset FAILED:", polErr.message);
     }
 
     return NextResponse.json({ ok: true });
@@ -128,9 +145,18 @@ export async function DELETE(
     if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const caller = await resolveCaller(request);
-    if (caller) { const denied = requirePermission(caller, "quote.delete"); if (denied) return denied; }
+    if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    const denied = requirePermission(caller, "quote.delete");
+    if (denied) return denied;
 
     const admin = getSupabaseAdmin();
+
+    // Sahiplik doğrulaması (IDOR) — silmeden önce
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (admin.from("quote_runs") as any)
+      .select("agency_id, created_by").eq("id", id).maybeSingle();
+    if (!existing) return NextResponse.json({ error: "Bulunamadı." }, { status: 404 });
+    if (!ownsRun(caller, existing)) return NextResponse.json({ error: "Bulunamadı." }, { status: 404 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (admin.from("quote_runs") as any).delete().eq("id", id);

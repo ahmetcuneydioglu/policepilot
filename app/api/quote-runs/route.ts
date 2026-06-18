@@ -117,17 +117,18 @@ export async function POST(request: NextRequest) {
 
     // ── Yetki kontrolü ────────────────────────────────────────────────────
     const caller = await resolveCaller(request);
-    if (caller) {
-      const denied = requirePermission(caller, "quote.create");
-      if (denied) return denied;
-    }
+    if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
+    const denied = requirePermission(caller, "quote.create");
+    if (denied) return denied;
 
     // ── Service role client (RLS bypass) ──────────────────────────────────
     const admin = getSupabaseAdmin();
 
-    // ── Agency ID: client'tan gelmediyse profil tablosundan çek ──────────
+    // ── Agency: tenant izolasyonu — body'ye GÜVENİLMEZ. ────────────────────
+    // agency_user daima KENDİ acentesine yazar; yalnız super_admin body verebilir.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let resolvedAgencyId: string | null = agency_id ?? null;
+    let resolvedAgencyId: string | null =
+      caller.role === "super_admin" ? (agency_id ?? null) : (caller.agencyId ?? null);
     if (!resolvedAgencyId) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: prof } = await (admin.from("profiles") as any)
