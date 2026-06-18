@@ -88,11 +88,16 @@ create index if not exists idx_requests_customer on public.requests(customer_id)
 
 -- ─── 6. RLS POLİTİKALARI ────────────────────────────────────────────────────
 
--- 6a. customers — açık politikaları kapat; scoped SELECT/INSERT/UPDATE/DELETE.
+-- 6a. customers — açık + DRIFT (dashboard'dan elle kurulmuş) politikaları kapat; scoped'a geç.
 drop policy if exists "public read customers"   on public.customers;
 drop policy if exists "public insert customers" on public.customers;
 drop policy if exists "public update customers" on public.customers;
 drop policy if exists "public delete customers" on public.customers;
+-- DRIFT temizliği: "<tablo>: agency_user" created_by izolasyonunu kıran ALL politikası;
+-- "<tablo>: super_admin" JWT tabanlı gereksiz tekrar; "<tablo>: public insert" açık delik.
+drop policy if exists "customers: agency_user"   on public.customers;
+drop policy if exists "customers: super_admin"   on public.customers;
+drop policy if exists "customers: public insert" on public.customers;
 drop policy if exists "scoped read customers"   on public.customers;
 drop policy if exists "scoped insert customers" on public.customers;
 drop policy if exists "scoped update customers" on public.customers;
@@ -119,11 +124,13 @@ create policy "scoped delete customers" on public.customers for delete
     or (agency_id = public.auth_agency_id()
         and (public.auth_is_managerial() or created_by = auth.uid())) );
 
--- 6b. policies — aynı desen.
+-- 6b. policies — aynı desen + drift temizliği.
 drop policy if exists "public read policies"   on public.policies;
 drop policy if exists "public insert policies" on public.policies;
 drop policy if exists "public update policies" on public.policies;
 drop policy if exists "public delete policies" on public.policies;
+drop policy if exists "policies: agency_user" on public.policies;
+drop policy if exists "policies: super_admin" on public.policies;
 drop policy if exists "scoped read policies"   on public.policies;
 drop policy if exists "scoped insert policies" on public.policies;
 drop policy if exists "scoped update policies" on public.policies;
@@ -156,6 +163,9 @@ drop policy if exists "public read requests"   on public.requests;
 drop policy if exists "public insert requests" on public.requests;
 drop policy if exists "public update requests" on public.requests;
 drop policy if exists "public delete requests" on public.requests;
+drop policy if exists "requests: agency_user"   on public.requests;
+drop policy if exists "requests: super_admin"   on public.requests;
+drop policy if exists "requests: public insert" on public.requests;
 drop policy if exists "scoped read requests"   on public.requests;
 drop policy if exists "scoped insert requests" on public.requests;
 drop policy if exists "scoped update requests" on public.requests;
