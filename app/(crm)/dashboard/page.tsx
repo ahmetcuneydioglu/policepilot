@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { ComponentType } from "react";
 import AnimatedCounter from "@/components/AnimatedCounter";
@@ -13,8 +13,8 @@ import { useAuth } from "@/lib/AuthContext";
 import { withScopeFilter, withRequestScope, isManagerial, needsOnboarding } from "@/lib/tenant";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
-  TrendingUp, CheckCircle2, Activity, Car, Home,
-  Heart, Shield, ArrowUpRight, Sparkles, Plus,
+  TrendingUp, CheckCircle2, Activity,
+  Shield, ArrowUpRight, Sparkles, Plus,
   AlertTriangle, CalendarClock, ChevronRight, RefreshCw,
   MessageCircle, XCircle,
 } from "lucide-react";
@@ -67,13 +67,16 @@ const FEED_POOL: RawFeedEntry[] = [
   { Icon: CheckCircle2,  iconBg: "bg-emerald-50",  iconColor: "text-emerald-600", message: "Teklif onaylandı ve poliçe kesildi",          sub: "Trafik · 34ABC123" },
 ];
 
-// ─── Product distribution (mock — last 30 days) ───────────────────────────────
-const PRODUCT_DIST = [
-  { label: "Trafik", pct: 38, color: "bg-blue-500",    Icon: Car },
-  { label: "Kasko",  pct: 24, color: "bg-indigo-500",  Icon: Shield },
-  { label: "Sağlık", pct: 18, color: "bg-emerald-500", Icon: Heart },
-  { label: "Konut",  pct: 12, color: "bg-amber-500",   Icon: Home },
-  { label: "Diğer",  pct:  8, color: "bg-violet-400",  Icon: FileText },
+// ─── Ürün dağılımı — GERÇEK aktif poliçe branş dağılımından hesaplanır ────────
+const PROD_COLORS = ["bg-blue-500", "bg-indigo-500", "bg-emerald-500", "bg-amber-500", "bg-violet-400", "bg-rose-400"];
+type ProdDist = { label: string; pct: number; color: string };
+// Demo modunda (super_admin · ?demo=1) gösterilecek örnek dağılım
+const DEMO_PRODUCT_DIST: ProdDist[] = [
+  { label: "Trafik", pct: 38, color: "bg-blue-500" },
+  { label: "Kasko",  pct: 24, color: "bg-indigo-500" },
+  { label: "Sağlık", pct: 18, color: "bg-emerald-500" },
+  { label: "Konut",  pct: 12, color: "bg-amber-500" },
+  { label: "Diğer",  pct:  8, color: "bg-violet-400" },
 ];
 
 // ─── Status map ───────────────────────────────────────────────────────────────
@@ -167,19 +170,7 @@ export default function DashboardPage() {
   const [linkCopied, setLinkCopied]   = useState(false);
   const [renewalInfo, setRenewalInfo] = useState<{ premium: number; topBranch: string | null }>({ premium: 0, topBranch: null });
   const [urgent, setUrgent] = useState<{ tomorrow: number; thisWeek: number; overdue: number }>({ tomorrow: 0, thisWeek: 0, overdue: 0 });
-  const feedIdxRef                  = useRef(0);
-
-  // ── Push a new item to the live feed with fade-in animation ───────────────
-  const pushFeedItem = useCallback((raw: RawFeedEntry) => {
-    const newId = `${Date.now()}-${Math.random()}`;
-    setFeedItems((prev) => [
-      { ...raw, id: newId, time: "Az önce", isNew: true },
-      ...prev,
-    ].slice(0, 11));
-    setTimeout(() => {
-      setFeedItems((prev) => prev.map((f) => (f.id === newId ? { ...f, isNew: false } : f)));
-    }, 60);
-  }, []);
+  const [productDist, setProductDist] = useState<ProdDist[]>([]);
 
   // ── Data load — waits for auth, scoped to agency ──────────────────────────
   useEffect(() => {
@@ -208,6 +199,7 @@ export default function DashboardPage() {
         isNew: false,
       }));
       setFeedItems(seed);
+      setProductDist(DEMO_PRODUCT_DIST);
       setRecentReqs([
         { id: "r1", request_type: "Kasko",  status: "Yeni",       created_at: new Date(Date.now() - 4 * 60000).toISOString(),   customers: { name: "Ahmet Yılmaz" } },
         { id: "r2", request_type: "Konut",  status: "İşlemde",    created_at: new Date(Date.now() - 22 * 60000).toISOString(),  customers: { name: "Fatma Kaya" } },
@@ -306,7 +298,20 @@ export default function DashboardPage() {
         })),
       ].slice(0, 8);
 
-      setFeedItems(realFeed); // Empty for new agency — live ticker will fill in
+      setFeedItems(realFeed); // Boş = taze acente (sahte ticker kaldırıldı)
+
+      // Ürün dağılımı: aktif poliçelerin GERÇEK branş dağılımı
+      const { data: typeRows } = await scope(
+        supabase.from("policies").select("policy_type").eq("status", "Aktif")
+      ) as { data: { policy_type: string }[] | null };
+      const tc: Record<string, number> = {};
+      (typeRows ?? []).forEach((p) => { tc[p.policy_type] = (tc[p.policy_type] ?? 0) + 1; });
+      const totalT = Object.values(tc).reduce((s, n) => s + n, 0);
+      setProductDist(
+        Object.entries(tc).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, n], i) => ({
+          label, pct: totalT ? Math.round((n / totalT) * 100) : 0, color: PROD_COLORS[i % PROD_COLORS.length],
+        }))
+      );
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setRecentReqs((recentRequests ?? []) as any);
@@ -338,19 +343,6 @@ export default function DashboardPage() {
     return () => clearTimeout(t);
   }, [newNotifAt]);
 
-  // ── Live feed ticker — adds a new item every ~11 s ───────────────────────
-  // Only run for super_admin or agencies with existing data
-  useEffect(() => {
-    if (loading) return;
-    if (role === "agency_user" && stats.customers === 0) return; // No ticker for fresh agencies
-    const tick = setInterval(() => {
-      const item = FEED_POOL[feedIdxRef.current % FEED_POOL.length];
-      feedIdxRef.current += 1;
-      pushFeedItem(item);
-    }, 11000);
-    return () => clearInterval(tick);
-  }, [loading, pushFeedItem, role, stats.customers]);
-
   // ─── AI summary bullets — tenant-specific, no hardcoded fallback numbers ──
   const isNewAgency = role === "agency_user" && !loading && stats.customers === 0;
   const aiBullets = isNewAgency
@@ -372,7 +364,7 @@ export default function DashboardPage() {
           : "Yaklaşan yenilemelerden prim beklentisi henüz oluşmadı",
         renewalInfo.topBranch
           ? `En çok yenilenecek branş: ${renewalInfo.topBranch}`
-          : "Trafik sigortası bu hafta en fazla talep gören ürün",
+          : "Yaklaşan yenilemede branş verisi henüz oluşmadı",
         stats.today > 0
           ? `${stats.today} müşteri bugün sisteme katıldı`
           : "Bugün henüz yeni müşteri eklenmedi",
@@ -380,7 +372,7 @@ export default function DashboardPage() {
 
   // ── Stat card definitions ────────────────────────────────────────────────
   const STAT_CARDS = [
-    { title: "Toplam Müşteri",    value: stats.customers,        Icon: Users,     grad: "from-blue-500 to-blue-600",       bg: "bg-blue-50",    text: "text-blue-600",    badge: "+4 bu hafta",   badgeCls: "text-emerald-700 bg-emerald-50" },
+    { title: "Toplam Müşteri",    value: stats.customers,        Icon: Users,     grad: "from-blue-500 to-blue-600",       bg: "bg-blue-50",    text: "text-blue-600",    badge: "toplam",        badgeCls: "text-gray-500 bg-gray-50" },
     { title: "Açık Teklif",       value: stats.requests,         Icon: FileText,  grad: "from-indigo-500 to-indigo-600",   bg: "bg-indigo-50",  text: "text-indigo-600",  badge: "Yeni+İşlemde",  badgeCls: "text-gray-500 bg-gray-50" },
     { title: "Yaklaşan Yenileme", value: stats.renewals,         Icon: Clock,     grad: "from-amber-500 to-orange-500",    bg: "bg-amber-50",   text: "text-amber-600",   badge: "30 gün içinde", badgeCls: "text-amber-700 bg-amber-50" },
     { title: "Bu Ay Yenilenen",   value: stats.renewedThisMonth, Icon: RefreshCw, grad: "from-violet-500 to-purple-600",   bg: "bg-violet-50",  text: "text-violet-600",  badge: "tamamlandı",    badgeCls: "text-violet-700 bg-violet-50" },
@@ -427,16 +419,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          {["Sistem aktif", "WhatsApp bağlı", "AI hazır"].map((label) => (
-            <div key={label} className="hidden sm:flex items-center gap-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
-              <span className="text-xs text-gray-500 font-medium">{label}</span>
-            </div>
-          ))}
-
           <Link
             href="/teklif-al"
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-sm"
@@ -805,37 +787,31 @@ export default function DashboardPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col">
           <div className="px-5 py-3.5 border-b border-gray-50">
             <h2 className="font-semibold text-slate-800 text-sm">Ürün Dağılımı</h2>
-            <p className="text-[10px] text-gray-400 mt-0.5">Son 30 gün · teklif bazlı</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Aktif poliçeler · branş bazlı</p>
           </div>
 
           <div className="p-5 space-y-3.5">
-            {PRODUCT_DIST.map((d) => (
+            {productDist.length === 0 ? (
+              <p className="text-[10px] text-gray-400 text-center py-4">
+                Aktif poliçe oldukça branş dağılımı burada görünür
+              </p>
+            ) : productDist.map((d) => (
               <div key={d.label}>
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-1.5">
-                    <d.Icon className="w-3.5 h-3.5 text-gray-400" />
+                    <span className={`w-2 h-2 rounded-full ${d.color}`} />
                     <span className="text-xs font-medium text-slate-600">{d.label}</span>
                   </div>
-                  <span className="text-xs font-bold text-slate-700">
-                    {isNewAgency ? "—" : `${d.pct}%`}
-                  </span>
+                  <span className="text-xs font-bold text-slate-700">{d.pct}%</span>
                 </div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className={`h-full ${d.color} rounded-full`}
-                    style={{
-                      width:      distReady && !isNewAgency ? `${d.pct}%` : "0%",
-                      transition: "width 0.8s ease-out",
-                    }}
+                    style={{ width: distReady ? `${d.pct}%` : "0%", transition: "width 0.8s ease-out" }}
                   />
                 </div>
               </div>
             ))}
-            {isNewAgency && (
-              <p className="text-[10px] text-gray-400 text-center pt-1">
-                Teklifler oluştukça dağılım gösterilecek
-              </p>
-            )}
           </div>
 
           {/* Quick actions */}

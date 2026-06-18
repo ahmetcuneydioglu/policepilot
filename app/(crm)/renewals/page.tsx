@@ -54,21 +54,12 @@ function dayBadge(days: number): { label: string; cls: string; bar: string; glow
   return            { label: `${days} gün`,                          cls: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200", bar: "bg-emerald-500", glow: "" };
 }
 
-// ─── Demo tasarruf/komisyon hesabı (deterministik, policy id bazlı) ───────────
-function hash32(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; }
-  return Math.abs(h);
-}
-
+// Sahte (hash bazlı) tasarruf/komisyon KALDIRILDI — ürün dürüstlüğü. Gerçek teklif
+// çalışılana kadar Tasarruf/Komisyon "—" gösterilir; gerçek tasarruf ileride
+// çalışılan tekliflerin best_price'ından hesaplanacak.
 function demoEconomics(p: { id: string; premium: number | null }): { savings: number; commission: number; bestQuote: number } | null {
-  if (p.premium == null || p.premium <= 0) return null;
-  const h = hash32(p.id);
-  const savingsRate = 0.10 + (h % 9) / 100;            // %10–%18 arası
-  const savings     = Math.round(p.premium * savingsRate / 10) * 10;
-  const bestQuote   = p.premium - savings;
-  const commission  = Math.round(bestQuote * 0.08 / 10) * 10; // ~%8 komisyon
-  return { savings, commission, bestQuote };
+  void p;
+  return null;
 }
 
 function fmt(n: number | null) {
