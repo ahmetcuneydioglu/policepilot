@@ -53,27 +53,38 @@ function trDay(d: Date | string | null): string | null {
   return new Date(d).toLocaleDateString("en-CA", { timeZone: "Europe/Istanbul" });
 }
 
+/**
+ * Bir tabloyu 1000'lik partiler halinde TAMAMEN çeker — Supabase 1000-satır cap'ini
+ * sessizce yutmaz (aksi halde platform toplamları/oranları eksik/yanlış olurdu).
+ * Stabil sayfalama için id'ye göre sıralanır.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchAll(admin: any, table: string, select: string): Promise<any[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const all: any[] = [];
+  const BATCH = 1000;
+  for (let from = 0; ; from += BATCH) {
+    const { data, error } = await admin.from(table).select(select)
+      .order("id", { ascending: true }).range(from, from + BATCH - 1);
+    if (error || !data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < BATCH) break;
+  }
+  return all;
+}
+
 export async function collectPlatformData(): Promise<PlatformData> {
   const admin = getSupabaseAdmin();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const q = (table: string, select: string) => (admin.from(table) as any).select(select);
-
-  const [agRes, profRes, custRes, runRes, polRes, waRes] = await Promise.all([
-    q("agencies", "id, name, slug, logo_url, phone, is_active, plan, expires_at, created_at, max_users, max_customers, max_requests, max_policies"),
-    q("profiles", "agency_id, role, created_at"),
-    q("customers", "agency_id, created_at"),
-    q("quote_runs", "agency_id, status, created_at"),
-    q("policies", "agency_id, status, premium, created_at, issued_at"),
-    q("whatsapp_queue", "agency_id, status, created_at, sent_at"),
+  // Tüm tablolar partili (cap'siz) çekilir → toplamlar/oranlar sessizce eksilmez.
+  const [agencies, profiles, customers, quoteRuns, policies, whatsapp] = await Promise.all([
+    fetchAll(admin, "agencies", "id, name, slug, logo_url, phone, is_active, plan, expires_at, created_at, max_users, max_customers, max_requests, max_policies") as Promise<AgencyRow[]>,
+    fetchAll(admin, "profiles", "agency_id, role, created_at"),
+    fetchAll(admin, "customers", "agency_id, created_at"),
+    fetchAll(admin, "quote_runs", "agency_id, status, created_at"),
+    fetchAll(admin, "policies", "agency_id, status, premium, created_at, issued_at"),
+    fetchAll(admin, "whatsapp_queue", "agency_id, status, created_at, sent_at"),
   ]);
-
-  const agencies  = (agRes.data ?? []) as AgencyRow[];
-  const profiles  = profRes.data ?? [];
-  const customers = custRes.data ?? [];
-  const quoteRuns = runRes.data ?? [];
-  const policies  = polRes.data ?? [];
-  const whatsapp  = waRes.data ?? [];
 
   const today = trDay(new Date())!;
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
