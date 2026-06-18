@@ -80,8 +80,11 @@ create trigger trg_set_row_owner_policies
 -- ─── 4. DEFAULT'LAR ─────────────────────────────────────────────────────────
 alter table public.customers alter column created_by set default auth.uid();
 alter table public.policies  alter column created_by set default auth.uid();
--- owner fail-open: agency_role belirtmeden eklenen profil artık en düşük yetki alır.
-alter table public.profiles  alter column agency_role set default 'viewer';
+-- NOT: profiles.agency_role default'u 'owner' KALIR. Default'a dayanan TEK yol
+-- yeni-acente-sahibi signup'ıdır (signup trigger rolü explicit set etmez) ve owner olmalı.
+-- Davet akışları rolü zaten açıkça verir → fail-open riski yok. 'viewer' yapmak yeni
+-- sahibi kilitliyordu (müşteri/poliçe ekleyemez). Açıkça 'owner' bırakıyoruz.
+alter table public.profiles  alter column agency_role set default 'owner';
 
 -- ─── 5. INDEX — requests customer-join scope performansı ────────────────────
 create index if not exists idx_requests_customer on public.requests(customer_id);
