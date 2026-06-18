@@ -5,6 +5,7 @@ export type Customer = {
   insurance_type: string;
   note: string | null;
   created_at: string;
+  created_by?: string | null;   // ekleyen kullanıcı (profiles.id) — managerial liste için
 };
 
 export type RequestStatus = "Yeni" | "İşlemde" | "Tamamlandı" | "İptal";

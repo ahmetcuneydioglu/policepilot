@@ -4,18 +4,22 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import type { Customer } from "@/lib/database.types";
-import CustomersTable from "@/components/CustomersTable";
+import CustomersTable, { type Member } from "@/components/CustomersTable";
 import AddCustomerModal from "@/components/AddCustomerModal";
 import BulkPolicyImport from "@/components/BulkPolicyImport";
-import { withScopeFilter } from "@/lib/tenant";
+import { withScopeFilter, isManagerial } from "@/lib/tenant";
 
 export default function CustomersPage() {
   const { role, agencyId, can, profile } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
+
+  // owner/manager → "Ekleyen" sütunu+filtresi için acente üyelerini çek (created_by eşlemesi)
+  const managerial = isManagerial(profile?.agency_role);
 
   async function load() {
     setFetchError("");
@@ -47,6 +51,15 @@ export default function CustomersPage() {
   // re-fetch whenever auth resolves (role/agencyId may be null on first render)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [role, agencyId, profile?.id, profile?.agency_role]);
+
+  // Managerial → acente üyelerini çek ("Ekleyen" eşlemesi); non-managerial'da boş.
+  useEffect(() => {
+    if (!managerial) { setMembers([]); return; }
+    fetch("/api/agency/members")
+      .then((r) => r.json())
+      .then((j) => { if (Array.isArray(j.members)) setMembers(j.members); })
+      .catch(() => {});
+  }, [managerial, agencyId]);
 
   function handleClose() {
     setShowAdd(false);
@@ -107,7 +120,7 @@ export default function CustomersPage() {
         </div>
       ) : !fetchError && (
         <div className="animate-fade-in-up stagger-1">
-          <CustomersTable customers={customers} />
+          <CustomersTable customers={customers} members={managerial ? members : undefined} />
         </div>
       )}
 

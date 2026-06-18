@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Customer } from "@/lib/database.types";
 import WhatsAppModal from "@/components/WhatsAppModal";
+
+export type Member = { id: string; full_name: string | null; agency_role?: string | null };
 
 const WA_SVG = (
   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -24,17 +26,27 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
   );
 }
 
-export default function CustomersTable({ customers }: { customers: Customer[] }) {
+export default function CustomersTable({ customers, members }: { customers: Customer[]; members?: Member[] }) {
   const router = useRouter();
   const [waCustomer, setWaCustomer] = useState<Customer | null>(null);
   const [search, setSearch] = useState("");
+  const [creatorFilter, setCreatorFilter] = useState("all");
   const [toast, setToast] = useState("");
+
+  // members verildiyse (owner/manager) "Ekleyen" sütunu + kişi filtresi gösterilir.
+  const showCreator = !!members;
+  const creatorMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (members ?? []).forEach((x) => m.set(x.id, x.full_name ?? "—"));
+    return m;
+  }, [members]);
 
   const filtered = customers.filter(
     (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.insurance_type.toLowerCase().includes(search.toLowerCase()) ||
-      c.phone.includes(search)
+      (creatorFilter === "all" || c.created_by === creatorFilter) &&
+      (c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.insurance_type.toLowerCase().includes(search.toLowerCase()) ||
+        c.phone.includes(search))
   );
 
   function handleWaSent() {
@@ -68,6 +80,19 @@ export default function CustomersTable({ customers }: { customers: Customer[] })
             className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
           />
         </div>
+        {showCreator && (members?.length ?? 0) > 1 && (
+          <select
+            value={creatorFilter}
+            onChange={(e) => setCreatorFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            title="Ekleyene göre filtrele"
+          >
+            <option value="all">Ekleyen: Herkes</option>
+            {members!.map((m) => (
+              <option key={m.id} value={m.id}>{m.full_name ?? "—"}</option>
+            ))}
+          </select>
+        )}
         <span className="text-sm text-gray-400">{filtered.length} müşteri</span>
       </div>
 
@@ -80,6 +105,9 @@ export default function CustomersTable({ customers }: { customers: Customer[] })
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Telefon</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sigorta Türü</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Kayıt</th>
+                {showCreator && (
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ekleyen</th>
+                )}
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksiyonlar</th>
               </tr>
             </thead>
@@ -111,6 +139,11 @@ export default function CustomersTable({ customers }: { customers: Customer[] })
                   <td className="px-6 py-4 text-gray-400 text-xs">
                     {new Date(customer.created_at).toLocaleDateString("tr-TR")}
                   </td>
+                  {showCreator && (
+                    <td className="px-6 py-4 text-gray-600 text-xs">
+                      {customer.created_by ? (creatorMap.get(customer.created_by) ?? "—") : "—"}
+                    </td>
+                  )}
                   <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
                       <button
