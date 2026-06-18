@@ -33,6 +33,9 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Vercel cron: yenileme job insert'leri default 10-15s'te kesilmesin.
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   // ── Auth: Vercel Cron secret ───────────────────────────────────────────────
   // Fail-closed: CRON_SECRET set DEĞİLSE de reddet (env unutulursa endpoint herkese açılmaz).

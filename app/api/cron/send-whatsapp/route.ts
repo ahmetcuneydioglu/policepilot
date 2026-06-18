@@ -17,6 +17,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { processQueue } from "@/services/whatsapp/queueService";
 
+// Vercel cron: WhatsApp kuyruğu sıralı gönderim default 10-15s'te kesilmesin.
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   // Fail-closed: CRON_SECRET set DEĞİLSE de reddet (env unutulursa endpoint herkese açılmaz).
   const cronSecret = process.env.CRON_SECRET;
