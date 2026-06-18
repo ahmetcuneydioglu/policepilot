@@ -16,15 +16,7 @@ type Agency = {
   is_active: boolean | null;
 };
 
-// ─── Helpers (same as /teklif-al/[product]) ──────────────────────────────────
-function normalizePhone(raw: string): string {
-  const d = raw.replace(/\D/g, "");
-  if (d.startsWith("905") && d.length === 12) return d;
-  if (d.startsWith("05")  && d.length === 11) return "9" + d;
-  if (d.startsWith("5")   && d.length === 10) return "90" + d;
-  return d;
-}
-function isValidPhone(raw: string) { return /^905[0-9]{9}$/.test(normalizePhone(raw)); }
+import { normalizePhone, isValidTrMobile } from "@/lib/phone";
 function validateTcVkn(val: string): string | null {
   if (!val) return null;
   const d = val.replace(/\D/g, "");
@@ -53,7 +45,7 @@ function validateFields(fields: FieldDef[], values: Record<string, string>): Rec
     if (f.required && !f.optional && f.type !== "checkbox" && !val) { errors[f.id] = "Bu alan zorunludur."; continue; }
     if (f.id === "kvkk" && values[f.id] !== "true") { errors[f.id] = "Devam etmek için onay vermeniz gerekir."; continue; }
     if (!val) continue;
-    if (f.id === "phone"        && !isValidPhone(val))   { errors[f.id] = "Geçerli bir Türkiye cep numarası girin."; continue; }
+    if (f.id === "phone"        && !isValidTrMobile(val))   { errors[f.id] = "Geçerli bir Türkiye cep numarası girin."; continue; }
     if (f.id === "tc_vkn")      { const e = validateTcVkn(val); if (e) errors[f.id] = e; continue; }
     if (f.id === "plaka"        && !isValidPlaka(val))   { errors[f.id] = "Geçerli bir Türk plakası girin."; continue; }
     if (f.id === "dogum_tarihi" && calcAge(val) < 18)    { errors[f.id] = "18 yaşından büyük olmanız gerekir."; continue; }

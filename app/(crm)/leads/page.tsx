@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import Papa from "papaparse";
 import { supabase } from "@/lib/supabase";
+import { normalizePhone } from "@/lib/phone";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -158,14 +159,6 @@ function isMobilePhone(raw: string): boolean {
 }
 
 /** Normalize to E.164-style 90xxxxxxxxxx (no +). */
-function normalizePhone(raw: string): string {
-  const d = raw.replace(/\D/g, "");
-  if (d.startsWith("90") && d.length === 12) return d;
-  if (d.startsWith("0") && d.length === 11) return "9" + d;
-  if (d.length === 10) return "90" + d;
-  return d;
-}
-
 /** Build WhatsApp href or null if phone is not a mobile number. */
 function waHref(rawPhone: string | null, message: string): string | null {
   if (!rawPhone) return null;

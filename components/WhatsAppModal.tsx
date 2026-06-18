@@ -2,17 +2,7 @@
 
 import { useState } from "react";
 
-// ─── Phone normalization ───────────────────────────────────────────────────────
-// 05xx... (11 digits)  → 905xx...
-// +905xx... / 905xx... → 905xx...
-// 5xx...  (10 digits)  → 905xx...
-export function normalizePhone(phone: string): string {
-  const d = phone.replace(/\D/g, "");
-  if (d.startsWith("90") && d.length === 12) return d;
-  if (d.startsWith("0") && d.length === 11) return "9" + d;
-  if (d.length === 10) return "90" + d;
-  return d;
-}
+import { normalizePhone } from "@/lib/phone";
 
 // ─── Message templates ────────────────────────────────────────────────────────
 type Template = {

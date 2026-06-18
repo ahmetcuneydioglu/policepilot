@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Copy, Check, MessageSquare, Sparkles, X, Phone } from "lucide-react";
-import { normalizePhone } from "./WhatsAppModal";
+import { normalizePhone } from "@/lib/phone";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type WaQuoteResult = {

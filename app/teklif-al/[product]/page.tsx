@@ -6,22 +6,7 @@ import { notFound } from "next/navigation";
 import { findProduct, categoryOf, type FieldDef } from "@/lib/insurance-products";
 import { supabase } from "@/lib/supabase";
 
-// ─── Phone ────────────────────────────────────────────────────────────────────
-// Accepted: 05xxxxxxxxx | 5xxxxxxxxx | +905xxxxxxxxx | 905xxxxxxxxx
-// Stored as: 905xxxxxxxxx (12 digits, E.164-ish without +)
-function normalizePhone(raw: string): string {
-  const d = raw.replace(/\D/g, "");
-  if (d.startsWith("905") && d.length === 12) return d;
-  if (d.startsWith("05") && d.length === 11)  return "9" + d;       // 05xx → 905xx
-  if (d.startsWith("5") && d.length === 10)   return "90" + d;      // 5xx  → 905xx
-  if (d.startsWith("90") && d.length === 12)  return d;             // already 90xx
-  return d;
-}
-
-function isValidPhone(raw: string): boolean {
-  const normalized = normalizePhone(raw);
-  return /^905[0-9]{9}$/.test(normalized);
-}
+import { normalizePhone, isValidTrMobile } from "@/lib/phone";
 
 // ─── TC / VKN ─────────────────────────────────────────────────────────────────
 // Format only — real checksum validation requires SBM / Nüfus Müdürlüğü API.
@@ -105,7 +90,7 @@ function validateFields(
 
     // Phone
     if (f.id === "phone") {
-      if (!isValidPhone(val)) {
+      if (!isValidTrMobile(val)) {
         errors[f.id] =
           "Geçerli bir Türkiye cep numarası girin. (05xxxxxxxxx / +905xxxxxxxxx)";
       }
