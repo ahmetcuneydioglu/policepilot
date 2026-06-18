@@ -292,11 +292,19 @@ export default function LeadsPage() {
   // ---------------------------------------------------------------------------
   const loadLeads = useCallback(async () => {
     setLoading(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.from("leads") as any)
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (!error && data) setLeads(data as Lead[]);
+    // TÜM lead'leri 1000'lik partiler halinde çek — Supabase 1000-cap'ini sessizce
+    // yutmaz (binlerce lead'de veri eksilmez). Filtre/mutasyon mantığı aynen kalır.
+    const all: Lead[] = [];
+    const BATCH = 1000;
+    for (let from = 0; ; from += BATCH) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase.from("leads") as any)
+        .select("*").order("created_at", { ascending: false }).range(from, from + BATCH - 1);
+      if (error || !data || data.length === 0) break;
+      all.push(...(data as Lead[]));
+      if (data.length < BATCH) break;
+    }
+    setLeads(all);
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -397,9 +405,16 @@ export default function LeadsPage() {
     setImportResult(null);
 
     // Load existing leads for duplicate check (company_name + phone)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing } = await (supabase.from("leads") as any)
-      .select("company_name, phone");
+    // Mükerrer kontrolü için TÜM mevcut lead'leri partiler halinde çek (cap'siz)
+    const existing: { company_name: string; phone: string | null }[] = [];
+    for (let from = 0; ; from += 1000) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase.from("leads") as any)
+        .select("company_name, phone").range(from, from + 999);
+      if (error || !data || data.length === 0) break;
+      existing.push(...(data as { company_name: string; phone: string | null }[]));
+      if (data.length < 1000) break;
+    }
     const existingSet = new Set<string>(
       (existing ?? []).map(
         (r: { company_name: string; phone: string | null }) =>
