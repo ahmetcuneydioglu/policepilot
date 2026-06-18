@@ -18,8 +18,10 @@ import type { NextRequest } from "next/server";
 import { processQueue } from "@/services/whatsapp/queueService";
 
 export async function GET(request: NextRequest) {
+  // Fail-closed: CRON_SECRET set DEĞİLSE de reddet (env unutulursa endpoint herkese açılmaz).
+  const cronSecret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronSecret || auth !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
