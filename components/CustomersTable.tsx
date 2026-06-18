@@ -26,11 +26,23 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
   );
 }
 
-export default function CustomersTable({ customers, members }: { customers: Customer[]; members?: Member[] }) {
+/**
+ * Controlled (presentational): arama/filtre/sayfalama PAGE tarafından sunucuda
+ * yapılır; bu bileşen yalnız verilen sayfayı render eder (1000-cap sessiz kesme yok).
+ */
+export default function CustomersTable({
+  customers, members, search, onSearch, creatorFilter, onCreatorFilter, total,
+}: {
+  customers: Customer[];
+  members?: Member[];
+  search: string;
+  onSearch: (v: string) => void;
+  creatorFilter: string;
+  onCreatorFilter: (v: string) => void;
+  total: number;
+}) {
   const router = useRouter();
   const [waCustomer, setWaCustomer] = useState<Customer | null>(null);
-  const [search, setSearch] = useState("");
-  const [creatorFilter, setCreatorFilter] = useState("all");
   const [toast, setToast] = useState("");
 
   // members verildiyse (owner/manager) "Ekleyen" sütunu + kişi filtresi gösterilir.
@@ -41,29 +53,7 @@ export default function CustomersTable({ customers, members }: { customers: Cust
     return m;
   }, [members]);
 
-  const filtered = customers.filter(
-    (c) =>
-      (creatorFilter === "all" || c.created_by === creatorFilter) &&
-      (c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.insurance_type.toLowerCase().includes(search.toLowerCase()) ||
-        c.phone.includes(search))
-  );
-
-  function handleWaSent() {
-    setToast("WhatsApp mesajı hazırlandı");
-  }
-
-  if (customers.length === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center py-16 text-center">
-        <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-        <p className="text-sm font-medium text-gray-500">Henüz müşteri yok</p>
-        <p className="text-xs text-gray-400 mt-1">İlk müşteriyi eklemek için butona tıklayın</p>
-      </div>
-    );
-  }
+  const hasFilter = search.trim() !== "" || creatorFilter !== "all";
 
   return (
     <>
@@ -75,15 +65,15 @@ export default function CustomersTable({ customers, members }: { customers: Cust
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Müşteri ara..."
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Müşteri ara (ad, telefon, tür)..."
             className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
           />
         </div>
         {showCreator && (members?.length ?? 0) > 1 && (
           <select
             value={creatorFilter}
-            onChange={(e) => setCreatorFilter(e.target.value)}
+            onChange={(e) => onCreatorFilter(e.target.value)}
             className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             title="Ekleyene göre filtrele"
           >
@@ -93,80 +83,90 @@ export default function CustomersTable({ customers, members }: { customers: Cust
             ))}
           </select>
         )}
-        <span className="text-sm text-gray-400">{filtered.length} müşteri</span>
+        <span className="text-sm text-gray-400">{total} müşteri</span>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ad Soyad</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Telefon</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sigorta Türü</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Kayıt</th>
-                {showCreator && (
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ekleyen</th>
-                )}
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksiyonlar</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map((customer, i) => (
-                <tr
-                  key={customer.id}
-                  onClick={() => router.push(`/customers/${customer.id}`)}
-                  className="hover:bg-blue-50/40 transition-colors group cursor-pointer animate-fade-in-up"
-                  style={{ animationDelay: `${i * 30}ms` }}
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-                        {customer.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-800">{customer.name}</p>
-                        {customer.note && (
-                          <p className="text-xs text-gray-400 truncate max-w-[160px]">{customer.note}</p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">{customer.phone}</td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-slate-700 font-medium">{customer.insurance_type}</span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-400 text-xs">
-                    {new Date(customer.created_at).toLocaleDateString("tr-TR")}
-                  </td>
-                  {showCreator && (
-                    <td className="px-6 py-4 text-gray-600 text-xs">
-                      {customer.created_by ? (creatorMap.get(customer.created_by) ?? "—") : "—"}
-                    </td>
-                  )}
-                  <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setWaCustomer(customer); }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors border border-emerald-100"
-                      >
-                        {WA_SVG}
-                        WhatsApp
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); router.push(`/customers/${customer.id}`); }}
-                        className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                      >
-                        Kontrol Merkezi →
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {customers.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center py-16 text-center">
+          <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p className="text-sm font-medium text-gray-500">{hasFilter ? "Sonuç bulunamadı" : "Henüz müşteri yok"}</p>
+          {!hasFilter && <p className="text-xs text-gray-400 mt-1">İlk müşteriyi eklemek için butona tıklayın</p>}
         </div>
-      </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ad Soyad</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Telefon</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sigorta Türü</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Kayıt</th>
+                  {showCreator && (
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ekleyen</th>
+                  )}
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksiyonlar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {customers.map((customer, i) => (
+                  <tr
+                    key={customer.id}
+                    onClick={() => router.push(`/customers/${customer.id}`)}
+                    className="hover:bg-blue-50/40 transition-colors group cursor-pointer animate-fade-in-up"
+                    style={{ animationDelay: `${i * 30}ms` }}
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                          {customer.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800">{customer.name}</p>
+                          {customer.note && (
+                            <p className="text-xs text-gray-400 truncate max-w-[160px]">{customer.note}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">{customer.phone}</td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-slate-700 font-medium">{customer.insurance_type}</span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-400 text-xs">
+                      {new Date(customer.created_at).toLocaleDateString("tr-TR")}
+                    </td>
+                    {showCreator && (
+                      <td className="px-6 py-4 text-gray-600 text-xs">
+                        {customer.created_by ? (creatorMap.get(customer.created_by) ?? "—") : "—"}
+                      </td>
+                    )}
+                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setWaCustomer(customer); }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors border border-emerald-100"
+                        >
+                          {WA_SVG}
+                          WhatsApp
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); router.push(`/customers/${customer.id}`); }}
+                          className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        >
+                          Kontrol Merkezi →
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {waCustomer && (
         <WhatsAppModal
@@ -174,7 +174,7 @@ export default function CustomersTable({ customers, members }: { customers: Cust
           phone={waCustomer.phone}
           insuranceType={waCustomer.insurance_type}
           onClose={() => setWaCustomer(null)}
-          onSent={handleWaSent}
+          onSent={() => setToast("WhatsApp mesajı hazırlandı")}
         />
       )}
 

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import { withScopeFilter, withRequestScope } from "@/lib/tenant";
 import type { Request, Customer } from "@/lib/database.types";
 import AddRequestModal from "@/components/AddRequestModal";
+
+const PAGE_SIZE = 50;
 
 const statusStyles: Record<string, string> = {
   Yeni: "bg-blue-100 text-blue-700",
@@ -22,39 +24,52 @@ export default function RequestsPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refreshAll = () => setRefreshKey((k) => k + 1);
 
-  async function load() {
+  // ── Talep listesi: kapsam + .range (1000-cap'e takılmaz) ────────────────────
+  const loadRequests = useCallback(async () => {
+    setLoading(true);
     // requests'te created_by yok → bağlı müşterinin created_by'si üzerinden scope.
-    // Non-managerial: yalnız kendi müşterilerinin talepleri görünür.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let reqQuery = (supabase.from("requests") as any)
-      .select("*, customers!inner(name, created_by)")
+    let q = (supabase.from("requests") as any)
+      .select("*, customers!inner(name, created_by)", { count: "exact" })
       .order("created_at", { ascending: false });
-    reqQuery = withRequestScope(reqQuery, role, agencyId, profile?.id, profile?.agency_role);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let custQuery = (supabase.from("customers") as any)
-      .select("id, name, phone, insurance_type, note, created_at")
-      .order("name");
-    custQuery = withScopeFilter(custQuery, role, agencyId, profile?.id, profile?.agency_role);
-    const [{ data: reqs }, { data: custs }] = await Promise.all([reqQuery, custQuery]);
-    setRequests((reqs as RequestWithCustomer[]) ?? []);
-    setCustomers((custs as Customer[]) ?? []);
+    q = withRequestScope(q, role, agencyId, profile?.id, profile?.agency_role);
+    const from = page * PAGE_SIZE;
+    const { data, count } = await q.range(from, from + PAGE_SIZE - 1);
+    setRequests((data as RequestWithCustomer[]) ?? []);
+    setTotal(count ?? 0);
     setLoading(false);
-  }
+  }, [role, agencyId, profile?.id, profile?.agency_role, page]);
 
-  // re-fetch when auth resolves (role/agencyId may be null on first render)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [role, agencyId, profile?.id, profile?.agency_role]);
+  useEffect(() => { loadRequests(); }, [loadRequests, refreshKey]);
+
+  // ── Müşteri listesi (yeni talep modalı için) — bir kez ─────────────────────
+  const loadCustomers = useCallback(async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q = (supabase.from("customers") as any)
+      .select("id, name, phone, insurance_type, note, created_at")
+      .order("name").limit(500);
+    q = withScopeFilter(q, role, agencyId, profile?.id, profile?.agency_role);
+    const { data } = await q;
+    setCustomers((data as Customer[]) ?? []);
+  }, [role, agencyId, profile?.id, profile?.agency_role]);
+
+  useEffect(() => { loadCustomers(); }, [loadCustomers]);
 
   async function updateStatus(id: string, status: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from("requests") as any).update({ status }).eq("id", id);
-    load();
+    refreshAll();
   }
 
   function handleClose() {
     setShowAdd(false);
-    load();
+    setPage(0);
+    refreshAll();
   }
 
   return (
@@ -63,7 +78,7 @@ export default function RequestsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Teklif Talepleri</h1>
           <p className="text-gray-500 mt-0.5 text-sm">
-            {loading ? "Yükleniyor..." : `${requests.length} talep`}
+            {loading ? "Yükleniyor..." : `${total} talep`}
           </p>
         </div>
         <button
@@ -152,6 +167,27 @@ export default function RequestsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+          {/* Sayfalama */}
+          <div className="px-6 py-3 border-t border-gray-50 bg-slate-50/50 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-xs text-gray-400">
+              {total > 0 ? `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} / ${total} kayıt` : "0 kayıt"}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition-colors"
+              >← Önceki</button>
+              <span className="text-xs text-gray-500 tabular-nums">
+                Sayfa {page + 1} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+              </span>
+              <button
+                onClick={() => setPage((p) => ((p + 1) * PAGE_SIZE < total ? p + 1 : p))}
+                disabled={(page + 1) * PAGE_SIZE >= total}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition-colors"
+              >Sonraki →</button>
+            </div>
           </div>
         </div>
       )}

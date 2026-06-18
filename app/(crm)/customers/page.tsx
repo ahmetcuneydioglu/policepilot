@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import type { Customer } from "@/lib/database.types";
@@ -9,50 +9,59 @@ import AddCustomerModal from "@/components/AddCustomerModal";
 import BulkPolicyImport from "@/components/BulkPolicyImport";
 import { withScopeFilter, isManagerial } from "@/lib/tenant";
 
+const PAGE_SIZE = 50;
+
 export default function CustomersPage() {
   const { role, agencyId, can, profile } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [creatorFilter, setCreatorFilter] = useState("all");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refreshAll = () => setRefreshKey((k) => k + 1);
 
-  // owner/manager → "Ekleyen" sütunu+filtresi için acente üyelerini çek (created_by eşlemesi)
+  // owner/manager → "Ekleyen" sütunu/filtresi
   const managerial = isManagerial(profile?.agency_role);
 
-  async function load() {
+  // arama debounce + filtre/arama değişince ilk sayfaya dön
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.replace(/[%,()]/g, " ").trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, creatorFilter]);
+
+  // ── Sayfa verisi: kapsam + arama + Ekleyen filtresi + .range (1000-cap'siz) ─
+  const loadPage = useCallback(async () => {
+    setLoading(true);
     setFetchError("");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase.from("customers") as any)
-      .select("*")
-      .order("created_at", { ascending: false });
-    // Kapsam: super_admin tümü; owner/manager acente; diğerleri yalnız kendi (created_by)
-    query = withScopeFilter(query, role, agencyId, profile?.id, profile?.agency_role);
-    const { data, error } = await query;
-
+    let q: any = withScopeFilter((supabase.from("customers") as any).select("*", { count: "exact" }).order("created_at", { ascending: false }), role, agencyId, profile?.id, profile?.agency_role);
+    const s = debouncedSearch;
+    if (s) q = q.or(`name.ilike.%${s}%,phone.ilike.%${s}%,insurance_type.ilike.%${s}%`);
+    if (creatorFilter !== "all") q = q.eq("created_by", creatorFilter);
+    const from = page * PAGE_SIZE;
+    const { data, count, error } = await q.range(from, from + PAGE_SIZE - 1);
     if (error) {
       console.error("CUSTOMERS_FETCH_ERROR", error);
-      let msg = error.message ?? "Bilinmeyen hata";
-      if (error.code === "42501" || msg.toLowerCase().includes("rls") || msg.toLowerCase().includes("policy")) {
-        msg = `RLS hatası: 'customers' tablosuna SELECT izni yok. Supabase Dashboard → Authentication → Policies bölümünden SELECT policy ekleyin. (${msg})`;
-      } else if (error.code === "42P01") {
-        msg = `Tablo bulunamadı: 'customers' tablosu Supabase'de mevcut değil. schema.sql dosyasını çalıştırın. (${msg})`;
-      }
-      setFetchError(msg);
+      setFetchError(error.message ?? "Veri alınamadı");
       setLoading(false);
       return;
     }
-
-    setCustomers(data ?? []);
+    setCustomers((data ?? []) as Customer[]);
+    setTotal(count ?? 0);
     setLoading(false);
-  }
+  }, [role, agencyId, profile?.id, profile?.agency_role, debouncedSearch, creatorFilter, page]);
 
-  // re-fetch whenever auth resolves (role/agencyId may be null on first render)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [role, agencyId, profile?.id, profile?.agency_role]);
+  useEffect(() => { loadPage(); }, [loadPage, refreshKey]);
 
-  // Managerial → acente üyelerini çek ("Ekleyen" eşlemesi); non-managerial'da boş.
+  // Managerial → acente üyelerini çek ("Ekleyen" eşlemesi)
   useEffect(() => {
     if (!managerial) { setMembers([]); return; }
     fetch("/api/agency/members")
@@ -61,10 +70,10 @@ export default function CustomersPage() {
       .catch(() => {});
   }, [managerial, agencyId]);
 
-  function handleClose() {
-    setShowAdd(false);
-    load();
-  }
+  function handleClose() { setShowAdd(false); setPage(0); refreshAll(); }
+
+  const showSkeleton = loading && customers.length === 0 && total === 0 && !fetchError;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -72,7 +81,7 @@ export default function CustomersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Müşteriler</h1>
           <p className="text-gray-500 mt-0.5 text-sm">
-            {loading ? "Yükleniyor..." : fetchError ? "Veri alınamadı" : `${customers.length} müşteri kayıtlı`}
+            {showSkeleton ? "Yükleniyor..." : fetchError ? "Veri alınamadı" : `${total} müşteri kayıtlı`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -106,7 +115,7 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {loading ? (
+      {showSkeleton ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">
@@ -120,7 +129,35 @@ export default function CustomersPage() {
         </div>
       ) : !fetchError && (
         <div className="animate-fade-in-up stagger-1">
-          <CustomersTable customers={customers} members={managerial ? members : undefined} />
+          <CustomersTable
+            customers={customers}
+            members={managerial ? members : undefined}
+            search={search}
+            onSearch={setSearch}
+            creatorFilter={creatorFilter}
+            onCreatorFilter={setCreatorFilter}
+            total={total}
+          />
+          {total > 0 && (
+            <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-gray-400">
+                {`${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} / ${total} kayıt`}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition-colors"
+                >← Önceki</button>
+                <span className="text-xs text-gray-500 tabular-nums">Sayfa {page + 1} / {totalPages}</span>
+                <button
+                  onClick={() => setPage((p) => ((p + 1) * PAGE_SIZE < total ? p + 1 : p))}
+                  disabled={(page + 1) * PAGE_SIZE >= total}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition-colors"
+                >Sonraki →</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -130,8 +167,8 @@ export default function CustomersPage() {
         <BulkPolicyImport
           agencyId={agencyId}
           role={role}
-          onClose={() => { setShowBulk(false); load(); }}
-          onDone={load}
+          onClose={() => { setShowBulk(false); setPage(0); refreshAll(); }}
+          onDone={refreshAll}
         />
       )}
     </div>
