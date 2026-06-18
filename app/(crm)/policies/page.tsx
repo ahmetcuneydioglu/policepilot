@@ -28,6 +28,27 @@ function isExpired(endDate: string): boolean {
   return new Date(endDate).getTime() < Date.now();
 }
 
+// ─── Server-side sayfalama yardımcıları ─────────────────────────────────────────
+const PAGE_SIZE = 50;
+/** TR bugün (YYYY-MM-DD) */
+function todayStr(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Istanbul" });
+}
+function addDaysStr(base: string, days: number): string {
+  const d = new Date(`${base}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+/** Filtre çipini DB sorgusuna çevirir (client isExpired/daysLeft mantığının server karşılığı). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyPolicyFilter(q: any, filter: FilterKey, today: string): any {
+  if (filter === "Aktif")    return q.eq("status", "Aktif").gte("end_date", today);
+  if (filter === "Yaklaşan") return q.eq("status", "Aktif").gte("end_date", today).lte("end_date", addDaysStr(today, 30));
+  if (filter === "Geçmiş")   return q.lt("end_date", today);
+  if (filter === "Pasif")    return q.eq("status", "Pasif");
+  return q; // Tümü
+}
+
 function expiryBadge(endDate: string, status: PolicyStatus) {
   if (status === "Yenilendi") return { label: "✅ Yenilendi", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
   if (status === "Pasif") return { label: "Pasif", cls: "bg-gray-100 text-gray-500 border-gray-200" };
@@ -991,64 +1012,84 @@ function PolicyRow({
 export default function PoliciesPage() {
   const { role, agencyId, profile, can } = useAuth();
   const [policies, setPolicies] = useState<PolicyWithCustomer[]>([]);
+  const [counts, setCounts] = useState<Record<FilterKey, number>>({ Tümü: 0, Aktif: 0, Yaklaşan: 0, Geçmiş: 0, Pasif: 0 });
+  const [criticalCount, setCriticalCount] = useState(0);
+  const [warningCount, setWarningCount]   = useState(0);
+  const [total, setTotal] = useState(0);
+  const [page, setPage]   = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("Tümü");
   const [selected, setSelected] = useState<PolicyWithCustomer | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [waPolicy, setWaPolicy] = useState<PolicyWithCustomer | null>(null);
   const [toast, setToast] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refreshAll = () => setRefreshKey((k) => k + 1);
 
-  const fetchPolicies = useCallback(async () => {
+  // Arama debounce — her tuşta server'a gitmesin
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.replace(/[%,()]/g, " ").trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  // Filtre/arama değişince ilk sayfaya dön
+  useEffect(() => { setPage(0); }, [filter, debouncedSearch]);
+
+  // ── Sayfa verisi: kapsam + filtre + arama + .range (1000-cap'e takılmaz) ────
+  const loadPage = useCallback(async () => {
+    setLoading(true);
+    const today = todayStr();
+
+    // Arama: poliçe alanları ilike OR + müşteri adı eşleşmeleri customer_id.in ile
+    let searchOr: string | null = null;
+    const s = debouncedSearch;
+    if (s) {
+      const ors = [`policy_type.ilike.%${s}%`, `insurance_company.ilike.%${s}%`, `policy_no.ilike.%${s}%`];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cq = withScopeFilter((supabase.from("customers") as any).select("id"), role, agencyId, profile?.id, profile?.agency_role)
+        .ilike("name", `%${s}%`).limit(200);
+      const { data: custMatches } = await cq;
+      const ids = ((custMatches ?? []) as { id: string }[]).map((c) => c.id);
+      if (ids.length) ors.push(`customer_id.in.(${ids.join(",")})`);
+      searchOr = ors.join(",");
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q = (supabase.from("policies") as any)
-      .select("*, customers(name, phone)")
-      .order("end_date", { ascending: true });
-    // Kapsam: owner/manager acente; satış/operasyon/görüntüleyici yalnız kendi
-    q = withScopeFilter(q, role, agencyId, profile?.id, profile?.agency_role);
-    const { data, error } = await q;
+    let q: any = withScopeFilter((supabase.from("policies") as any).select("*, customers(name, phone)", { count: "exact" }), role, agencyId, profile?.id, profile?.agency_role);
+    q = applyPolicyFilter(q, filter, today);
+    if (searchOr) q = q.or(searchOr);
+    const from = page * PAGE_SIZE;
+    const { data, count, error } = await q.order("end_date", { ascending: true }).range(from, from + PAGE_SIZE - 1);
     if (error) console.error("[policies] fetch error:", error.message);
     setPolicies((data ?? []) as PolicyWithCustomer[]);
+    setTotal(count ?? 0);
     setLoading(false);
+  }, [filter, debouncedSearch, page, role, agencyId, profile?.id, profile?.agency_role]);
+
+  useEffect(() => { loadPage(); }, [loadPage, refreshKey]);
+
+  // ── Çip sayıları + kritik/uyarı: kapsam toplamları (arama/sayfa bağımsız) ───
+  const loadCounts = useCallback(async () => {
+    const today = todayStr();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const base = () => withScopeFilter((supabase.from("policies") as any).select("id", { count: "exact", head: true }), role, agencyId, profile?.id, profile?.agency_role);
+    const reqs = [
+      base(),
+      applyPolicyFilter(base(), "Aktif", today),
+      applyPolicyFilter(base(), "Yaklaşan", today),
+      applyPolicyFilter(base(), "Geçmiş", today),
+      applyPolicyFilter(base(), "Pasif", today),
+      base().eq("status", "Aktif").gte("end_date", today).lte("end_date", addDaysStr(today, 5)),
+      base().eq("status", "Aktif").gt("end_date", addDaysStr(today, 5)).lte("end_date", addDaysStr(today, 15)),
+    ];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [a, ak, y, g, p, c, w] = await Promise.all(reqs.map((r: any) => r.then((x: any) => x.count ?? 0)));
+    setCounts({ Tümü: a, Aktif: ak, Yaklaşan: y, Geçmiş: g, Pasif: p });
+    setCriticalCount(c); setWarningCount(w);
   }, [role, agencyId, profile?.id, profile?.agency_role]);
 
-  useEffect(() => {
-    setLoading(true);
-    fetchPolicies();
-  }, [fetchPolicies]);
-
-  // ── Filtre sayıları
-  const counts = {
-    Tümü:     policies.length,
-    Aktif:    policies.filter((p) => p.status === "Aktif" && !isExpired(p.end_date)).length,
-    Yaklaşan: policies.filter((p) => p.status === "Aktif" && !isExpired(p.end_date) && daysLeft(p.end_date) <= 30).length,
-    Geçmiş:   policies.filter((p) => isExpired(p.end_date)).length,
-    Pasif:    policies.filter((p) => p.status === "Pasif").length,
-  };
-
-  // ── Filtrele + arama
-  const q = search.toLowerCase().trim();
-  const filtered = policies.filter((p) => {
-    // Filtre chip
-    if (filter === "Aktif"    && (p.status !== "Aktif" || isExpired(p.end_date))) return false;
-    if (filter === "Yaklaşan" && (p.status !== "Aktif" || isExpired(p.end_date) || daysLeft(p.end_date) > 30)) return false;
-    if (filter === "Geçmiş"   && !isExpired(p.end_date)) return false;
-    if (filter === "Pasif"    && p.status !== "Pasif") return false;
-    // Arama
-    if (q) {
-      const hit =
-        (p.customers?.name?.toLowerCase().includes(q) ?? false) ||
-        p.policy_type.toLowerCase().includes(q) ||
-        (p.insurance_company?.toLowerCase().includes(q) ?? false) ||
-        (p.policy_no?.toLowerCase().includes(q) ?? false);
-      if (!hit) return false;
-    }
-    return true;
-  });
-
-  // ── Kritik / uyarı
-  const critical = policies.filter((p) => p.status === "Aktif" && !isExpired(p.end_date) && daysLeft(p.end_date) <= 5);
-  const warning  = policies.filter((p) => p.status === "Aktif" && !isExpired(p.end_date) && daysLeft(p.end_date) > 5 && daysLeft(p.end_date) <= 15);
+  useEffect(() => { loadCounts(); }, [loadCounts, refreshKey]);
 
   const FILTERS: FilterKey[] = ["Tümü", "Aktif", "Yaklaşan", "Geçmiş", "Pasif"];
   const filterColors: Record<FilterKey, string> = {
@@ -1067,7 +1108,7 @@ export default function PoliciesPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Poliçe Takibi</h1>
           <p className="text-gray-500 mt-0.5 text-sm">
-            {loading ? "Yükleniyor..." : `${policies.length} poliçe`}
+            {loading ? "Yükleniyor..." : `${counts.Tümü} poliçe`}
           </p>
         </div>
         {can("policy.create") && (
@@ -1084,21 +1125,21 @@ export default function PoliciesPage() {
       </div>
 
       {/* Kritik / Uyarı bannerlar */}
-      {!loading && (critical.length > 0 || warning.length > 0) && (
+      {!loading && (criticalCount > 0 || warningCount > 0) && (
         <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up stagger-1">
-          {critical.length > 0 && (
+          {criticalCount > 0 && (
             <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex-1">
               <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
               <p className="text-sm text-red-700 font-medium">
-                <span className="font-bold">{critical.length} poliçe</span> kritik — 5 gün veya daha az kaldı
+                <span className="font-bold">{criticalCount} poliçe</span> kritik — 5 gün veya daha az kaldı
               </p>
             </div>
           )}
-          {warning.length > 0 && (
+          {warningCount > 0 && (
             <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex-1">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0" />
               <p className="text-sm text-amber-700 font-medium">
-                <span className="font-bold">{warning.length} poliçe</span> yaklaşıyor — 15 gün içinde bitiyor
+                <span className="font-bold">{warningCount} poliçe</span> yaklaşıyor — 15 gün içinde bitiyor
               </p>
             </div>
           )}
@@ -1153,7 +1194,7 @@ export default function PoliciesPage() {
             ))}
           </div>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : policies.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center py-16 text-center animate-fade-in-up">
           <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -1186,7 +1227,7 @@ export default function PoliciesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map((p, i) => (
+                {policies.map((p, i) => (
                   <PolicyRow
                     key={p.id}
                     policy={p}
@@ -1198,10 +1239,27 @@ export default function PoliciesPage() {
               </tbody>
             </table>
           </div>
-          <div className="px-6 py-3 border-t border-gray-50 bg-slate-50/50">
+          <div className="px-6 py-3 border-t border-gray-50 bg-slate-50/50 flex items-center justify-between gap-3 flex-wrap">
             <p className="text-xs text-gray-400">
-              {filtered.length} kayıt gösteriliyor{filtered.length !== policies.length ? ` (toplam ${policies.length})` : ""}
+              {total > 0
+                ? `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} / ${total} kayıt`
+                : "0 kayıt"}
             </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition-colors"
+              >← Önceki</button>
+              <span className="text-xs text-gray-500 tabular-nums">
+                Sayfa {page + 1} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+              </span>
+              <button
+                onClick={() => setPage((p) => ((p + 1) * PAGE_SIZE < total ? p + 1 : p))}
+                disabled={(page + 1) * PAGE_SIZE >= total}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition-colors"
+              >Sonraki →</button>
+            </div>
           </div>
         </div>
       )}
@@ -1212,7 +1270,7 @@ export default function PoliciesPage() {
           policy={selected}
           agencyId={agencyId}
           onClose={() => setSelected(null)}
-          onRefresh={() => { fetchPolicies(); setSelected(null); }}
+          onRefresh={() => { refreshAll(); setSelected(null); }}
         />
       )}
 
@@ -1222,7 +1280,7 @@ export default function PoliciesPage() {
           mode="add"
           agencyId={agencyId}
           onClose={() => setAddOpen(false)}
-          onSaved={() => { fetchPolicies(); setToast("Poliçe başarıyla eklendi"); }}
+          onSaved={() => { refreshAll(); setToast("Poliçe başarıyla eklendi"); }}
         />
       )}
 
