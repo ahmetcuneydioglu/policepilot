@@ -8,24 +8,13 @@
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 
-export function fmtMoney(n: number | null | undefined): string {
-  if (n == null) return "—";
-  return n.toLocaleString("tr-TR", { maximumFractionDigits: 0 }) + " ₺";
-}
+// Para/tarih biçimlendirme tek kaynaktan (lib/format) — hem içeride kullan hem re-export.
+import { fmtMoney, fmtDate, fmtDateTime } from "@/lib/format";
+export { fmtMoney, fmtDate, fmtDateTime };
 
 export function fmtNum(n: number | null | undefined): string {
   if (n == null) return "—";
   return n.toLocaleString("tr-TR");
-}
-
-export function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-export function fmtDateTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("tr-TR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 export function timeAgo(iso: string | null | undefined): string {

@@ -111,22 +111,8 @@ export type CustomerBundle = {
   insights: CustomerInsights;
 };
 
-// ─── Format helpers ───────────────────────────────────────────────────────────
-
-export function fmtMoney(n: number | null | undefined): string {
-  if (n == null) return "—";
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 0 }) + " ₺";
-}
-
-export function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-export function fmtDateTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("tr-TR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
+// ─── Format helpers — tek kaynak (lib/format), re-export ──────────────────────
+export { fmtMoney, fmtDate, fmtDateTime } from "@/lib/format";
 
 export function daysLeft(endDate: string): number {
   const end = new Date(endDate); end.setHours(23, 59, 59, 999);
