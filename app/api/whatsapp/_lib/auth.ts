@@ -64,7 +64,7 @@ export async function resolveCaller(request: NextRequest): Promise<ApiCaller | n
  * Yetki guard'ı — mutation endpoint'lerinde kullanılır.
  *  - super_admin her zaman geçer (bypass).
  *  - status='suspended' → 403 (okuma serbest, yazma kapalı).
- *  - agencyRole yoksa (legacy) 'owner' varsayılır → eski kullanıcı kilitlenmez.
+ *  - agencyRole yoksa (belirsiz) 'viewer' (fail-closed) → en düşük yetki, escalate etmez.
  * İzin varsa null döner; yoksa hazır NextResponse döner.
  *
  * Kullanım:  const denied = requirePermission(caller, "customer.edit");
@@ -75,7 +75,7 @@ export function requirePermission(caller: ApiCaller, key: PermissionKey): NextRe
   if (caller.status === "suspended") {
     return NextResponse.json({ error: "Hesabınız askıya alınmış. Yöneticinizle görüşün.", code: "suspended" }, { status: 403 });
   }
-  const role = caller.agencyRole ?? "owner"; // legacy güvenlik: rol yoksa tam yetki
+  const role = caller.agencyRole ?? "viewer"; // fail-closed: rol belirsizse en düşük yetki
   if (hasPermission(role, caller.permissions ?? null, key)) return null;
   return NextResponse.json({ error: "Bu işlem için yetkiniz yok.", code: "forbidden_permission" }, { status: 403 });
 }

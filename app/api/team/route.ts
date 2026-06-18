@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       members: data ?? [],
       selfId: caller.userId,
-      callerRole: caller.agencyRole ?? "owner",
+      callerRole: caller.agencyRole ?? "viewer",
     });
   } catch (err) {
     console.error("[api/team GET]", err);
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Geçersiz rol: ${agencyRole}` }, { status: 400 });
     }
     // Yalnız owner, owner rolü atayabilir (manager ayrıcalık yükseltemez)
-    if (agencyRole === "owner" && (caller.agencyRole ?? "owner") !== "owner") {
+    if (agencyRole === "owner" && (caller.agencyRole ?? "viewer") !== "owner") {
       return NextResponse.json({ error: "Yalnız acente sahibi 'Acente Sahibi' rolü atayabilir." }, { status: 403 });
     }
 

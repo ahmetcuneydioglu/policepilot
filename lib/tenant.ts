@@ -31,13 +31,14 @@ export function withAgencyFilter(query: any, role: string | null, agencyId: stri
 
 // ─── Kişi-bazlı veri kapsamı ────────────────────────────────────────────────
 // Owner + Yönetici tüm acente verisini görür; Satış/Operasyon/Görüntüleyici
-// yalnız kendi oluşturduğunu (created_by). agency_role null → legacy owner sayılır.
+// yalnız kendi oluşturduğunu (created_by). agency_role null → fail-closed (viewer):
+// rolü belirsiz kullanıcı tüm acente verisini GÖREMEZ (DB'de agency_role NOT NULL).
 
 const MANAGERIAL_ROLES = new Set(["owner", "manager"]);
 
-/** Rol acente verisinin tümünü görebilir mi? (null → owner kabul, görür) */
+/** Rol acente verisinin tümünü görebilir mi? (null/belirsiz → HAYIR, fail-closed) */
 export function isManagerial(agencyRole: string | null | undefined): boolean {
-  return agencyRole == null || MANAGERIAL_ROLES.has(agencyRole);
+  return agencyRole != null && MANAGERIAL_ROLES.has(agencyRole);
 }
 
 /**

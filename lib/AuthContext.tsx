@@ -175,10 +175,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const agencyId = profile?.agency_id ?? null;
 
-  // ── Granular yetki: super_admin daima true; agency_role yoksa 'owner' (legacy) ──
+  // ── Granular yetki: super_admin daima true; agency_role yoksa 'viewer' (fail-closed) ──
   const can = useCallback((key: PermissionKey): boolean => {
     if (role === "super_admin") return true;
-    return hasPermission(profile?.agency_role ?? "owner", profile?.permissions ?? null, key);
+    return hasPermission(profile?.agency_role ?? "viewer", profile?.permissions ?? null, key);
   }, [role, profile?.agency_role, profile?.permissions]);
 
   console.log("[AuthContext] role:", role, "source:", roleSource, "agencyId:", agencyId);

@@ -45,7 +45,7 @@ export async function PATCH(
     if (!caller.agencyId) return NextResponse.json({ error: "Acente bağlamı bulunamadı." }, { status: 400 });
 
     const { userId } = await params;
-    const callerIsOwner = (caller.agencyRole ?? "owner") === "owner";
+    const callerIsOwner = (caller.agencyRole ?? "viewer") === "owner";
 
     const target = await loadTarget(caller.agencyId, userId);
     if (!target) return NextResponse.json({ error: "Üye bulunamadı." }, { status: 404 });
@@ -149,7 +149,7 @@ export async function DELETE(
     const { userId } = await params;
     if (userId === caller.userId) return NextResponse.json({ error: "Kendinizi silemezsiniz." }, { status: 400 });
 
-    const callerIsOwner = (caller.agencyRole ?? "owner") === "owner";
+    const callerIsOwner = (caller.agencyRole ?? "viewer") === "owner";
     const target = await loadTarget(caller.agencyId, userId);
     if (!target) return NextResponse.json({ error: "Üye bulunamadı." }, { status: 404 });
     if (target.role === "super_admin") return NextResponse.json({ error: "Platform yöneticisi silinemez." }, { status: 403 });
