@@ -116,7 +116,7 @@ function PolicyFormModal({
   initial?: PolicyWithCustomer | null;
   agencyId: string | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (policyId?: string | null) => void;
 }) {
   const [form, setForm] = useState<PolicyFormData>({
     customer_id:       initial?.customer_id ?? "",
@@ -262,13 +262,13 @@ function PolicyFormModal({
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const q = mode === "add"
-      ? (supabase.from("policies") as any).insert(payload)
-      : (supabase.from("policies") as any).update(payload).eq("id", initial!.id);
+      ? (supabase.from("policies") as any).insert(payload).select("id").single()
+      : (supabase.from("policies") as any).update(payload).eq("id", initial!.id).select("id").single();
 
-    const { error: err } = await q;
+    const { data: saved, error: err } = await q;
     setSaving(false);
     if (err) { setError(err.message); return; }
-    onSaved();
+    onSaved(saved?.id ?? null);
     onClose();
   }
 
@@ -1028,6 +1028,23 @@ export default function PoliciesPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const refreshAll = () => setRefreshKey((k) => k + 1);
 
+  // Satış Fırsatı → Poliçe dönüştürme: /policies?firsat=&customer=&type= ile prefill
+  const [prefill, setPrefill] = useState<PolicyWithCustomer | null>(null);
+  const [firsatId, setFirsatId] = useState<string | null>(null);
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const firsat = sp.get("firsat"), customer = sp.get("customer"), type = sp.get("type");
+    if (!firsat || !customer) return;
+    (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: c } = await (supabase.from("customers") as any).select("name").eq("id", customer).maybeSingle();
+      setPrefill({ customer_id: customer, policy_type: type || "Kasko", customers: { name: c?.name ?? "" } } as PolicyWithCustomer);
+      setFirsatId(firsat);
+      setAddOpen(true);
+      window.history.replaceState({}, "", "/policies"); // URL'i temizle
+    })();
+  }, []);
+
   // Arama debounce — her tuşta server'a gitmesin
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.replace(/[%,()]/g, " ").trim()), 300);
@@ -1278,9 +1295,19 @@ export default function PoliciesPage() {
       {addOpen && (
         <PolicyFormModal
           mode="add"
+          initial={prefill}
           agencyId={agencyId}
-          onClose={() => setAddOpen(false)}
-          onSaved={() => { refreshAll(); setToast("Poliçe başarıyla eklendi"); }}
+          onClose={() => { setAddOpen(false); setPrefill(null); setFirsatId(null); }}
+          onSaved={(policyId) => {
+            refreshAll();
+            setToast(firsatId ? "Fırsat poliçeye dönüştürüldü" : "Poliçe başarıyla eklendi");
+            if (firsatId && policyId) {
+              fetch(`/api/requests/${firsatId}`, {
+                method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ policy_id: policyId }),
+              }).catch(() => {});
+            }
+            setFirsatId(null); setPrefill(null);
+          }}
         />
       )}
 

@@ -44,6 +44,9 @@ export type UserPerf = {
   total_premium: number;
   total_commission: number;
   conversion: number;          // kazanılan/toplam teklif (%)
+  opportunities_total: number; // sorumlu olduğu satış fırsatı (requests.assigned_to)
+  opportunities_won: number;   // Kazanıldı aşamasındaki fırsat
+  opp_conversion: number;      // kazanılan/toplam fırsat (%)
   score: number;               // 0-100 performans skoru (çalışanlar arası normalize)
   last_activity: string | null;
   last_login: string | null;
@@ -77,12 +80,13 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
   const t = (table: string) => admin.from(table) as any;
   const monthStart = istMonthStartIso();
 
-  const [profRes, custRes, runRes, polRes, actRes] = await Promise.all([
+  const [profRes, custRes, runRes, polRes, actRes, reqRes] = await Promise.all([
     t("profiles").select("id, full_name, agency_role, last_login_at").eq("agency_id", agencyId),
     t("customers").select("created_by").eq("agency_id", agencyId),
     t("quote_runs").select("created_by, status, created_at").eq("agency_id", agencyId),
     t("policies").select("created_by, premium, commission, status, created_at").eq("agency_id", agencyId),
     t("activity_log").select("actor_id, created_at").eq("agency_id", agencyId).gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString()),
+    t("requests").select("assigned_to, status").eq("agency_id", agencyId),
   ]);
 
   const users = new Map<string, UserPerf>();
@@ -94,7 +98,8 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
       agency_role: p.agency_role,
       customers: 0, quotes_total: 0, quotes_month: 0, quotes_won: 0,
       policies_total: 0, policies_month: 0, total_premium: 0, total_commission: 0,
-      conversion: 0, score: 0, last_activity: null, last_login: p.last_login_at ?? null,
+      conversion: 0, opportunities_total: 0, opportunities_won: 0, opp_conversion: 0,
+      score: 0, last_activity: null, last_login: p.last_login_at ?? null,
     });
   }
   const ensure = (uid: string | null): UserPerf | null => (uid && users.has(uid) ? users.get(uid)! : null);
@@ -124,8 +129,16 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
     if (!u) continue;
     if (!u.last_activity || a.created_at > u.last_activity) u.last_activity = a.created_at;
   }
+  // Satış fırsatları — SORUMLU personele (assigned_to) atfedilir
+  for (const r of (reqRes.data ?? []) as { assigned_to: string | null; status: string }[]) {
+    const u = ensure(r.assigned_to);
+    if (!u) continue;
+    u.opportunities_total++;
+    if (r.status === "Kazanıldı") u.opportunities_won++;
+  }
   for (const u of users.values()) {
     u.conversion = u.quotes_total > 0 ? Math.round((u.quotes_won / u.quotes_total) * 100) : 0;
+    u.opp_conversion = u.opportunities_total > 0 ? Math.round((u.opportunities_won / u.opportunities_total) * 100) : 0;
   }
 
   const list = [...users.values()];

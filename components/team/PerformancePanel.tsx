@@ -141,6 +141,25 @@ function DetailModal({ user, avgConversion, rank, onClose }: { user: UserPerf; a
           ))}
         </div>
 
+        {/* satış fırsatları (assigned_to bazlı) */}
+        {user.opportunities_total > 0 && (
+          <div className="px-5 pt-4">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Satış Fırsatları</p>
+            <div className="flex items-center gap-2">
+              {[
+                { v: String(user.opportunities_total), k: "fırsat" },
+                { v: String(user.opportunities_won), k: "kazanılan" },
+                { v: `%${user.opp_conversion}`, k: "dönüşüm" },
+              ].map((m) => (
+                <div key={m.k} className="flex-1 bg-slate-50 rounded-xl px-2.5 py-2 text-center">
+                  <p className="text-base font-extrabold text-slate-900 tabular-nums leading-none">{m.v}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{m.k}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* zaman bilgileri */}
         <div className="p-5 space-y-2 text-sm">
           <div className="flex items-center justify-between">
