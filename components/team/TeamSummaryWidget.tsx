@@ -26,8 +26,10 @@ export default function TeamSummaryWidget() {
 
   if (!data || data.users.length === 0) return null;
 
-  const top = data.leaders.top_premium;
-  const idle = data.users.filter(
+  // Yalnız çalışanlar (acente sahibi hariç) — sıralama/atıl çalışan-bazlı
+  const staff = data.users.filter((u) => u.agency_role !== "owner");
+  const top = [...staff].filter((u) => u.total_premium > 0).sort((a, b) => b.total_premium - a.total_premium)[0] ?? null;
+  const idle = staff.filter(
     (u) => !u.last_activity || (Date.now() - new Date(u.last_activity).getTime()) / 864e5 >= IDLE_DAYS
   ).length;
 
@@ -60,7 +62,7 @@ export default function TeamSummaryWidget() {
       {idle > 0 && (
         <div className="flex items-center gap-2 mt-3 text-xs text-amber-700">
           <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-          <span><span className="font-bold">{idle} personel</span> {IDLE_DAYS}+ gündür işlemsiz</span>
+          <span><span className="font-bold">{idle} çalışan</span> {IDLE_DAYS}+ gündür işlemsiz</span>
         </div>
       )}
     </div>

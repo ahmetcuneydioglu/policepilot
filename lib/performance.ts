@@ -34,6 +34,7 @@ export type UserPerf = {
   id: string;
   name: string;
   role_label: string;
+  agency_role: string | null;  // ham rol — owner'ı sıralamadan ayırmak için
   customers: number;
   quotes_total: number;
   quotes_month: number;
@@ -43,6 +44,7 @@ export type UserPerf = {
   total_premium: number;
   total_commission: number;
   conversion: number;          // kazanılan/toplam teklif (%)
+  score: number;               // 0-100 performans skoru (çalışanlar arası normalize)
   last_activity: string | null;
   last_login: string | null;
 };
@@ -57,7 +59,15 @@ export type AgencyPerformance = {
     top_conversion: UserPerf | null;
   };
   last7: { date: string; count: number }[];
-  team: { avg_conversion: number; total_premium: number; total_policies: number; total_commission: number };
+  team: {
+    total_customers: number;
+    total_quotes: number;
+    total_policies: number;
+    total_premium: number;
+    total_commission: number;
+    conversion: number;        // acente geneli kazanılan/toplam teklif (%)
+    avg_conversion: number;    // çalışan başına dönüşüm ortalaması (kıyas için)
+  };
   unattributed: number;        // created_by NULL (Faz 1 öncesi) müşteri sayısı
 };
 
@@ -81,9 +91,10 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
       id: p.id,
       name: p.full_name ?? "İsimsiz",
       role_label: agencyRoleLabel(p.agency_role),
+      agency_role: p.agency_role,
       customers: 0, quotes_total: 0, quotes_month: 0, quotes_won: 0,
       policies_total: 0, policies_month: 0, total_premium: 0, total_commission: 0,
-      conversion: 0, last_activity: null, last_login: p.last_login_at ?? null,
+      conversion: 0, score: 0, last_activity: null, last_login: p.last_login_at ?? null,
     });
   }
   const ensure = (uid: string | null): UserPerf | null => (uid && users.has(uid) ? users.get(uid)! : null);
@@ -138,13 +149,34 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
   }
   const last7 = days.map((d) => ({ date: d, count: dayCounts.get(d) ?? 0 }));
 
-  // Ekip ortalamaları (kıyas için)
+  // Performans skoru (0-100) — yalnız ÇALIŞANLAR (owner hariç) arasında normalize.
+  // Üretim (prim+poliçe), verimlilik (dönüşüm), pipeline (müşteri) ve güncellik karışımı.
+  const rankable = list.filter((u) => u.agency_role !== "owner");
+  const maxPrem = Math.max(1, ...rankable.map((u) => u.total_premium));
+  const maxPol  = Math.max(1, ...rankable.map((u) => u.policies_total));
+  const maxCust = Math.max(1, ...rankable.map((u) => u.customers));
+  for (const u of list) {
+    const premN = (u.total_premium / maxPrem) * 100;
+    const polN  = (u.policies_total / maxPol) * 100;
+    const custN = (u.customers / maxCust) * 100;
+    const days  = u.last_activity ? Math.floor((Date.now() - new Date(u.last_activity).getTime()) / 864e5) : 999;
+    const fresh = Math.max(0, 100 - days * 8);
+    u.score = Math.max(0, Math.min(100, Math.round(0.30 * premN + 0.25 * polN + 0.20 * u.conversion + 0.15 * custN + 0.10 * fresh)));
+  }
+
+  // Ekip toplamları — GERÇEK acente geneli (atıf fark etmez; owner üretimi + eski kayıtlar dahil)
+  const runs = (runRes.data ?? []) as { status: string }[];
+  const pols = (polRes.data ?? []) as { premium: number | null; commission: number | null }[];
+  const teamWon = runs.filter((r) => r.status === "Kazanıldı").length;
   const withQuotes = list.filter((u) => u.quotes_total >= 2);
   const team = {
+    total_customers: (custRes.data ?? []).length,
+    total_quotes: runs.length,
+    total_policies: pols.length,
+    total_premium: pols.reduce((s, p) => s + (p.premium ?? 0), 0),
+    total_commission: pols.reduce((s, p) => s + (p.commission ?? 0), 0),
+    conversion: runs.length ? Math.round((teamWon / runs.length) * 100) : 0,
     avg_conversion: withQuotes.length ? Math.round(withQuotes.reduce((s, u) => s + u.conversion, 0) / withQuotes.length) : 0,
-    total_premium: list.reduce((s, u) => s + u.total_premium, 0),
-    total_policies: list.reduce((s, u) => s + u.policies_total, 0),
-    total_commission: list.reduce((s, u) => s + u.total_commission, 0),
   };
 
   return { users: list, leaders, last7, team, unattributed };
