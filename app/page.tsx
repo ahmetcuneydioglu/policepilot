@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, ChevronRight, Check, Star,
+  ArrowRight, ChevronRight, Check,
   Users, Clock, MessageSquare, Zap, ShieldCheck,
   Sparkles, TrendingUp, Bot, Building2, Calendar,
   Trophy, Award, Wallet, Activity, Send, CheckCheck, Bell,
@@ -172,10 +172,10 @@ function PerformanceMock() {
 /* Operasyon Merkezi — stat tiles */
 function OperationsMock() {
   const stats = [
-    { l: "Acente", v: "128", Icon: Building2, c: "text-blue-600 bg-blue-50" },
-    { l: "Kullanıcı", v: "540", Icon: Users, c: "text-indigo-600 bg-indigo-50" },
-    { l: "Müşteri", v: "12.4K", Icon: Users, c: "text-violet-600 bg-violet-50" },
-    { l: "Poliçe", v: "8.9K", Icon: ShieldCheck, c: "text-emerald-600 bg-emerald-50" },
+    { l: "Müşteri", v: "1.240", Icon: Users, c: "text-blue-600 bg-blue-50" },
+    { l: "Poliçe", v: "890", Icon: ShieldCheck, c: "text-emerald-600 bg-emerald-50" },
+    { l: "Açık Fırsat", v: "32", Icon: Target, c: "text-indigo-600 bg-indigo-50" },
+    { l: "Ekip", v: "8", Icon: Users, c: "text-violet-600 bg-violet-50" },
   ];
   return (
     <div className="bg-slate-50 p-4">
@@ -327,20 +327,20 @@ const PIPELINE = ["Yeni Lead", "İletişime Geçildi", "Teklif Hazırlanıyor", 
 const PLANS = [
   {
     name: "Starter", price: "Ücretsiz", per: "deneme", popular: false,
-    desc: "Yeni başlayan acenteler için temel CRM.",
-    features: ["5 kullanıcı", "500 müşteri", "Temel poliçe & yenileme", "WhatsApp tek-tık mesaj", "Topluluk desteği"],
+    desc: "Dijitale geçin, müşteri ve poliçelerinizi tek yerde toplayın.",
+    features: ["Müşteri & poliçe yönetimi", "Temel yenileme takibi", "WhatsApp tek-tık mesaj", "5 kullanıcıya kadar", "500 müşteri"],
     cta: "Ücretsiz Başla",
   },
   {
     name: "Professional", price: "₺1.490", per: "/ay", popular: true,
-    desc: "Büyüyen acenteler için tam operasyon.",
-    features: ["15 kullanıcı", "5.000 müşteri", "Satış Fırsatları + Kanban", "WhatsApp otomasyonu", "Personel performansı", "AI asistan & öneriler", "Öncelikli destek"],
+    desc: "Operasyonu otomatikleştirin: kaçan yenileme yok, üreten bir ekip.",
+    features: ["WhatsApp otomasyonu & kuyruk", "Otomatik yenileme hatırlatma", "Satış Fırsatları (Kanban)", "Personel performansı & sıralama", "AI asistan & koçluk", "15 kullanıcı · 5.000 müşteri", "Öncelikli destek"],
     cta: "Demo Talep Et",
   },
   {
     name: "Enterprise", price: "₺4.990", per: "/ay", popular: false,
-    desc: "Çok şubeli ve yüksek hacimli acenteler.",
-    features: ["Sınırsız kullanıcı", "Sınırsız müşteri", "Tüm Professional özellikleri", "Özel entegrasyonlar", "Gelişmiş raporlama", "Özel başarı yöneticisi"],
+    desc: "Çok şubeli, yüksek hacimli acenteler için sınırsız güç.",
+    features: ["Tüm Professional özellikleri", "Sınırsız kullanıcı & müşteri", "Çok şube & gelişmiş raporlama", "Özel entegrasyonlar", "Özel başarı yöneticisi", "SLA & öncelikli destek"],
     cta: "Bizimle Görüşün",
   },
 ];
@@ -430,7 +430,7 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 mb-12 text-sm text-blue-300/70">
-            {[{ Icon: Star, l: "4.9/5 ortalama puan" }, { Icon: Users, l: "500+ aktif acente" }, { Icon: ShieldCheck, l: "KVKK uyumlu" }, { Icon: Zap, l: "5 dakikada kurulum" }].map(({ Icon, l }) => (
+            {[{ Icon: MessageSquare, l: "Meta Onaylı WhatsApp" }, { Icon: ShieldCheck, l: "KVKK Uyumlu Altyapı" }, { Icon: Zap, l: "5 Dakikada Kurulum" }, { Icon: Building2, l: "Yerli & Güvenli" }].map(({ Icon, l }) => (
               <div key={l} className="flex items-center gap-1.5"><Icon className="w-4 h-4 text-blue-400" /><span>{l}</span></div>
             ))}
           </div>
@@ -478,6 +478,10 @@ export default function HomePage() {
               <p className="text-slate-500 text-base mb-6 leading-relaxed">
                 Meta onaylı WhatsApp altyapısıyla otomatik hatırlatmalar, kuyruk yönetimi ve toplu iletişim. Hiçbir yenileme, hiçbir fırsat kaçmaz.
               </p>
+              <div className="inline-flex items-center gap-2 bg-white border border-emerald-200 rounded-xl px-3.5 py-2 mb-6 shadow-sm">
+                <TrendingUp className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span className="text-xs font-semibold text-slate-700">Zamanında bir mesaj, kaybetmek üzere olduğunuz müşteriyi geri getirir.</span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-7">
                 {WA_FEATURES.map((f) => (
                   <div key={f.t} className="flex items-center gap-2.5">
@@ -495,7 +499,35 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ══ 4. SATIŞ FIRSATLARI ══ */}
+      {/* ══ 4. YENİLEME MERKEZİ ══ */}
+      <section className="py-20 bg-slate-50 border-y border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <BrowserChrome url="app.sigortaos.com/renewals"><RenewalsMock /></BrowserChrome>
+            <div className="lg:order-first">
+              <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-700 rounded-full px-3 py-1 text-xs font-bold mb-4">
+                <RefreshCw className="w-3.5 h-3.5" /> Yenileme Merkezi
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-4 leading-tight">Yenileme Tarihini Kaçırmayın</h2>
+              <p className="text-slate-500 text-base mb-5 leading-relaxed">Bir acentenin gelirinin büyük kısmı yenilemelerden gelir. SigortaOS yaklaşan bitişleri 30/60/90 gün önceden tespit eder, otomatik hatırlatır ve <b className="text-slate-700">kaçan poliçeyi geri kazandırır.</b></p>
+              <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2 mb-6">
+                <Wallet className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span className="text-xs font-semibold text-amber-800">Kaçan her yenileme = kaybedilen yıllık komisyon</span>
+              </div>
+              <div className="space-y-3">
+                {[["Yaklaşan yenilemeler", "30/60/90 gün önceden otomatik tespit"], ["Otomatik hatırlatmalar", "WhatsApp ile tek tık veya otomatik"], ["Yenileme fırsatları", "Her yenileme yeni bir satış fırsatı"], ["Müşteri kaybını azaltma", "Zamanında iletişimle elde tutma"]].map(([t, d]) => (
+                  <div key={t} className="flex gap-3">
+                    <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5"><Check className="w-3.5 h-3.5 text-amber-600" /></div>
+                    <div><p className="text-sm font-bold text-slate-800">{t}</p><p className="text-xs text-slate-500">{d}</p></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══ 5. SATIŞ FIRSATLARI ══ */}
       <section id="satis" className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-10">
@@ -524,32 +556,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ══ 5. YENİLEME MERKEZİ ══ */}
-      <section className="py-20 bg-slate-50 border-y border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <BrowserChrome url="app.sigortaos.com/renewals"><RenewalsMock /></BrowserChrome>
-            <div className="lg:order-first">
-              <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-700 rounded-full px-3 py-1 text-xs font-bold mb-4">
-                <RefreshCw className="w-3.5 h-3.5" /> Yenileme Merkezi
-              </div>
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-4 leading-tight">Yenileme Tarihini Kaçırmayın</h2>
-              <p className="text-slate-500 text-base mb-6 leading-relaxed">Sigorta işinin can damarı yenilemelerdir. SigortaOS yaklaşan bitişleri otomatik tespit eder, hatırlatır ve müşteri kaybını önler.</p>
-              <div className="space-y-3">
-                {[["Yaklaşan yenilemeler", "30/60/90 gün önceden otomatik tespit"], ["Otomatik hatırlatmalar", "WhatsApp ile tek tık veya otomatik"], ["Yenileme fırsatları", "Her yenileme yeni bir satış fırsatı"], ["Müşteri kaybını azaltma", "Zamanında iletişimle elde tutma"]].map(([t, d]) => (
-                  <div key={t} className="flex gap-3">
-                    <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5"><Check className="w-3.5 h-3.5 text-amber-600" /></div>
-                    <div><p className="text-sm font-bold text-slate-800">{t}</p><p className="text-xs text-slate-500">{d}</p></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ══ 6. EKİP & PERSONEL ══ */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-slate-50 border-y border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
@@ -581,7 +589,7 @@ export default function HomePage() {
           <div className="text-center mb-10">
             <SectionLabel color="text-blue-400">Operasyon Merkezi</SectionLabel>
             <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">Tüm Operasyon Tek Ekranda</h2>
-            <p className="text-blue-200/70 max-w-xl mx-auto mt-3">Acente, kullanıcı, müşteri ve poliçe sayılarından sistem durumuna kadar her şey gerçek zamanlı.</p>
+            <p className="text-blue-200/70 max-w-xl mx-auto mt-3">Müşterileriniz, poliçeleriniz, satış fırsatlarınız ve ekibiniz — acentenizin nabzı tek ekranda, gerçek zamanlı.</p>
           </div>
           <div className="max-w-4xl mx-auto"><BrowserChrome url="app.sigortaos.com/admin"><OperationsMock /></BrowserChrome></div>
         </div>
@@ -641,7 +649,7 @@ export default function HomePage() {
           <div className="text-center mb-12">
             <SectionLabel>Paketler</SectionLabel>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3">Acentenize Uygun Planı Seçin</h2>
-            <p className="text-slate-500 max-w-lg mx-auto">İhtiyacınız büyüdükçe ek lisans ve modüllerle genişletin. Sözleşme yok, istediğiniz zaman iptal.</p>
+            <p className="text-slate-500 max-w-lg mx-auto">Limit değil, sonuç satıyoruz. İhtiyacınız büyüdükçe ek lisans ve modüllerle genişletin — sözleşme yok, istediğiniz zaman iptal.</p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-5xl mx-auto items-stretch">
             {PLANS.map((p) => (
@@ -681,22 +689,25 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ══ 11. REFERANS / GÜVEN ══ */}
+      {/* ══ 11. GÜVEN & GÜVENLİK ══ */}
       <section className="py-20 bg-slate-50 border-y border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-12">
-            <SectionLabel>Acentelerin Tercihi</SectionLabel>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">Türkiye&apos;nin Modern Acenteleri SigortaOS Kullanıyor</h2>
+            <SectionLabel>Güven & Güvenlik</SectionLabel>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-3">Verileriniz Güvende, Altyapınız Sağlam</h2>
+            <p className="text-slate-500 max-w-lg mx-auto">Sigorta verisi hassastır. SigortaOS kurumsal güvenlik standartlarıyla, her acentenin verisini birbirinden izole tutar.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-2xl border border-slate-200/70 p-6">
-                <div className="flex gap-0.5 mb-3">{[...Array(5)].map((_, j) => <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400" />)}</div>
-                <p className="text-sm text-slate-600 leading-relaxed mb-5">&quot;Yorum alanı — gerçek acente referansları buraya eklenecek. WhatsApp otomasyonu ve yenileme takibi sayesinde dönüşümümüz arttı.&quot;</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-200" />
-                  <div><p className="text-sm font-bold text-slate-800">Acente Sahibi</p><p className="text-xs text-slate-400">Şehir · Acente Adı</p></div>
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">
+            {[
+              { Icon: MessageSquare, t: "Meta Onaylı WhatsApp", d: "Resmî WhatsApp Business API ile gönderim — gri yöntem değil, kalıcı çözüm." },
+              { Icon: ShieldCheck, t: "KVKK Uyumlu", d: "Kişisel veriler mevzuata uygun işlenir, saklanır ve korunur." },
+              { Icon: Building2, t: "İzole Multi-Tenant", d: "Satır-seviyesi güvenlik (RLS): her acente yalnız kendi verisini görür." },
+              { Icon: Zap, t: "Yerli & Sürekli Gelişen", d: "Türk sigorta acenteleri için tasarlandı, düzenli güncellenir." },
+            ].map((c) => (
+              <div key={c.t} className="bg-white rounded-2xl border border-slate-200/70 p-6">
+                <div className="w-11 h-11 rounded-2xl bg-slate-900 flex items-center justify-center mb-4"><c.Icon className="w-5 h-5 text-white" /></div>
+                <p className="font-bold text-slate-900 mb-1.5">{c.t}</p>
+                <p className="text-sm text-slate-500 leading-relaxed">{c.d}</p>
               </div>
             ))}
           </div>
