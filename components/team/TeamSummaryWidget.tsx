@@ -40,8 +40,8 @@ export default function TeamSummaryWidget() {
           </div>
           <h2 className="text-sm font-bold text-slate-800">Ekip Özeti</h2>
         </div>
-        <Link href="/team" className="inline-flex items-center gap-0.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700">
-          Performans <ArrowUpRight className="w-3 h-3" />
+        <Link href="/settings?s=personel-performansi" className="inline-flex items-center gap-0.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700">
+          Tüm Performans <ArrowUpRight className="w-3 h-3" />
         </Link>
       </div>
 

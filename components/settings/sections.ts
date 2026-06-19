@@ -9,12 +9,13 @@ import {
   LayoutDashboard, Building2, Network, Users, UserCog, Megaphone,
   FileText, ShieldCheck, MessageCircle, Mail, MessageSquare, Bot,
   Workflow, KeyRound, History, CreditCard, Gauge, Receipt, Webhook,
+  TrendingUp,
 } from "lucide-react";
 import type { PermissionKey } from "@/lib/permissions";
 
 export type SectionKey =
   | "genel"
-  | "sirket" | "subeler" | "kullanicilar"
+  | "sirket" | "subeler" | "kullanicilar" | "personel-performansi"
   | "musteri-ayarlari" | "lead-kaynaklari"
   | "teklif-ayarlari" | "police-ayarlari"
   | "whatsapp" | "email" | "sms"
@@ -49,6 +50,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
       { key: "sirket",       label: "Şirket Bilgileri", Icon: Building2 },
       { key: "subeler",      label: "Şubeler",          Icon: Network, soon: true },
       { key: "kullanicilar", label: "Kullanıcılar",     Icon: Users, perm: "users.manage" },
+      { key: "personel-performansi", label: "Personel Performansı", Icon: TrendingUp, perm: "users.manage" },
     ],
   },
   {

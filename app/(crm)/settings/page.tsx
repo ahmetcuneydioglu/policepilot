@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import TeamManagement from "@/components/TeamManagement";
+import PerformancePanel from "@/components/team/PerformancePanel";
 import SettingsNav from "@/components/settings/SettingsNav";
 import ComingSoon from "@/components/settings/ComingSoon";
 import GeneralOverview from "@/components/settings/GeneralOverview";
@@ -58,6 +59,7 @@ function SettingsCenter() {
       case "genel":              return <GeneralOverview onNavigate={go} can={can} />;
       case "sirket":             return <CompanyProfile />;
       case "kullanicilar":       return <TeamManagement embedded />;
+      case "personel-performansi": return <PerformancePanel />;
       case "roller":             return <RolesMatrix />;
       case "whatsapp":           return <WhatsAppSection />;
       case "paketim":            return <SubscriptionSection focus="plan" />;
