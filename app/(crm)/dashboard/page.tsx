@@ -11,6 +11,7 @@ import { useNotifications } from "@/lib/NotificationContext";
 import NotifPermissionButton from "@/components/NotifPermissionButton";
 import { useAuth } from "@/lib/AuthContext";
 import { withScopeFilter, withRequestScope, isManagerial, needsOnboarding } from "@/lib/tenant";
+import TeamSummaryWidget from "@/components/team/TeamSummaryWidget";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity,
@@ -665,6 +666,9 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ══ EKİP ÖZETİ (yalnız owner/manager) ═══════════════════════════════ */}
+      {isManagerial(profile?.agency_role) && <TeamSummaryWidget />}
 
       {/* ══ CHART + LIVE FEED ═══════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
