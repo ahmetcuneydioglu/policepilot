@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { fmtMoney } from "@/lib/format";
 import type { AgencyPerformance, UserPerf } from "@/lib/performance";
+import CoachingCard from "./CoachingCard";
 
 const IDLE_DAYS = 7;
 
@@ -255,6 +256,10 @@ export default function PerformancePanel() {
       {/* ══ 2) PERSONEL SIRALAMASI ════════════════════════════════════════ */}
       <section>
         <SectionHead title="Personel Sıralaması" sub="Çalışan performansı — performans skoruna göre (acente sahibi hariç)" />
+
+        {staff.length > 0 && (
+          <CoachingCard onPickUser={(id) => { const u = staff.find((x) => x.id === id); if (u) setSelected(u); }} />
+        )}
 
         {idle.length > 0 && (
           <div className="flex items-start gap-3 px-4 py-3 mb-3 bg-amber-50 border border-amber-200 rounded-xl">
