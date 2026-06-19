@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     const { error: requestErr } = await (admin.from("requests") as any).insert({
       customer_id:  customer.id,
       request_type: insurance_type,
-      status:       "Yeni",
+      status:       "Yeni Lead",
       price_offer:  null,
       agency_id:    agencyId,
     });

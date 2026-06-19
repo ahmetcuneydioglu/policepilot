@@ -52,7 +52,7 @@ type RawFeedEntry = {
 
 // ─── Live feed pool (cycles through these) ────────────────────────────────────
 const FEED_POOL: RawFeedEntry[] = [
-  { Icon: Users,         iconBg: "bg-blue-50",    iconColor: "text-blue-600",    message: "Ali Koç trafik sigortası talebi bıraktı",    sub: "Trafik · Yeni" },
+  { Icon: Users,         iconBg: "bg-blue-50",    iconColor: "text-blue-600",    message: "Ali Koç trafik sigortası fırsatı oluştu",    sub: "Trafik · Yeni Lead" },
   { Icon: MessageSquare, iconBg: "bg-emerald-50",  iconColor: "text-emerald-600", message: "WhatsApp mesajı hazırlandı ve gönderildi",    sub: "AI tarafından oluşturuldu" },
   { Icon: CheckCircle2,  iconBg: "bg-emerald-50",  iconColor: "text-emerald-600", message: "Kasko teklifi tamamlandı",                    sub: "Ayşe Kaya · ₺3.200/yıl" },
   { Icon: Clock,         iconBg: "bg-amber-50",    iconColor: "text-amber-600",   message: "Poliçe yenileme hatırlatması gönderildi",     sub: "Mehmet Demir · 5 gün kaldı" },
@@ -62,7 +62,7 @@ const FEED_POOL: RawFeedEntry[] = [
   { Icon: CheckCircle2,  iconBg: "bg-emerald-50",  iconColor: "text-emerald-600", message: "Fatma Şahin poliçesi başarıyla yenilendi",    sub: "Konut · 1 yıl uzatıldı" },
   { Icon: MessageSquare, iconBg: "bg-emerald-50",  iconColor: "text-emerald-600", message: "Müşteriye dönüş yapıldı",                     sub: "Hasan Bulut · WhatsApp" },
   { Icon: TrendingUp,    iconBg: "bg-indigo-50",   iconColor: "text-indigo-600",  message: "Sağlık talebi artışı tespit edildi",          sub: "Bu hafta +23%" },
-  { Icon: Shield,        iconBg: "bg-blue-50",     iconColor: "text-blue-600",    message: "Mert Yıldız İMM talebi bıraktı",             sub: "İMM · Yeni" },
+  { Icon: Shield,        iconBg: "bg-blue-50",     iconColor: "text-blue-600",    message: "Mert Yıldız İMM fırsatı oluştu",             sub: "İMM · Yeni Lead" },
   { Icon: Sparkles,      iconBg: "bg-violet-50",   iconColor: "text-violet-600",  message: "AI operasyon özeti güncellendi",              sub: "Günlük analiz tamamlandı" },
   { Icon: Users,         iconBg: "bg-blue-50",     iconColor: "text-blue-600",    message: "Seda Yıldırım DASK formu tamamladı",         sub: "DASK · Zorunlu" },
   { Icon: CheckCircle2,  iconBg: "bg-emerald-50",  iconColor: "text-emerald-600", message: "Teklif onaylandı ve poliçe kesildi",          sub: "Trafik · 34ABC123" },
@@ -82,10 +82,12 @@ const DEMO_PRODUCT_DIST: ProdDist[] = [
 
 // ─── Status map ───────────────────────────────────────────────────────────────
 const STATUS_CLS: Record<string, string> = {
-  Yeni:       "bg-blue-50 text-blue-700 border border-blue-100",
-  İşlemde:    "bg-indigo-50 text-indigo-700 border border-indigo-100",
-  Tamamlandı: "bg-emerald-50 text-emerald-700 border border-emerald-100",
-  İptal:      "bg-red-50 text-red-700 border border-red-100",
+  "Yeni Lead":           "bg-blue-50 text-blue-700 border border-blue-100",
+  "İletişime Geçildi":   "bg-orange-50 text-orange-700 border border-orange-100",
+  "Teklif Hazırlanıyor": "bg-violet-50 text-violet-700 border border-violet-100",
+  "Takip Ediliyor":      "bg-amber-50 text-amber-700 border border-amber-100",
+  "Kazanıldı":           "bg-emerald-50 text-emerald-700 border border-emerald-100",
+  "Kaybedildi":          "bg-rose-50 text-rose-700 border border-rose-100",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -202,10 +204,10 @@ export default function DashboardPage() {
       setFeedItems(seed);
       setProductDist(DEMO_PRODUCT_DIST);
       setRecentReqs([
-        { id: "r1", request_type: "Kasko",  status: "Yeni",       created_at: new Date(Date.now() - 4 * 60000).toISOString(),   customers: { name: "Ahmet Yılmaz" } },
-        { id: "r2", request_type: "Konut",  status: "İşlemde",    created_at: new Date(Date.now() - 22 * 60000).toISOString(),  customers: { name: "Fatma Kaya" } },
-        { id: "r3", request_type: "Sağlık", status: "Tamamlandı", created_at: new Date(Date.now() - 65 * 60000).toISOString(),  customers: { name: "Mehmet Demir" } },
-        { id: "r4", request_type: "Trafik", status: "Yeni",       created_at: new Date(Date.now() - 120 * 60000).toISOString(), customers: { name: "Zeynep Arslan" } },
+        { id: "r1", request_type: "Kasko",  status: "Yeni Lead",          created_at: new Date(Date.now() - 4 * 60000).toISOString(),   customers: { name: "Ahmet Yılmaz" } },
+        { id: "r2", request_type: "Konut",  status: "İletişime Geçildi",  created_at: new Date(Date.now() - 22 * 60000).toISOString(),  customers: { name: "Fatma Kaya" } },
+        { id: "r3", request_type: "Sağlık", status: "Kazanıldı",          created_at: new Date(Date.now() - 65 * 60000).toISOString(),  customers: { name: "Mehmet Demir" } },
+        { id: "r4", request_type: "Trafik", status: "Yeni Lead",          created_at: new Date(Date.now() - 120 * 60000).toISOString(), customers: { name: "Zeynep Arslan" } },
       ]);
       setLoading(false);
       setTimeout(() => setDistReady(true), 300);
@@ -225,7 +227,7 @@ export default function DashboardPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const results = await Promise.all([
         scope(supabase.from("customers").select("*", { count: "exact", head: true })),
-        reqScope(supabase.from("requests").select("*, customers!inner(id)", { count: "exact", head: true }).in("status", ["Yeni", "İşlemde"])),
+        reqScope(supabase.from("requests").select("*, customers!inner(id)", { count: "exact", head: true }).in("status", ["Yeni Lead", "İletişime Geçildi", "Teklif Hazırlanıyor", "Takip Ediliyor"])),
         scope(supabase.from("policies").select("*", { count: "exact", head: true }).eq("status", "Aktif").lte("end_date", in30).gte("end_date", today)),
         scope(supabase.from("customers").select("*", { count: "exact", head: true }).gte("created_at", today)),
         scope(supabase.from("customers").select("id, name, created_at").order("created_at", { ascending: false }).limit(4)),
@@ -292,7 +294,7 @@ export default function DashboardPage() {
           Icon:       FileText,
           iconBg:     "bg-indigo-50",
           iconColor:  "text-indigo-600",
-          message:    `${r.customers?.name ?? "Müşteri"} ${r.request_type} talebi bıraktı`,
+          message:    `${r.customers?.name ?? "Müşteri"} ${r.request_type} fırsatı oluştu`,
           sub:        `${r.request_type} · ${r.status}`,
           time:       timeAgo(r.created_at),
           isNew:      false,
@@ -374,7 +376,7 @@ export default function DashboardPage() {
   // ── Stat card definitions ────────────────────────────────────────────────
   const STAT_CARDS = [
     { title: "Toplam Müşteri",    value: stats.customers,        Icon: Users,     grad: "from-blue-500 to-blue-600",       bg: "bg-blue-50",    text: "text-blue-600",    badge: "toplam",        badgeCls: "text-gray-500 bg-gray-50" },
-    { title: "Açık Teklif",       value: stats.requests,         Icon: FileText,  grad: "from-indigo-500 to-indigo-600",   bg: "bg-indigo-50",  text: "text-indigo-600",  badge: "Yeni+İşlemde",  badgeCls: "text-gray-500 bg-gray-50" },
+    { title: "Açık Fırsat",       value: stats.requests,         Icon: FileText,  grad: "from-indigo-500 to-indigo-600",   bg: "bg-indigo-50",  text: "text-indigo-600",  badge: "açık aşamalar", badgeCls: "text-gray-500 bg-gray-50" },
     { title: "Yaklaşan Yenileme", value: stats.renewals,         Icon: Clock,     grad: "from-amber-500 to-orange-500",    bg: "bg-amber-50",   text: "text-amber-600",   badge: "30 gün içinde", badgeCls: "text-amber-700 bg-amber-50" },
     { title: "Bu Ay Yenilenen",   value: stats.renewedThisMonth, Icon: RefreshCw, grad: "from-violet-500 to-purple-600",   bg: "bg-violet-50",  text: "text-violet-600",  badge: "tamamlandı",    badgeCls: "text-violet-700 bg-violet-50" },
     { title: "Bugün Eklenen",     value: stats.today,            Icon: Activity,  grad: "from-emerald-500 to-teal-500",    bg: "bg-emerald-50", text: "text-emerald-600", badge: "bugün",         badgeCls: "text-emerald-700 bg-emerald-50" },
@@ -625,13 +627,13 @@ export default function DashboardPage() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
               </span>
-              <h2 className="font-semibold text-slate-800 text-sm">Yeni Gelen Talepler</h2>
+              <h2 className="font-semibold text-slate-800 text-sm">Yeni Gelen Fırsatlar</h2>
               <span className="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                 {notifications.length}
               </span>
             </div>
-            <Link href="/requests" className="text-xs text-blue-600 font-semibold hover:text-blue-800 transition-colors flex items-center gap-0.5">
-              Tümünü İşleme Al <ArrowUpRight className="w-3.5 h-3.5" />
+            <Link href="/firsatlar" className="text-xs text-blue-600 font-semibold hover:text-blue-800 transition-colors flex items-center gap-0.5">
+              Tümünü Gör <ArrowUpRight className="w-3.5 h-3.5" />
             </Link>
           </div>
           <div className="divide-y divide-gray-50">
@@ -658,7 +660,7 @@ export default function DashboardPage() {
                     </a>
                   )}
                   <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 ${cardHighlighted ? "animate-pulse" : ""}`}>
-                    Yeni
+                    Yeni Lead
                   </span>
                 </div>
               </div>
@@ -742,8 +744,8 @@ export default function DashboardPage() {
         {/* Recent requests */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm">
           <div className="px-5 py-3.5 border-b border-gray-50 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-800 text-sm">Son Teklif Talepleri</h2>
-            <Link href="/requests" className="text-xs text-blue-600 font-semibold hover:text-blue-800 transition-colors flex items-center gap-0.5">
+            <h2 className="font-semibold text-slate-800 text-sm">Son Satış Fırsatları</h2>
+            <Link href="/firsatlar" className="text-xs text-blue-600 font-semibold hover:text-blue-800 transition-colors flex items-center gap-0.5">
               Tümünü gör <ArrowUpRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -825,7 +827,7 @@ export default function DashboardPage() {
               {[
                 { label: "Yeni Müşteri Ekle",  href: "/customers", Icon: Plus,          cls: "text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100" },
                 { label: "WhatsApp Gönder",     href: "/customers", Icon: MessageSquare, cls: "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100" },
-                { label: "Teklifleri İncele",   href: "/requests",  Icon: FileText,      cls: "text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100" },
+                { label: "Fırsatları Gör",      href: "/firsatlar", Icon: FileText,      cls: "text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100" },
               ].map((a) => (
                 <Link
                   key={a.label}

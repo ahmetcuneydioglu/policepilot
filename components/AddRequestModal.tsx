@@ -39,7 +39,7 @@ export default function AddRequestModal({ customers, onClose, agencyId }: Props)
     e.preventDefault();
     if (!limitOk) return;
     if (!form.customer_id || !form.request_type) {
-      setError("Müşteri ve talep türü zorunludur.");
+      setError("Müşteri ve sigorta türü zorunludur.");
       return;
     }
     setLoading(true);
@@ -76,7 +76,7 @@ export default function AddRequestModal({ customers, onClose, agencyId }: Props)
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in-up">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-slate-800">Yeni Teklif Talebi</h2>
+          <h2 className="font-semibold text-slate-800">Yeni Satış Fırsatı</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -109,7 +109,7 @@ export default function AddRequestModal({ customers, onClose, agencyId }: Props)
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Talep Türü *</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Sigorta Türü *</label>
               <select value={form.request_type} onChange={(e) => set("request_type", e.target.value)}
                 className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                 <option value="">Sigorta türü seçin</option>
@@ -132,7 +132,7 @@ export default function AddRequestModal({ customers, onClose, agencyId }: Props)
               </button>
               <button type="submit" disabled={loading}
                 className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60">
-                {loading ? "Kaydediliyor..." : "Teklif Oluştur"}
+                {loading ? "Kaydediliyor..." : "Fırsat Oluştur"}
               </button>
             </div>
           </form>

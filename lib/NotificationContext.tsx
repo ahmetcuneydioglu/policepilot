@@ -166,7 +166,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     });
     n.onclick = () => {
       window.focus();
-      window.location.href = "/requests";
+      window.location.href = "/firsatlar";
     };
   }, []);
 
@@ -209,7 +209,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const baseQ = (supabase.from("requests") as any)
         .select("id, request_type, status, created_at, customer_id")
-        .eq("status", "Yeni")
+        .eq("status", "Yeni Lead")
         .order("created_at", { ascending: false })
         .limit(15);
 
@@ -312,7 +312,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (payload: any) => {
           const req = payload.new;
-          if (req?.status && req.status !== "Yeni") {
+          if (req?.status && req.status !== "Yeni Lead") {
             setNotifications((prev) => prev.filter((n) => n.id !== req.id));
           }
         }

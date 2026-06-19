@@ -8,7 +8,14 @@ export type Customer = {
   created_by?: string | null;   // ekleyen kullanıcı (profiles.id) — managerial liste için
 };
 
-export type RequestStatus = "Yeni" | "İşlemde" | "Tamamlandı" | "İptal";
+// Satış Fırsatı aşamaları (DB tablosu geriye-uyum için "requests")
+export type RequestStatus =
+  | "Yeni Lead"
+  | "İletişime Geçildi"
+  | "Teklif Hazırlanıyor"
+  | "Takip Ediliyor"
+  | "Kazanıldı"
+  | "Kaybedildi";
 
 export type PolicyStatus = "Aktif" | "Pasif" | "Yenilendi";
 
@@ -19,6 +26,13 @@ export type Request = {
   status: RequestStatus;
   price_offer: number | null;
   created_at: string;
+  updated_at?: string | null;
+  agency_id?: string | null;
+  created_by?: string | null;
+  assigned_to?: string | null;
+  next_follow_up_date?: string | null;
+  notes?: string | null;
+  policy_id?: string | null;
   customers?: { name: string } | null;
 };
 
