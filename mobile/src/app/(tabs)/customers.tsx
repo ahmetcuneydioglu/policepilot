@@ -5,6 +5,7 @@ import {
   Alert, Linking, RefreshControl, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius } from '@/lib/theme';
 import { Customer } from '@/lib/types';
@@ -810,6 +811,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CustomersScreen() {
+  const router = useRouter();
   const { agencyId, role, userId } = useProfile();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filtered, setFiltered]   = useState<Customer[]>([]);
@@ -904,7 +906,7 @@ export default function CustomersScreen() {
           renderItem={({ item }) => (
             <CustomerCard
               customer={item}
-              onPress={() => setSelected(item)}
+              onPress={() => router.push(`/customer/${item.id}`)}
               onWA={() => Linking.openURL(`whatsapp://send?phone=${waNumber(item.phone)}`)}
             />
           )}

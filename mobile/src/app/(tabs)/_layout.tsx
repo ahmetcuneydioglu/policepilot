@@ -2,19 +2,15 @@ import { Tabs } from 'expo-router';
 import { Text, Platform } from 'react-native';
 import { Colors } from '@/lib/theme';
 import { useNotificationStore } from '@/lib/NotificationContext';
-import { useProfile } from '@/lib/useProfile';
 
 function TabBarIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
-    <Text style={{ fontSize: focused ? 24 : 22, opacity: focused ? 1 : 0.6 }}>{emoji}</Text>
+    <Text style={{ fontSize: focused ? 22 : 20, opacity: focused ? 1 : 0.55 }}>{emoji}</Text>
   );
 }
 
 export default function TabsLayout() {
   const { unreadCount } = useNotificationStore();
-  const { role } = useProfile();
-
-  const isSuperAdmin = role === 'super_admin';
 
   return (
     <Tabs
@@ -27,10 +23,10 @@ export default function TabsLayout() {
           borderTopColor: Colors.border,
           borderTopWidth: 1,
           paddingBottom: Platform.OS === 'ios' ? 0 : 8,
-          height: Platform.OS === 'ios' ? 80 : 64,
+          height: Platform.OS === 'ios' ? 82 : 64,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '600',
         },
       }}
@@ -38,8 +34,15 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Panel',
+          title: 'Ana Sayfa',
           tabBarIcon: ({ focused }) => <TabBarIcon emoji="🏠" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="renewals"
+        options={{
+          title: 'Yenilemeler',
+          tabBarIcon: ({ focused }) => <TabBarIcon emoji="🔄" focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -52,7 +55,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="requests"
         options={{
-          title: 'Talepler',
+          title: 'Teklifler',
           tabBarIcon: ({ focused }) => <TabBarIcon emoji="📋" focused={focused} />,
           tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
           tabBarBadgeStyle: {
@@ -68,21 +71,23 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="policies"
+        name="ai"
         options={{
-          title: 'Poliçeler',
-          tabBarIcon: ({ focused }) => <TabBarIcon emoji="📄" focused={focused} />,
+          title: 'AI',
+          tabBarIcon: ({ focused }) => <TabBarIcon emoji="✨" focused={focused} />,
         }}
       />
       <Tabs.Screen
-        name="admin"
+        name="more"
         options={{
-          title: 'Yönetim',
-          tabBarIcon: ({ focused }) => <TabBarIcon emoji="⚙️" focused={focused} />,
-          // super_admin değilse sekmeyi tab bar'dan gizle
-          href: isSuperAdmin ? undefined : null,
+          title: 'Daha',
+          tabBarIcon: ({ focused }) => <TabBarIcon emoji="☰" focused={focused} />,
         }}
       />
+
+      {/* Tab bar'da gizli ama "Daha" üzerinden erişilebilir rotalar */}
+      <Tabs.Screen name="policies" options={{ href: null }} />
+      <Tabs.Screen name="admin" options={{ href: null }} />
     </Tabs>
   );
 }

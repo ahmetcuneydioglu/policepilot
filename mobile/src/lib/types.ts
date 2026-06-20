@@ -21,7 +21,14 @@ export type Profile = {
   created_at: string;
 };
 
-export type RequestStatus = 'Yeni' | 'İşlemde' | 'Tamamlandı' | 'İptal';
+// Web ile birebir 6 aşamalı satış hattı (sales_opportunities_migration CHECK ile uyumlu)
+export type RequestStatus =
+  | 'Yeni Lead'
+  | 'İletişime Geçildi'
+  | 'Teklif Hazırlanıyor'
+  | 'Takip Ediliyor'
+  | 'Kazanıldı'
+  | 'Kaybedildi';
 
 export type PolicyStatus = 'Aktif' | 'Pasif';
 

@@ -90,7 +90,7 @@ function NotificationSetup({
       });
     },
     onRequestUpdated: (req) => {
-      if (req.status !== 'Yeni') {
+      if (req.status !== 'Yeni Lead') {
         setBadgeCount((c) => Math.max(0, c - 1));
       }
     },
@@ -161,6 +161,8 @@ function RootLayoutInner() {
         <Stack.Screen name="new-request"             options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/notifications"  options={{ presentation: 'card' }} />
         <Stack.Screen name="notifications"           options={{ presentation: 'modal' }} />
+        <Stack.Screen name="customer/[id]"           options={{ presentation: 'card' }} />
+        <Stack.Screen name="whatsapp"                options={{ presentation: 'card' }} />
       </Stack>
     </>
   );

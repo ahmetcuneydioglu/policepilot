@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,197 +6,143 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
-  Linking,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
-import { useNotificationStore } from '@/lib/NotificationContext';
-
-const CARD_WIDTH = (Dimensions.get('window').width - 48 - 12) / 2;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Colors, Spacing, Radius } from '@/lib/theme';
+import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
+import { useNotificationStore } from '@/lib/NotificationContext';
+import { useProfile } from '@/lib/useProfile';
+import { fetchOperationMetrics, OperationMetrics } from '@/lib/dashboard';
+import { formatShortTRY, greetingTR, formatLongDateTR } from '@/lib/format';
 
-type Stats = {
-  totalCustomers: number;
-  newRequests: number;
-  expiringPolicies: number;
-  activePolicies: number;
+const CARD_WIDTH = (Dimensions.get('window').width - Spacing.lg * 2 - 12) / 2;
+
+const EMPTY: OperationMetrics = {
+  yenilemeSayisi: 0, bekleyenTeklif: 0, bugunKesilen: 0, potansiyelKomisyon: 0,
+  tahminiPrim: 0, buAyPrim: 0, buAyKomisyon: 0, aktifPolice: 0, donusum: 0, yeniTalep: 0,
 };
 
 export default function DashboardScreen() {
-  const [stats, setStats] = useState<Stats>({
-    totalCustomers: 0,
-    newRequests: 0,
-    expiringPolicies: 0,
-    activePolicies: 0,
-  });
-  const [refreshing, setRefreshing] = useState(false);
-  const [userName, setUserName] = useState('');
   const router = useRouter();
   const { unreadCount } = useNotificationStore();
+  const { profile, agencyId } = useProfile();
 
-  async function fetchStats() {
-    const today = new Date();
-    const in30Days = new Date(today);
-    in30Days.setDate(today.getDate() + 30);
+  const [metrics, setMetrics] = useState<OperationMetrics>(EMPTY);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [email, setEmail] = useState('');
 
-    const [customersRes, requestsRes, policiesRes, expiringRes] = await Promise.all([
-      supabase.from('customers').select('id', { count: 'exact', head: true }),
-      supabase.from('requests').select('id', { count: 'exact', head: true }).eq('status', 'Yeni'),
-      supabase.from('policies').select('id', { count: 'exact', head: true }).eq('status', 'Aktif'),
-      supabase
-        .from('policies')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'Aktif')
-        .gte('end_date', today.toISOString().split('T')[0])
-        .lte('end_date', in30Days.toISOString().split('T')[0]),
-    ]);
-
-    setStats({
-      totalCustomers: customersRes.count ?? 0,
-      newRequests: requestsRes.count ?? 0,
-      activePolicies: policiesRes.count ?? 0,
-      expiringPolicies: expiringRes.count ?? 0,
-    });
-  }
-
-  async function fetchUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user?.email) {
-      setUserName(user.email.split('@')[0]);
-    }
-  }
+  const load = useCallback(async () => {
+    const m = await fetchOperationMetrics(agencyId);
+    setMetrics(m);
+    setLoading(false);
+  }, [agencyId]);
 
   useEffect(() => {
-    fetchStats();
-    fetchUser();
-  }, []);
+    load();
+    supabase.auth.getUser().then(({ data: { user } }) => setEmail(user?.email ?? ''));
+  }, [load]);
 
-  async function onRefresh() {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchStats();
+    await load();
     setRefreshing(false);
-  }
+  }, [load]);
 
-  async function handleSignOut() {
+  function handleSignOut() {
     Alert.alert('Çıkış Yap', 'Hesabınızdan çıkmak istediğinize emin misiniz?', [
       { text: 'İptal', style: 'cancel' },
-      {
-        text: 'Çıkış Yap',
-        style: 'destructive',
-        onPress: () => supabase.auth.signOut(),
-      },
+      { text: 'Çıkış Yap', style: 'destructive', onPress: () => supabase.auth.signOut() },
     ]);
   }
 
-  const statCards = [
-    { label: 'Müşteriler', value: stats.totalCustomers, color: Colors.primary, bg: Colors.primaryLight, emoji: '👥' },
-    { label: 'Yeni Talepler', value: stats.newRequests, color: Colors.warning, bg: '#FFFBEB', emoji: '📋' },
-    { label: 'Aktif Poliçe', value: stats.activePolicies, color: Colors.success, bg: '#F0FDF4', emoji: '✅' },
-    { label: '30 Günde Bitiyor', value: stats.expiringPolicies, color: Colors.danger, bg: '#FEF2F2', emoji: '⚠️' },
+  const name = profile?.full_name?.trim() || email.split('@')[0] || 'Ahmet';
+
+  // Bugün yapılacaklar (aksiyona yönlendiren hero satırları)
+  const todos = [
+    { dot: '🔴', value: String(metrics.yenilemeSayisi), label: 'Yenileme Takibi',     onPress: () => router.push('/(tabs)/renewals') },
+    { dot: '🟡', value: String(metrics.bekleyenTeklif),  label: 'Bekleyen Teklif',      onPress: () => router.push('/(tabs)/requests') },
+    { dot: '🟢', value: String(metrics.bugunKesilen),    label: 'Bugün Kesilen Poliçe', onPress: () => router.push('/(tabs)/policies') },
+    { dot: '💰', value: formatShortTRY(metrics.potansiyelKomisyon), label: 'Potansiyel Komisyon', onPress: () => router.push('/(tabs)/renewals') },
   ];
 
-  const quickActions = [
-    { label: 'Müşteri Ekle', emoji: '➕', color: Colors.primary, onPress: () => router.push('/(tabs)/customers') },
-    { label: 'Teklif Talebi', emoji: '📋', color: Colors.warning, onPress: () => router.push('/new-request') },
-    { label: 'Poliçe Ekle', emoji: '📄', color: Colors.success, onPress: () => router.push('/(tabs)/policies') },
-    { label: 'WhatsApp', emoji: '💬', color: '#25D366', onPress: () => Linking.openURL('whatsapp://') },
+  // Canlı kartlar
+  const cards = [
+    { label: 'BU AY PRİM',    value: formatShortTRY(metrics.buAyPrim),     accent: Colors.primary },
+    { label: 'BU AY KOMİSYON', value: formatShortTRY(metrics.buAyKomisyon), accent: Colors.success },
+    { label: 'AKTİF POLİÇE',  value: String(metrics.aktifPolice),          accent: Colors.heading },
+    { label: 'BEKLEYEN TEKLİF', value: String(metrics.bekleyenTeklif),     accent: Colors.warning },
+    { label: 'DÖNÜŞÜM ORANI', value: `%${metrics.donusum}`,                accent: Colors.primary },
+    { label: 'YENİ TALEP',    value: String(metrics.yeniTalep),            accent: Colors.danger },
   ];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
-        style={styles.scroll}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Merhaba, {userName || 'Kullanıcı'} 👋</Text>
-            <Text style={styles.appTitle}>SigortaOS</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>{greetingTR()} {name} 👋</Text>
+            <Text style={styles.date}>{formatLongDateTR()}</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity
-              style={[styles.signOutBtn, { marginRight: 8 }]}
-              onPress={() => router.push('/notifications')}
-            >
-              <View>
-                <Text style={styles.signOutText}>🔔</Text>
-                {unreadCount > 0 && (
-                  <View style={styles.bellBadge}>
-                    <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                  </View>
-                )}
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/notifications')}>
+            <Text style={styles.iconEmoji}>🔔</Text>
+            {unreadCount > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
               </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-              <Text style={styles.signOutText}>Çıkış</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <Text style={styles.date}>
-          {new Date().toLocaleDateString('tr-TR', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          })}
-        </Text>
-
-        {/* Stats */}
-        <View style={styles.statsGrid}>
-          {statCards.map((card, i) => (
-            <View
-              key={card.label}
-              style={[styles.statCard, { backgroundColor: card.bg }, i % 2 === 0 ? { marginRight: 12 } : {}]}
-            >
-              <Text style={styles.statEmoji}>{card.emoji}</Text>
-              <Text style={[styles.statValue, { color: card.color }]}>{card.value}</Text>
-              <Text style={styles.statLabel}>{card.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Hızlı İşlemler</Text>
-          <View style={styles.actionsGrid}>
-            {quickActions.map((action, i) => (
-              <TouchableOpacity
-                key={action.label}
-                style={[styles.actionCard, i % 2 === 0 ? { marginRight: 12 } : {}]}
-                onPress={action.onPress}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.actionIcon, { backgroundColor: action.color + '18' }]}>
-                  <Text style={styles.actionEmoji}>{action.emoji}</Text>
-                </View>
-                <Text style={styles.actionLabel}>{action.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Expiring alert */}
-        {stats.expiringPolicies > 0 && (
-          <TouchableOpacity
-            style={styles.alertBanner}
-            onPress={() => router.push('/(tabs)/policies')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.alertEmoji}>⚠️</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.alertTitle}>
-                {stats.expiringPolicies} poliçe 30 gün içinde bitiyor
-              </Text>
-              <Text style={styles.alertSub}>Poliçeler ekranına git →</Text>
-            </View>
+            )}
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.iconBtn, { marginLeft: 8 }]} onPress={handleSignOut}>
+            <Text style={styles.iconEmoji}>⏻</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : (
+          <>
+            {/* Bugün Yapılacaklar */}
+            <Text style={styles.sectionLabel}>BUGÜN YAPILACAKLAR</Text>
+            <View style={styles.todoCard}>
+              {todos.map((t, i) => (
+                <TouchableOpacity
+                  key={t.label}
+                  style={[styles.todoRow, i < todos.length - 1 && styles.todoRowBorder]}
+                  onPress={t.onPress}
+                  activeOpacity={0.6}
+                >
+                  <Text style={styles.todoDot}>{t.dot}</Text>
+                  <Text style={styles.todoValue}>{t.value}</Text>
+                  <Text style={styles.todoLabel}>{t.label}</Text>
+                  <Text style={styles.todoChevron}>›</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Canlı Kartlar */}
+            <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>CANLI DURUM</Text>
+            <View style={styles.grid}>
+              {cards.map((c, i) => (
+                <View key={c.label} style={[styles.statCard, i % 2 === 0 ? { marginRight: 12 } : {}]}>
+                  <Text style={styles.statLabel}>{c.label}</Text>
+                  <Text style={[styles.statValue, { color: c.accent }]} numberOfLines={1} adjustsFontSizeToFit>
+                    {c.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -205,68 +151,43 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  scroll: { flex: 1 },
   content: { padding: Spacing.lg, paddingBottom: Spacing.xl },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 4,
-  },
-  greeting: { fontSize: 14, color: Colors.secondary },
-  appTitle: { fontSize: 26, fontWeight: '800', color: Colors.heading, letterSpacing: -0.5 },
-  signOutBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  signOutText: { fontSize: 13, color: Colors.secondary, fontWeight: '600' },
-  bellBadge: {
-    position: 'absolute', top: -6, right: -8,
-    backgroundColor: Colors.danger,
-    borderRadius: 8, minWidth: 16, height: 16,
+
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.lg },
+  greeting: { ...Type.title },
+  date: { ...Type.caption, marginTop: 2, textTransform: 'capitalize' },
+  iconBtn: {
+    width: 42, height: 42, borderRadius: Radius.md,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border,
     alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 3,
+  },
+  iconEmoji: { fontSize: 18 },
+  bellBadge: {
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: Colors.danger, borderRadius: 9, minWidth: 18, height: 18,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
+    borderWidth: 2, borderColor: Colors.background,
   },
   bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
-  date: { fontSize: 13, color: Colors.secondary, marginBottom: Spacing.lg, textTransform: 'capitalize' },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: Spacing.lg },
-  statCard: { width: CARD_WIDTH, borderRadius: Radius.lg, padding: Spacing.md, alignItems: 'flex-start', marginBottom: 12 },
-  statEmoji: { fontSize: 22, marginBottom: 6 },
-  statValue: { fontSize: 32, fontWeight: '800', lineHeight: 36 },
-  statLabel: { fontSize: 12, color: Colors.secondary, marginTop: 2, fontWeight: '500' },
-  section: { marginBottom: Spacing.lg },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.heading, marginBottom: Spacing.md },
-  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  actionCard: {
-    width: CARD_WIDTH,
-    backgroundColor: Colors.card,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+
+  loadingBox: { paddingVertical: 80, alignItems: 'center' },
+  sectionLabel: { ...Type.label, marginBottom: Spacing.sm },
+
+  // Bugün Yapılacaklar
+  todoCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, ...Shadow.md, overflow: 'hidden' },
+  todoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: Spacing.md },
+  todoRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  todoDot: { fontSize: 18, width: 28 },
+  todoValue: { ...Type.title, fontSize: 20, minWidth: 64 },
+  todoLabel: { ...Type.body, flex: 1, color: Colors.text },
+  todoChevron: { fontSize: 24, color: Colors.placeholder, fontWeight: '300' },
+
+  // Canlı kartlar
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  statCard: {
+    width: CARD_WIDTH, backgroundColor: Colors.card, borderRadius: Radius.lg,
+    padding: Spacing.md, marginBottom: 12, ...Shadow.sm,
   },
-  actionIcon: { width: 52, height: 52, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  actionEmoji: { fontSize: 24 },
-  actionLabel: { fontSize: 13, fontWeight: '600', color: Colors.heading, textAlign: 'center' },
-  alertBanner: {
-    backgroundColor: '#FEF9C3',
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FDE047',
-  },
-  alertEmoji: { fontSize: 28, marginRight: 12 },
-  alertTitle: { fontSize: 14, fontWeight: '700', color: '#92400E' },
-  alertSub: { fontSize: 12, color: '#B45309', marginTop: 2 },
+  statLabel: { ...Type.label, fontSize: 10, marginBottom: 6 },
+  statValue: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
 });

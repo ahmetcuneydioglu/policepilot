@@ -37,14 +37,6 @@
       ],
       "expo-document-picker",
       [
-        "expo-notifications",
-        {
-          "icon": "./assets/images/icon.png",
-          "color": "#2563EB",
-          "defaultChannel": "default"
-        }
-      ],
-      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
@@ -54,7 +46,8 @@
           }
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/withoutPushEntitlement"
     ],
     "experiments": {
       "typedRoutes": true,

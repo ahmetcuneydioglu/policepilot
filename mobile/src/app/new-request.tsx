@@ -579,7 +579,7 @@ function FormStep({
       const requestPayload: Record<string, unknown> = {
         customer_id: customerId,
         request_type: product.label,
-        status: 'Yeni',
+        status: 'Yeni Lead',
         price_offer: null,
       };
       if (agencyId) requestPayload.agency_id = agencyId;
