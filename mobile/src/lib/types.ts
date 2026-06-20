@@ -55,6 +55,7 @@ export type DocumentRecord = {
   file_size: number | null;
   bucket: string;          // "documents"
   uploaded_by: string | null;
+  doc_type?: string | null; // Kimlik/Ruhsat/Poliçe/Hasar/Diğer (Evrak Merkezi kategorisi)
   created_at: string;
 };
 

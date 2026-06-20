@@ -59,3 +59,13 @@ export async function apiPut<T = any>(path: string, body?: unknown): Promise<T> 
   });
   return handle<T>(res);
 }
+
+/** multipart/form-data POST — Content-Type'ı fetch'in boundary ile koymasına bırak. */
+export async function apiPostForm<T = any>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { ...(await authHeaders()) },
+    body: form,
+  });
+  return handle<T>(res);
+}

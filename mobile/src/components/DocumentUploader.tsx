@@ -54,11 +54,12 @@ type Props = {
   entityId: string;
   agencyId: string | null;
   uploadedBy: string | null;
+  docType?: string | null;
   onUploaded: (doc: DocumentRecord) => void;
 };
 
 export default function DocumentUploader({
-  entity, entityId, agencyId, uploadedBy, onUploaded,
+  entity, entityId, agencyId, uploadedBy, docType, onUploaded,
 }: Props) {
   const [loading, setLoading] = useState(false);
 
@@ -200,7 +201,7 @@ export default function DocumentUploader({
     try {
       const result = await uploadDocument({
         uri, fileName, mimeType, fileSize,
-        entity, entityId, agencyId, uploadedBy,
+        entity, entityId, agencyId, uploadedBy, docType,
       });
 
       if (result.ok) {

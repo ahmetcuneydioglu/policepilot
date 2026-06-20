@@ -131,6 +131,7 @@ export type UploadDocumentParams = {
   entityId: string;
   agencyId: string | null;
   uploadedBy: string | null;
+  docType?: string | null;
 };
 
 export type UploadResult =
@@ -140,7 +141,7 @@ export type UploadResult =
 export async function uploadDocument(params: UploadDocumentParams): Promise<UploadResult> {
   const {
     uri, fileName, mimeType, fileSize,
-    entity, entityId, agencyId, uploadedBy,
+    entity, entityId, agencyId, uploadedBy, docType,
   } = params;
 
   // 1. Dosyayı expo-file-system üzerinden base64 olarak oku
@@ -180,6 +181,7 @@ export async function uploadDocument(params: UploadDocumentParams): Promise<Uplo
     file_size: fileSize ?? null,
     bucket: BUCKET,
     uploaded_by: uploadedBy,
+    doc_type: docType ?? null,
   };
 
   const { data, error: dbError } = await (supabase.from('documents') as any)
