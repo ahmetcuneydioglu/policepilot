@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
-  Switch, ActivityIndicator, Alert, RefreshControl,
+  Switch, ActivityIndicator, Alert, RefreshControl, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -67,6 +67,7 @@ export default function WhatsappCenterScreen() {
   const [segment, setSegment] = useState<'pending' | 'sent' | 'failed'>('pending');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [selected, setSelected] = useState<QueueItem | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -106,10 +107,16 @@ export default function WhatsappCenterScreen() {
   }
 
   async function sendTest() {
+    const phone = settings.whatsapp_phone.replace(/\D/g, '');
+    if (!phone) {
+      Alert.alert('Numara gerekli', 'Önce "Alıcı Numara" alanına test edilecek WhatsApp numarasını girin (örn. 905XXXXXXXXX).');
+      return;
+    }
     setTesting(true);
     try {
-      await apiPost('/api/whatsapp/test-send', {});
-      Alert.alert('✅ Gönderildi', 'Test mesajı WhatsApp üzerinden gönderildi.');
+      // Onaylı şablonla gönder — Meta, düz metni 24 saat penceresi dışında reddeder.
+      await apiPost('/api/whatsapp/test-send', { use_template: true, phone });
+      Alert.alert('✅ Gönderildi', `Test şablonu ${phone} numarasına gönderildi. WhatsApp'ını kontrol et.`);
       await load();
     } catch (e) {
       Alert.alert('Gönderilemedi', e instanceof Error ? e.message : 'Hata');
@@ -202,7 +209,7 @@ export default function WhatsappCenterScreen() {
             visible.map((it) => {
               const st = statusStyle(it.status);
               return (
-                <View key={it.id} style={styles.msgCard}>
+                <TouchableOpacity key={it.id} style={styles.msgCard} onPress={() => setSelected(it)} activeOpacity={0.7}>
                   <View style={styles.msgTop}>
                     <Text style={styles.msgPhone}>{it.phone}</Text>
                     <View style={[styles.badge, { backgroundColor: st.bg }]}><Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text></View>
@@ -213,7 +220,7 @@ export default function WhatsappCenterScreen() {
                     <Text style={styles.msgTime}>{ago(it.created_at)} önce</Text>
                   </View>
                   {it.status === 'failed' && !!it.error_message && <Text style={styles.msgErr} numberOfLines={2}>{it.error_message}</Text>}
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
@@ -226,7 +233,49 @@ export default function WhatsappCenterScreen() {
           </View>
         </ScrollView>
       )}
+
+      {selected && <MessageModal item={selected} onClose={() => setSelected(null)} />}
     </SafeAreaView>
+  );
+}
+
+function MessageModal({ item, onClose }: { item: QueueItem; onClose: () => void }) {
+  const st = statusStyle(item.status);
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet">
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose} style={styles.hBtn}><Text style={styles.hBack}>Kapat</Text></TouchableOpacity>
+          <Text style={styles.hTitle}>Mesaj</Text>
+          <View style={styles.hBtn} />
+        </View>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.msgTop}>
+            <Text style={styles.msgPhone}>{item.phone}</Text>
+            <View style={[styles.badge, { backgroundColor: st.bg }]}><Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text></View>
+          </View>
+          <View style={[styles.card, { marginTop: Spacing.md }]}>
+            <Text style={styles.fullMsg}>{item.message}</Text>
+          </View>
+          <View style={[styles.card, { marginTop: Spacing.md }]}>
+            <DetailRow label="Tür" value={templateLabel(item.template_key)} />
+            <DetailRow label="Durum" value={st.label} />
+            <DetailRow label="Oluşturma" value={new Date(item.created_at).toLocaleString('tr-TR')} />
+            {!!item.sent_at && <DetailRow label="Gönderim" value={new Date(item.sent_at).toLocaleString('tr-TR')} />}
+            {!!item.error_message && <DetailRow label="Hata" value={item.error_message} />}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
   );
 }
 
@@ -292,4 +341,9 @@ const styles = StyleSheet.create({
   autoEmoji: { fontSize: 18, width: 30 },
   autoLabel: { ...Type.body, flex: 1, color: Colors.heading, fontWeight: '600' },
   autoNote: { ...Type.caption, color: Colors.secondary },
+
+  fullMsg: { ...Type.body, color: Colors.heading, lineHeight: 21 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  detailLabel: { ...Type.caption, color: Colors.secondary },
+  detailValue: { ...Type.body, color: Colors.heading, fontWeight: '600', flex: 1, textAlign: 'right', marginLeft: 12 },
 });
