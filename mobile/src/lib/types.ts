@@ -17,6 +17,7 @@ export type Profile = {
   id: string;
   full_name: string | null;
   role: 'super_admin' | 'agency_user';
+  agency_role: string | null; // owner | manager | sales | operations | viewer
   agency_id: string | null;
   created_at: string;
 };

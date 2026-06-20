@@ -11,6 +11,7 @@ export default function MoreScreen() {
   const router = useRouter();
   const { profile, role } = useProfile();
   const isSuperAdmin = role === 'super_admin';
+  const isManager = isSuperAdmin || profile?.agency_role === 'owner' || profile?.agency_role === 'manager';
 
   function signOut() {
     Alert.alert('Çıkış Yap', 'Hesabınızdan çıkmak istediğinize emin misiniz?', [
@@ -23,14 +24,20 @@ export default function MoreScreen() {
     {
       title: 'OPERASYON',
       rows: [
+        { emoji: '✅', label: 'Görevler', href: '/gorevler' },
         { emoji: '📄', label: 'Poliçeler', href: '/(tabs)/policies' },
-        { emoji: '🔔', label: 'Bildirimler', href: '/notifications' },
         { emoji: '💬', label: 'WhatsApp Merkezi', href: '/whatsapp' },
         { emoji: '📁', label: 'Evrak Merkezi', href: '/evraklar' },
-        { emoji: '✅', label: 'Görevler', soon: true },
-        { emoji: '📊', label: 'Raporlar', soon: true },
+        { emoji: '🔔', label: 'Bildirimler', href: '/notifications' },
       ],
     },
+    ...(isManager ? [{
+      title: 'YÖNETİM',
+      rows: [
+        { emoji: '🏆', label: 'Performans', href: '/performans' as Href },
+        { emoji: '📊', label: 'Raporlar', href: '/raporlar' as Href },
+      ] as Row[],
+    }] : []),
     {
       title: 'HESAP',
       rows: [
