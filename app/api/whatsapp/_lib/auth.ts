@@ -21,37 +21,54 @@ export interface ApiCaller {
 }
 
 export async function resolveCaller(request: NextRequest): Promise<ApiCaller | null> {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  const session = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieHeader.split(";").map((c) => {
-            const [name, ...rest] = c.trim().split("=");
-            return { name, value: rest.join("=") };
-          });
-        },
-        setAll() {},
-      },
-    }
-  );
-
-  const { data: { user } } = await session.auth.getUser();
-  if (!user) return null;
-
   const admin = getSupabaseAdmin();
+
+  let userId: string;
+  let appMeta: Record<string, unknown> | undefined;
+
+  // ── 1. Bearer token (mobil uygulama) — varsa öncelikli ──────────────────────
+  const authz = request.headers.get("authorization") ?? "";
+  const bearer = /^bearer\s+/i.test(authz) ? authz.replace(/^bearer\s+/i, "").trim() : null;
+
+  if (bearer) {
+    const { data: { user }, error } = await admin.auth.getUser(bearer);
+    if (error || !user) return null;
+    userId = user.id;
+    appMeta = user.app_metadata as Record<string, unknown> | undefined;
+  } else {
+    // ── 2. Cookie session (web) — mevcut akış, değişmedi ──────────────────────
+    const cookieHeader = request.headers.get("cookie") ?? "";
+    const session = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieHeader.split(";").map((c) => {
+              const [name, ...rest] = c.trim().split("=");
+              return { name, value: rest.join("=") };
+            });
+          },
+          setAll() {},
+        },
+      }
+    );
+    const { data: { user } } = await session.auth.getUser();
+    if (!user) return null;
+    userId = user.id;
+    appMeta = user.app_metadata as Record<string, unknown> | undefined;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: prof } = await (admin.from("profiles") as any)
     .select("role, agency_id, agency_role, permissions, status")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
 
-  const jwtRole = (user.app_metadata as Record<string, string> | undefined)?.role ?? null;
+  const jwtRole = (appMeta as Record<string, string> | undefined)?.role ?? null;
 
   return {
-    userId:      user.id,
+    userId,
     role:        prof?.role ?? jwtRole ?? "agency_user",
     agencyId:    prof?.agency_id ?? null,
     agencyRole:  prof?.agency_role ?? null,
