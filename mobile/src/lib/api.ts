@@ -10,7 +10,9 @@
 
 import { supabase } from './supabase';
 
-export const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'https://sigortaos.com').replace(/\/+$/, '');
+// ÖNEMLİ: www'li kanonik domain — apex (sigortaos.com) 308 ile www'ye yönlendirir
+// ve fetch çapraz-origin redirect'te Authorization başlığını düşürür → 401.
+export const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'https://www.sigortaos.com').replace(/\/+$/, '');
 
 export class ApiError extends Error {
   status: number;
