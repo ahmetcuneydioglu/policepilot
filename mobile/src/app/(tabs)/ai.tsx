@@ -85,7 +85,9 @@ export default function AiScreen() {
             messages.map((m, i) => (
               <View key={i} style={[styles.bubbleRow, m.role === 'user' ? styles.rowRight : styles.rowLeft]}>
                 <View style={[styles.bubble, m.role === 'user' ? styles.bubbleUser : styles.bubbleAi]}>
-                  <Text style={[styles.bubbleText, m.role === 'user' && { color: '#fff' }]}>{m.content}</Text>
+                  {m.role === 'user'
+                    ? <Text style={[styles.bubbleText, { color: '#fff' }]}>{m.content}</Text>
+                    : <RichText text={m.content} />}
                 </View>
               </View>
             ))
@@ -125,6 +127,46 @@ export default function AiScreen() {
   );
 }
 
+// ─── Hafif markdown render (numaralı/madde liste + **kalın**) ────────────────
+function parseInline(text: string, keyBase: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((p, i) =>
+    p.startsWith('**') && p.endsWith('**')
+      ? <Text key={`${keyBase}-${i}`} style={styles.bold}>{p.slice(2, -2)}</Text>
+      : <Text key={`${keyBase}-${i}`}>{p}</Text>
+  );
+}
+
+function RichText({ text }: { text: string }) {
+  const lines = text.replace(/\r/g, '').split('\n');
+  return (
+    <View>
+      {lines.map((line, i) => {
+        const t = line.trim();
+        if (!t) return <View key={i} style={{ height: 6 }} />;
+        const num = t.match(/^(\d+)[.)]\s+(.*)$/);
+        const bul = t.match(/^[-•*]\s+(.*)$/);
+        if (num) {
+          return (
+            <View key={i} style={styles.liRow}>
+              <Text style={styles.liMarker}>{num[1]}.</Text>
+              <Text style={styles.liText}>{parseInline(num[2], String(i))}</Text>
+            </View>
+          );
+        }
+        if (bul) {
+          return (
+            <View key={i} style={styles.liRow}>
+              <Text style={styles.liMarker}>•</Text>
+              <Text style={styles.liText}>{parseInline(bul[1], String(i))}</Text>
+            </View>
+          );
+        }
+        return <Text key={i} style={styles.para}>{parseInline(t, String(i))}</Text>;
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
 
@@ -150,6 +192,11 @@ const styles = StyleSheet.create({
   bubbleUser: { backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
   bubbleAi: { backgroundColor: Colors.card, borderBottomLeftRadius: 4, ...Shadow.sm },
   bubbleText: { ...Type.body, color: Colors.heading, lineHeight: 21 },
+  bold: { fontWeight: '800', color: Colors.heading },
+  para: { ...Type.body, color: Colors.heading, lineHeight: 21, marginBottom: 6 },
+  liRow: { flexDirection: 'row', marginBottom: 6 },
+  liMarker: { ...Type.body, color: Colors.primary, fontWeight: '800', width: 22 },
+  liText: { ...Type.body, color: Colors.heading, flex: 1, lineHeight: 21 },
   typing: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   typingText: { ...Type.caption, color: Colors.secondary },
 

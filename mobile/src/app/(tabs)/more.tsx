@@ -26,7 +26,7 @@ export default function MoreScreen() {
         { emoji: '📄', label: 'Poliçeler', href: '/(tabs)/policies' },
         { emoji: '🔔', label: 'Bildirimler', href: '/notifications' },
         { emoji: '💬', label: 'WhatsApp Merkezi', href: '/whatsapp' },
-        { emoji: '📁', label: 'Evrak Merkezi', soon: true },
+        { emoji: '📁', label: 'Evrak Merkezi', href: '/evraklar' },
         { emoji: '✅', label: 'Görevler', soon: true },
         { emoji: '📊', label: 'Raporlar', soon: true },
       ],

@@ -110,7 +110,9 @@ export async function POST(request: NextRequest) {
       "Sen SigortaOS AI'sın — bir Türk sigorta acentesinin cebindeki dijital asistanı. " +
       "Yalnızca Türkçe, kısa ve aksiyon-odaklı yanıt ver. Aşağıdaki GÜNCEL ACENTE VERİSİNİ kullan; " +
       "isim ve telefon numaralarını olduğu gibi kullan. Veride olmayan bilgiyi UYDURMA — yoksa 'kayıt yok' de. " +
-      "Liste isteniyorsa madde madde, öncelik sırasıyla ver. Mesaj taslağı istenirse kısa, nazik, profesyonel bir WhatsApp metni yaz.\n\n" +
+      "Liste/sıralama isteniyorsa NUMARALI liste kullan (1., 2., 3.), HER MADDEYİ AYRI SATIRA yaz, müşteri adını **kalın** yap ve alanları ' · ' ile ayır " +
+      "(örn: '1. **Ahmet Yılmaz** · Kasko · 12.400₺ · 3 gün kaldı · 0532...'). Maddeler arasında boş satır bırakma. " +
+      "Mesaj taslağı istenirse kısa, nazik, profesyonel bir WhatsApp metni yaz.\n\n" +
       "=== GÜNCEL ACENTE VERİSİ ===\n" + context;
 
     const model = process.env.OPENAI_CHAT_MODEL ?? process.env.OPENAI_OCR_MODEL ?? "gpt-5.4-mini";

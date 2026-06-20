@@ -163,6 +163,7 @@ function RootLayoutInner() {
         <Stack.Screen name="notifications"           options={{ presentation: 'modal' }} />
         <Stack.Screen name="customer/[id]"           options={{ presentation: 'card' }} />
         <Stack.Screen name="whatsapp"                options={{ presentation: 'card' }} />
+        <Stack.Screen name="evraklar"                options={{ presentation: 'card' }} />
       </Stack>
     </>
   );
