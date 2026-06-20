@@ -167,6 +167,8 @@ function RootLayoutInner() {
         <Stack.Screen name="gorevler"                options={{ presentation: 'card' }} />
         <Stack.Screen name="performans"              options={{ presentation: 'card' }} />
         <Stack.Screen name="raporlar"                options={{ presentation: 'card' }} />
+        <Stack.Screen name="quote-center"            options={{ presentation: 'card' }} />
+        <Stack.Screen name="quote-run/[id]"          options={{ presentation: 'card' }} />
       </Stack>
     </>
   );

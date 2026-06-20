@@ -6,7 +6,6 @@
 
 import { NextResponse }       from "next/server";
 import type { NextRequest }   from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin }   from "@/lib/supabase-admin";
 import { resolveCaller, requirePermission, type ApiCaller } from "../../whatsapp/_lib/auth";
 import { isManagerial } from "@/lib/tenant";
@@ -19,34 +18,12 @@ function ownsRun(caller: ApiCaller, run: { agency_id: string | null; created_by?
   return true;
 }
 
-function sessionClient(request: NextRequest) {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieHeader.split(";").map((c) => {
-            const [name, ...rest] = c.trim().split("=");
-            return { name, value: rest.join("=") };
-          });
-        },
-        setAll() {},
-      },
-    }
-  );
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-
-    const { data: { user } } = await sessionClient(request).auth.getUser();
-    if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
@@ -86,9 +63,6 @@ export async function PATCH(
     const { id } = await params;
     const body   = await request.json();
     const { status, won_result_id } = body;
-
-    const { data: { user } } = await sessionClient(request).auth.getUser();
-    if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
@@ -140,9 +114,6 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-
-    const { data: { user } } = await sessionClient(request).auth.getUser();
-    if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });

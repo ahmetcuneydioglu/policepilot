@@ -6,30 +6,10 @@
 
 import { NextResponse }          from "next/server";
 import type { NextRequest }      from "next/server";
-import { createServerClient }    from "@supabase/ssr";
 import { getSupabaseAdmin }      from "@/lib/supabase-admin";
 import { logActivity }           from "@/lib/activity";
 import { resolveCaller, requirePermission } from "../whatsapp/_lib/auth";
 import { scopeByUser } from "@/lib/tenant";
-
-function sessionClient(request: NextRequest) {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieHeader.split(";").map((c) => {
-            const [name, ...rest] = c.trim().split("=");
-            return { name, value: rest.join("=") };
-          });
-        },
-        setAll() {},
-      },
-    }
-  );
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -92,30 +72,7 @@ export async function POST(request: NextRequest) {
       renewal_of_policy_id,
     } = body;
 
-    // ── Oturum doğrulama ──────────────────────────────────────────────────
-    const cookieHeader = request.headers.get("cookie") ?? "";
-    const supabaseSession = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieHeader.split(";").map((c) => {
-              const [name, ...rest] = c.trim().split("=");
-              return { name, value: rest.join("=") };
-            });
-          },
-          setAll() { /* read-only in API route */ },
-        },
-      }
-    );
-
-    const { data: { user } } = await supabaseSession.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
-    }
-
-    // ── Yetki kontrolü ────────────────────────────────────────────────────
+    // ── Oturum + yetki (bearer/cookie) ────────────────────────────────────
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
     const denied = requirePermission(caller, "quote.create");
@@ -133,7 +90,7 @@ export async function POST(request: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: prof } = await (admin.from("profiles") as any)
         .select("agency_id")
-        .eq("id", user.id)
+        .eq("id", caller.userId)
         .maybeSingle();
       resolvedAgencyId = prof?.agency_id ?? null;
     }
@@ -170,7 +127,7 @@ export async function POST(request: NextRequest) {
           phone:          customer_phone?.trim() || "",
           insurance_type: product_type,
           note:           null,
-          created_by:     user.id,
+          created_by:     caller.userId,
         })
         .select("id")
         .single();
@@ -204,7 +161,7 @@ export async function POST(request: NextRequest) {
         run_finished_at: new Date().toISOString(),
         // Yenileme ilişkisi
         renewal_of_policy_id: renewal_of_policy_id ?? null,
-        created_by:      user.id,
+        created_by:      caller.userId,
       })
       .select("id")
       .single();
@@ -215,7 +172,7 @@ export async function POST(request: NextRequest) {
     }
 
     await logActivity({
-      agencyId: resolvedAgencyId, actorId: user.id,
+      agencyId: resolvedAgencyId, actorId: caller.userId,
       action: "create", entityType: "quote_run", entityId: run.id,
       summary: `Teklif çalışıldı: ${product_type}${customer_name ? ` — ${customer_name}` : ""}`,
     });

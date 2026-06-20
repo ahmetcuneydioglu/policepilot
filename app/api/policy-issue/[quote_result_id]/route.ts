@@ -13,32 +13,11 @@
 
 import { NextResponse }       from "next/server";
 import type { NextRequest }   from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { getQuoteIssueContext, checkIfAlreadyIssued } from "@/services/insurance/quoteService";
 import { processMockPayment }  from "@/services/payment/paymentService";
 import { issuePolicy }         from "@/services/insurance/policyIssueService";
 import type { PaymentResult }  from "@/services/payment/paymentService";
 import { resolveCaller, requirePermission } from "../../whatsapp/_lib/auth";
-
-// ─── Auth helper ──────────────────────────────────────────────────────────────
-function getSessionClient(request: NextRequest) {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieHeader.split(";").map((c) => {
-            const [name, ...rest] = c.trim().split("=");
-            return { name, value: rest.join("=") };
-          });
-        },
-        setAll() {},
-      },
-    }
-  );
-}
 
 // ─── Source type helper ───────────────────────────────────────────────────────
 function isOfflineSource(sourceType: string): boolean {
@@ -65,9 +44,6 @@ export async function GET(
 ) {
   try {
     const { quote_result_id } = await params;
-
-    const { data: { user } } = await getSessionClient(request).auth.getUser();
-    if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
@@ -100,9 +76,6 @@ export async function POST(
 ) {
   try {
     const { quote_result_id } = await params;
-
-    const { data: { user } } = await getSessionClient(request).auth.getUser();
-    if (!user) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
 
     const caller = await resolveCaller(request);
     if (!caller) return NextResponse.json({ error: "Oturum açılmamış." }, { status: 401 });
@@ -177,7 +150,7 @@ export async function POST(
     const issued = await issuePolicy({
       context,
       paymentResult,
-      agentUserId: user.id,
+      agentUserId: caller.userId,
       sourceType,
     });
 

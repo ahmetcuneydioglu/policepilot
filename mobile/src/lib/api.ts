@@ -60,6 +60,15 @@ export async function apiPut<T = any>(path: string, body?: unknown): Promise<T> 
   return handle<T>(res);
 }
 
+export async function apiPatch<T = any>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+    body: JSON.stringify(body ?? {}),
+  });
+  return handle<T>(res);
+}
+
 /** multipart/form-data POST — Content-Type'ı fetch'in boundary ile koymasına bırak. */
 export async function apiPostForm<T = any>(path: string, form: FormData): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
