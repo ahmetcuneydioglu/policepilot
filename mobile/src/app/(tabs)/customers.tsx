@@ -12,6 +12,7 @@ import { Customer } from '@/lib/types';
 import { useProfile } from '@/lib/useProfile';
 import DocumentSection from '@/components/DocumentSection';
 import LimitModal from '@/components/LimitModal';
+import BulkPolicyImportMobile from '@/components/BulkPolicyImportMobile';
 import { checkLimit, limitErrorMessage } from '@/lib/limits';
 import type { LimitResult } from '@/lib/limits';
 
@@ -819,6 +820,7 @@ export default function CustomersScreen() {
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addVisible, setAddVisible] = useState(false);
+  const [bulkOpen, setBulkOpen]   = useState(false);
   const [selected, setSelected]   = useState<Customer | null>(null);
 
   async function fetchCustomers() {
@@ -875,9 +877,14 @@ export default function CustomersScreen() {
           <Text style={styles.title}>Müşteriler</Text>
           <Text style={styles.subtitle}>{customers.length} kayıt</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setAddVisible(true)} activeOpacity={0.8}>
-          <Text style={styles.addBtnText}>+ Ekle</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={{ backgroundColor: Colors.primaryLight, paddingHorizontal: 12, paddingVertical: 10, borderRadius: Radius.md, justifyContent: 'center' }} onPress={() => setBulkOpen(true)} activeOpacity={0.8}>
+            <Text style={{ color: Colors.primary, fontWeight: '700', fontSize: 13 }}>📦 Toplu</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setAddVisible(true)} activeOpacity={0.8}>
+            <Text style={styles.addBtnText}>+ Ekle</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search */}
@@ -919,6 +926,10 @@ export default function CustomersScreen() {
             </View>
           }
         />
+      )}
+
+      {bulkOpen && (
+        <BulkPolicyImportMobile agencyId={agencyId} onClose={() => setBulkOpen(false)} onDone={fetchCustomers} />
       )}
 
       {/* Detail Modal */}

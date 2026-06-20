@@ -1,7 +1,8 @@
 /**
  * src/app/evraklar.tsx — Evrak Merkezi
- * - Tüm acente evrakları (kategori filtreli) + müşteri seçip kategoriyle yükleme
- * - Poliçe Tara (OCR): kamerayla poliçe çek → /api/ocr/policy → müşteri+poliçe oluştur
+ * - Liste: MÜŞTERİ ADI (büyük) + poliçe türü; imzalı URL ile açma (her bucket)
+ * - Poliçe Tara (OCR) + Toplu Poliçe → /api/customers/from-policy (müşteri eşleştirme + policy_no dedup)
+ * - + Ekle: müşteri+kategori seçip kamera/galeri/dosya yükleme
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -14,16 +15,17 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
-import { fileIcon, formatFileSize, getSignedUrl, deleteDocument, uploadDocument } from '@/lib/storage';
-import { apiPostForm, ApiError } from '@/lib/api';
-import { checkLimit, limitErrorMessage } from '@/lib/limits';
+import { fileIcon, formatFileSize, deleteDocument } from '@/lib/storage';
+import { apiPost, ApiError } from '@/lib/api';
+import {
+  POLICY_TYPES, ocrToRow, ocrExtract, submitFromPolicy, isValidRow,
+  type Asset, type PolicyRow,
+} from '@/lib/policyOcr';
 import type { DocumentRecord } from '@/lib/types';
 import DocumentUploader from '@/components/DocumentUploader';
+import BulkPolicyImportMobile from '@/components/BulkPolicyImportMobile';
 
-type DocRow = DocumentRecord & { customers?: { name: string } | null };
-type OcrField = { value: string | null; confidence?: number; needsReview?: boolean };
-type OcrFields = Record<string, OcrField>;
-type Asset = { uri: string; fileName: string; mimeType: string };
+type DocRow = DocumentRecord & { customers?: { name: string } | null; policies?: { policy_type: string } | null };
 
 const CATEGORIES = ['Kimlik', 'Ruhsat', 'Poliçe', 'Hasar Evrakı', 'Diğer'];
 
@@ -32,6 +34,11 @@ function getImagePicker() {
 }
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function docTypeLabel(t?: string | null): string {
+  if (!t) return '';
+  if (t === 'policy' || t === 'ocr' || t === 'ocr_upload') return 'Poliçe';
+  return t;
 }
 
 export default function EvraklarScreen() {
@@ -44,12 +51,13 @@ export default function EvraklarScreen() {
   const [opening, setOpening] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('Tümü');
   const [addOpen, setAddOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [ocr, setOcr] = useState<{ fields: OcrFields; asset: Asset } | null>(null);
+  const [ocr, setOcr] = useState<{ row: PolicyRow; asset: Asset; meta: { provider: string; mode: string; raw: string } } | null>(null);
 
   const load = useCallback(async () => {
     let q = (supabase.from('documents') as any)
-      .select('id,file_name,file_path,file_type,file_size,customer_id,agency_id,doc_type,created_at,customers(name)')
+      .select('id,file_name,file_path,file_type,file_size,customer_id,agency_id,bucket,doc_type,created_at,customers(name),policies(policy_type)')
       .order('created_at', { ascending: false })
       .limit(200);
     if (agencyId) q = q.eq('agency_id', agencyId);
@@ -62,16 +70,22 @@ export default function EvraklarScreen() {
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
 
   const visible = useMemo(
-    () => (filter === 'Tümü' ? docs : docs.filter((d) => (d.doc_type ?? '') === filter)),
+    () => (filter === 'Tümü' ? docs : docs.filter((d) => (docTypeLabel(d.doc_type) || '') === filter || (d.doc_type ?? '') === filter)),
     [docs, filter]
   );
 
   async function openDoc(d: DocRow) {
     setOpening(d.id);
-    const url = await getSignedUrl(d.file_path);
-    setOpening(null);
-    if (url) Linking.openURL(url).catch(() => Alert.alert('Açılamadı', 'Dosya açılamadı.'));
-    else Alert.alert('Açılamadı', 'Dosya bağlantısı alınamadı.');
+    try {
+      const { url } = await apiPost<{ url: string }>('/api/documents/sign', { id: d.id });
+      if (url) await Linking.openURL(url);
+      else Alert.alert('Açılamadı', 'Dosya bağlantısı alınamadı.');
+    } catch (e) {
+      const msg = e instanceof ApiError && e.status === 401 ? 'Sunucu güncellemesi yayınlanmalı.' : e instanceof Error ? e.message : 'Açılamadı';
+      Alert.alert('Açılamadı', msg);
+    } finally {
+      setOpening(null);
+    }
   }
 
   function confirmDelete(d: DocRow) {
@@ -96,22 +110,17 @@ export default function EvraklarScreen() {
       const req = await ImagePicker.requestCameraPermissionsAsync();
       if (req.status !== 'granted') { Alert.alert('İzin gerekli', 'Poliçe taramak için kamera izni gerekli.'); return; }
     }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8, allowsEditing: false });
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || !result.assets?.length) return;
-
     const a = result.assets[0];
     const asset: Asset = { uri: a.uri, fileName: a.fileName ?? `police_${Date.now()}.jpg`, mimeType: 'image/jpeg' };
 
     setScanning(true);
     try {
-      const form = new FormData();
-      // React Native dosya parçası: { uri, name, type }
-      form.append('file', { uri: asset.uri, name: asset.fileName, type: asset.mimeType } as any);
-      const res = await apiPostForm<{ fields: OcrFields }>('/api/ocr/policy', form);
-      setOcr({ fields: res.fields ?? {}, asset });
+      const res = await ocrExtract(asset);
+      setOcr({ row: ocrToRow(res.fields), asset, meta: { provider: res.provider, mode: res.mode, raw: res.raw } });
     } catch (e) {
-      let msg = e instanceof Error ? e.message : 'OCR başarısız';
-      if (e instanceof ApiError && e.status === 401) msg = 'Sunucu güncellemesi henüz yayınlanmamış olabilir.';
+      const msg = e instanceof ApiError && e.status === 401 ? 'Sunucu güncellemesi henüz yayınlanmamış olabilir.' : e instanceof Error ? e.message : 'OCR başarısız';
       Alert.alert('Okunamadı', msg);
     } finally {
       setScanning(false);
@@ -126,14 +135,15 @@ export default function EvraklarScreen() {
         <TouchableOpacity onPress={() => setAddOpen(true)} style={styles.hBtn}><Text style={styles.hAdd}>+ Ekle</Text></TouchableOpacity>
       </View>
 
-      {/* Poliçe Tara (OCR) */}
-      <TouchableOpacity style={styles.scanBtn} onPress={scanPolicy} disabled={scanning} activeOpacity={0.85}>
-        {scanning
-          ? <><ActivityIndicator color="#fff" /><Text style={styles.scanText}>  Okunuyor…</Text></>
-          : <Text style={styles.scanText}>📸  Poliçe Tara (OCR) → Otomatik Müşteri/Poliçe</Text>}
-      </TouchableOpacity>
+      <View style={styles.actionRow}>
+        <TouchableOpacity style={[styles.action, scanning && { opacity: 0.6 }]} onPress={scanPolicy} disabled={scanning} activeOpacity={0.85}>
+          {scanning ? <ActivityIndicator color="#fff" /> : <Text style={styles.actionText}>📸  Poliçe Tara</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.action, styles.actionAlt]} onPress={() => setBulkOpen(true)} activeOpacity={0.85}>
+          <Text style={[styles.actionText, { color: Colors.primary }]}>📦  Toplu Poliçe</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Kategori filtre */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
         {['Tümü', ...CATEGORIES].map((c) => {
           const active = filter === c;
@@ -148,32 +158,27 @@ export default function EvraklarScreen() {
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={Colors.primary} /></View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />} showsVerticalScrollIndicator={false}>
           {visible.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyEmoji}>📁</Text>
               <Text style={styles.emptyTitle}>{filter === 'Tümü' ? 'Henüz evrak yok' : `"${filter}" kategorisinde evrak yok`}</Text>
-              <Text style={styles.emptySub}>Yukarıdan poliçe tara ya da “+ Ekle” ile belge yükle.</Text>
+              <Text style={styles.emptySub}>Poliçe tara, toplu içe aktar ya da “+ Ekle” ile belge yükle.</Text>
             </View>
           ) : (
             visible.map((d) => {
               const ic = fileIcon(d.file_type);
+              const desc = d.policies?.policy_type || docTypeLabel(d.doc_type) || 'Evrak';
               return (
                 <TouchableOpacity key={d.id} style={styles.row} onPress={() => openDoc(d)} onLongPress={() => confirmDelete(d)} activeOpacity={0.7}>
                   <View style={[styles.fileIcon, { backgroundColor: ic.color + '18' }]}>
                     {opening === d.id ? <ActivityIndicator size="small" color={ic.color} /> : <Text style={{ fontSize: 18 }}>{ic.icon}</Text>}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.fileName} numberOfLines={1}>{d.file_name}</Text>
-                    <Text style={styles.fileMeta} numberOfLines={1}>
-                      {d.customers?.name ?? 'Müşteri yok'} · {fmtDate(d.created_at)}{d.file_size ? ` · ${formatFileSize(d.file_size)}` : ''}
-                    </Text>
+                    <Text style={styles.fileName} numberOfLines={1}>{(d.customers?.name ?? 'MÜŞTERİ YOK').toLocaleUpperCase('tr-TR')}</Text>
+                    <Text style={styles.fileMeta} numberOfLines={1}>{desc} · {fmtDate(d.created_at)}{d.file_size ? ` · ${formatFileSize(d.file_size)}` : ''}</Text>
                   </View>
-                  {!!d.doc_type && <View style={styles.catBadge}><Text style={styles.catBadgeText}>{d.doc_type}</Text></View>}
+                  <View style={styles.catBadge}><Text style={styles.catBadgeText}>{docTypeLabel(d.doc_type) || desc}</Text></View>
                 </TouchableOpacity>
               );
             })
@@ -182,24 +187,14 @@ export default function EvraklarScreen() {
         </ScrollView>
       )}
 
-      {addOpen && (
-        <AddDocModal agencyId={agencyId} userId={userId} onClose={() => setAddOpen(false)} onUploaded={() => { setAddOpen(false); load(); }} />
-      )}
-      {ocr && (
-        <OcrReviewModal
-          fields={ocr.fields}
-          asset={ocr.asset}
-          agencyId={agencyId}
-          userId={userId}
-          onClose={() => setOcr(null)}
-          onCreated={() => { setOcr(null); load(); }}
-        />
-      )}
+      {addOpen && <AddDocModal agencyId={agencyId} userId={userId} onClose={() => setAddOpen(false)} onUploaded={() => { setAddOpen(false); load(); }} />}
+      {bulkOpen && <BulkPolicyImportMobile agencyId={agencyId} onClose={() => setBulkOpen(false)} onDone={load} />}
+      {ocr && <OcrReviewModal row={ocr.row} asset={ocr.asset} meta={ocr.meta} agencyId={agencyId} onClose={() => setOcr(null)} onCreated={() => { setOcr(null); load(); }} />}
     </SafeAreaView>
   );
 }
 
-// ─── Belge ekleme: müşteri seç + kategori → kamera/galeri/dosya ───────────────
+// ─── + Ekle: müşteri + kategori → kamera/galeri/dosya ─────────────────────────
 function AddDocModal({
   agencyId, userId, onClose, onUploaded,
 }: { agencyId: string | null; userId: string | null; onClose: () => void; onUploaded: () => void }) {
@@ -226,7 +221,6 @@ function AddDocModal({
             <Text style={styles.hTitle}>Belge Ekle</Text>
             <TouchableOpacity onPress={onClose} style={styles.hBtn}><Text style={styles.hAdd}>Kapat</Text></TouchableOpacity>
           </View>
-
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={styles.sectionLabel}>MÜŞTERİ SEÇ</Text>
             {selected ? (
@@ -245,7 +239,6 @@ function AddDocModal({
                 ))}
               </>
             )}
-
             {selected && (
               <>
                 <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>KATEGORİ</Text>
@@ -256,17 +249,10 @@ function AddDocModal({
                     </TouchableOpacity>
                   ))}
                 </View>
-
                 <View style={{ marginTop: Spacing.lg }}>
                   <Text style={styles.sectionLabel}>EVRAK YÜKLE</Text>
-                  <DocumentUploader
-                    entity="customers"
-                    entityId={selected.id}
-                    agencyId={agencyId}
-                    uploadedBy={userId}
-                    docType={category}
-                    onUploaded={() => { Alert.alert('✅ Yüklendi', `${category} · ${selected.name}`); onUploaded(); }}
-                  />
+                  <DocumentUploader entity="customers" entityId={selected.id} agencyId={agencyId} uploadedBy={userId} docType={category}
+                    onUploaded={() => { Alert.alert('✅ Yüklendi', `${category} · ${selected.name}`); onUploaded(); }} />
                   <Text style={styles.hint}>Kamera ile çek, galeriden seç veya PDF yükle. {selected.name} klasörüne kaydedilir.</Text>
                 </View>
               </>
@@ -278,89 +264,48 @@ function AddDocModal({
   );
 }
 
-// ─── OCR sonucu inceleme + müşteri/poliçe oluşturma ───────────────────────────
-const OCR_GROUPS: { title: string; rows: [string, string][] }[] = [
-  { title: 'MÜŞTERİ', rows: [['customer_name', 'Ad Soyad'], ['phone', 'Telefon'], ['tc_identity_no', 'TC / VKN']] },
-  { title: 'POLİÇE', rows: [['policy_type', 'Tür'], ['policy_no', 'Poliçe No'], ['insurance_company', 'Şirket'], ['start_date', 'Başlangıç (YYYY-AA-GG)'], ['end_date', 'Bitiş (YYYY-AA-GG)'], ['premium', 'Prim ₺']] },
-  { title: 'ARAÇ / DİĞER', rows: [['plate', 'Plaka'], ['vehicle_brand', 'Marka'], ['vehicle_model', 'Model'], ['vehicle_year', 'Yıl'], ['address', 'Adres']] },
+// ─── OCR tekli inceleme → from-policy ─────────────────────────────────────────
+const OCR_FIELDS: { key: keyof PolicyRow; label: string; isType?: boolean }[] = [
+  { key: 'name', label: 'Ad Soyad *' },
+  { key: 'phone', label: 'Telefon' },
+  { key: 'tc_identity_no', label: 'TC / VKN' },
+  { key: 'policy_type', label: 'Tür *', isType: true },
+  { key: 'policy_no', label: 'Poliçe No' },
+  { key: 'insurance_company', label: 'Şirket' },
+  { key: 'start_date', label: 'Başlangıç (YYYY-AA-GG)' },
+  { key: 'end_date', label: 'Bitiş (YYYY-AA-GG)' },
+  { key: 'premium', label: 'Prim ₺' },
+  { key: 'plate', label: 'Plaka' },
+  { key: 'brand_model', label: 'Marka / Model' },
+  { key: 'vehicle_year', label: 'Yıl' },
 ];
-const CORE = new Set(['customer_name', 'policy_type', 'start_date', 'end_date', 'premium', 'phone']);
+const CORE = new Set<keyof PolicyRow>(['name', 'phone', 'policy_type', 'start_date', 'end_date', 'premium']);
 
 function OcrReviewModal({
-  fields, asset, agencyId, userId, onClose, onCreated,
-}: { fields: OcrFields; asset: Asset; agencyId: string | null; userId: string | null; onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState<Record<string, string>>(() => {
-    const f: Record<string, string> = {};
-    for (const k of Object.keys(fields)) f[k] = fields[k]?.value ?? '';
-    return f;
-  });
+  row, asset, meta, agencyId, onClose, onCreated,
+}: { row: PolicyRow; asset: Asset; meta: { provider: string; mode: string; raw: string }; agencyId: string | null; onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState<PolicyRow>(row);
   const [creating, setCreating] = useState(false);
-  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const [typePicker, setTypePicker] = useState(false);
+  const set = (k: keyof PolicyRow, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   async function create() {
-    const name = (form.customer_name ?? '').trim();
-    if (!name) { Alert.alert('Ad gerekli', 'OCR ad bulamadı — lütfen elle girin.'); return; }
+    if (!isValidRow(form)) { Alert.alert('Eksik', 'Ad Soyad ve Tür zorunludur.'); return; }
     setCreating(true);
-    try {
-      const cl = await checkLimit(agencyId, 'customers');
-      if (!cl.ok) { Alert.alert('Limit', limitErrorMessage('customers', cl)); setCreating(false); return; }
-
-      const today = new Date().toISOString().slice(0, 10);
-      const extra: Record<string, string> = {};
-      if (form.plate) extra.plaka = form.plate;
-      const mm = [form.vehicle_brand, form.vehicle_model].filter(Boolean).join(' ').trim();
-      if (mm) extra.marka_model = mm;
-      if (form.vehicle_year) extra.arac_yili = form.vehicle_year;
-      if (form.address) extra.adres = form.address;
-      if (form.city) extra.il = form.city;
-      if (form.district) extra.ilce = form.district;
-
-      const { data: cust, error: ce } = await (supabase.from('customers') as any).insert({
-        name,
-        phone: form.phone || '',
-        insurance_type: form.policy_type || 'Diğer',
-        identity_no: form.tc_identity_no || form.identity_no || form.tax_no || null,
-        vehicle_plate: form.plate || null,
-        policy_end_date: form.end_date || null,
-        extra_data: Object.keys(extra).length ? extra : null,
-        agency_id: agencyId,
-      }).select().single();
-      if (ce) throw new Error(ce.message);
-
-      let policyId: string | null = null;
-      const pl = await checkLimit(agencyId, 'policies');
-      if (pl.ok && form.policy_type && form.end_date) {
-        const premium = form.premium ? Number(form.premium.replace(/[^\d]/g, '')) : null;
-        const { data: pol, error: pe } = await (supabase.from('policies') as any).insert({
-          customer_id: cust.id,
-          policy_type: form.policy_type,
-          start_date: form.start_date || today,
-          end_date: form.end_date,
-          premium: Number.isFinite(premium as number) ? premium : null,
-          insurance_company: form.insurance_company || null,
-          policy_no: form.policy_no || null,
-          status: 'Aktif',
-          agency_id: agencyId,
-        }).select().single();
-        if (!pe && pol) policyId = pol.id;
-      }
-
-      // Taranan görseli ilgili kayda Poliçe evrakı olarak ekle (best-effort)
-      await uploadDocument({
-        uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType, fileSize: null,
-        entity: policyId ? 'policies' : 'customers',
-        entityId: policyId ?? cust.id,
-        agencyId, uploadedBy: userId, docType: 'Poliçe',
-      }).catch(() => {});
-
-      Alert.alert('✅ Oluşturuldu', `${name}${policyId ? ' + poliçe' : ''} kaydedildi.`);
+    const res = await submitFromPolicy(asset, form, meta, agencyId);
+    setCreating(false);
+    if (res.status === 'saved') {
+      Alert.alert('✅ Oluşturuldu', res.matched ? `${form.name} (mevcut müşteriye eklendi) + poliçe.` : `${form.name} + poliçe kaydedildi.`);
       onCreated();
-    } catch (e) {
-      Alert.alert('Hata', e instanceof Error ? e.message : 'Oluşturulamadı');
-    } finally {
-      setCreating(false);
+    } else if (res.status === 'duplicate') {
+      Alert.alert('Zaten kayıtlı', res.error ?? 'Bu poliçe numarası zaten kayıtlı — yeni kayıt oluşturulmadı.');
+      onCreated();
+    } else {
+      Alert.alert('Hata', res.error ?? 'Oluşturulamadı');
     }
   }
+
+  const fields = OCR_FIELDS.filter(({ key }) => CORE.has(key) || (form[key] ?? '').length > 0);
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet">
@@ -371,41 +316,42 @@ function OcrReviewModal({
             <Text style={styles.hTitle}>OCR Sonucu</Text>
             <View style={styles.hBtn} />
           </View>
-
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            <Text style={styles.hint}>Alanları kontrol et, gerekirse düzelt. Sonra müşteri ve poliçe oluşturulur.</Text>
-            {OCR_GROUPS.map((g) => {
-              const rows = g.rows.filter(([k]) => CORE.has(k) || (form[k] ?? '').length > 0);
-              if (!rows.length) return null;
-              return (
-                <View key={g.title} style={{ marginTop: Spacing.md }}>
-                  <Text style={styles.sectionLabel}>{g.title}</Text>
-                  <View style={styles.card}>
-                    {rows.map(([k, label], i) => {
-                      const lowConf = fields[k]?.needsReview || (fields[k]?.confidence != null && (fields[k]!.confidence as number) < 0.5);
-                      return (
-                        <View key={k} style={[styles.ocrRow, i < rows.length - 1 && styles.ocrRowBorder]}>
-                          <Text style={styles.ocrLabel}>{label}{lowConf ? ' ⚠️' : ''}</Text>
-                          <TextInput
-                            style={styles.ocrInput}
-                            value={form[k] ?? ''}
-                            onChangeText={(v) => set(k, v)}
-                            placeholder="—"
-                            placeholderTextColor={Colors.placeholder}
-                          />
-                        </View>
-                      );
-                    })}
-                  </View>
+            <Text style={styles.hint}>Alanları kontrol et, gerekirse düzelt. Aynı TC/telefon mevcut müşteriye bağlanır; aynı poliçe no tekrar eklenmez.</Text>
+            <View style={[styles.card, { marginTop: Spacing.md, paddingVertical: 4 }]}>
+              {fields.map(({ key, label, isType }, i) => (
+                <View key={key} style={[styles.ocrRow, i < fields.length - 1 && styles.ocrRowBorder]}>
+                  <Text style={styles.ocrLabel}>{label}</Text>
+                  {isType ? (
+                    <TouchableOpacity onPress={() => setTypePicker(true)}><Text style={[styles.ocrInput, !form.policy_type && { color: Colors.placeholder }]}>{form.policy_type || 'Tür seç…'}</Text></TouchableOpacity>
+                  ) : (
+                    <TextInput style={styles.ocrInput} value={form[key]} onChangeText={(v) => set(key, v)} placeholder="—" placeholderTextColor={Colors.placeholder} />
+                  )}
                 </View>
-              );
-            })}
-
+              ))}
+            </View>
             <TouchableOpacity style={[styles.createBtn, creating && { opacity: 0.6 }]} onPress={create} disabled={creating}>
               {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>Müşteri + Poliçe Oluştur</Text>}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
+
+        {typePicker && (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setTypePicker(false)}>
+            <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setTypePicker(false)}>
+              <View style={styles.sheet}>
+                <Text style={styles.sheetTitle}>Poliçe Türü</Text>
+                <ScrollView>
+                  {POLICY_TYPES.map((t) => (
+                    <TouchableOpacity key={t} style={styles.sheetRow} onPress={() => { set('policy_type', t); setTypePicker(false); }}>
+                      <Text style={styles.sheetRowText}>{t}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -422,8 +368,10 @@ const styles = StyleSheet.create({
   hAdd: { ...Type.subhead, color: Colors.primary, textAlign: 'right' },
   hTitle: { ...Type.heading, fontSize: 16 },
 
-  scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary, marginHorizontal: Spacing.lg, marginTop: Spacing.md, borderRadius: Radius.lg, paddingVertical: 14, ...Shadow.sm },
-  scanText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  actionRow: { flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
+  action: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary, borderRadius: Radius.lg, paddingVertical: 13, ...Shadow.sm },
+  actionAlt: { backgroundColor: Colors.primaryLight },
+  actionText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
   filterScroll: { flexGrow: 0, marginTop: Spacing.sm },
   filterRow: { paddingHorizontal: Spacing.lg, gap: 8, paddingVertical: Spacing.sm },
@@ -434,7 +382,7 @@ const styles = StyleSheet.create({
 
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 8, ...Shadow.sm },
   fileIcon: { width: 42, height: 42, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  fileName: { ...Type.subhead, fontSize: 14 },
+  fileName: { fontSize: 14, fontWeight: '800', color: Colors.heading, letterSpacing: 0.2 },
   fileMeta: { ...Type.caption, marginTop: 2 },
   catBadge: { backgroundColor: Colors.primaryLight, borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 4, marginLeft: 8 },
   catBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.primary },
@@ -453,7 +401,6 @@ const styles = StyleSheet.create({
   suggestionSub: { ...Type.caption, marginTop: 2 },
   selectedBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: '#86EFAC' },
   selectedText: { fontSize: 14, color: Colors.success, fontWeight: '600' },
-
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   catChip: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 8 },
   catChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
@@ -466,4 +413,10 @@ const styles = StyleSheet.create({
   ocrInput: { ...Type.body, color: Colors.heading, paddingVertical: 4 },
   createBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', marginTop: Spacing.lg },
   createBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: Colors.card, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl, padding: Spacing.lg, maxHeight: '70%' },
+  sheetTitle: { ...Type.heading, fontSize: 16, marginBottom: Spacing.sm },
+  sheetRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  sheetRowText: { ...Type.body, color: Colors.heading },
 });
