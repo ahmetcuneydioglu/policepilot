@@ -12,6 +12,7 @@ import {
   fetchUpcomingRenewals, filterByWindow, buildCallUrl, buildRenewalWhatsappUrl,
   RenewalItem, RenewalWindow,
 } from '@/lib/renewals';
+import { startQuoteRun } from '@/lib/quoteCenter';
 
 const SEGMENTS: { key: RenewalWindow; label: string }[] = [
   { key: 3, label: '3 Gün' },
@@ -33,6 +34,7 @@ export default function RenewalsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [segment, setSegment] = useState<RenewalWindow>(30);
+  const [quotingId, setQuotingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const data = await fetchUpcomingRenewals(agencyId);
@@ -69,11 +71,20 @@ export default function RenewalsScreen() {
       Alert.alert('WhatsApp açılamadı', 'Cihazda WhatsApp yüklü olmayabilir.')
     );
   }
-  function teklif(item: RenewalItem) {
-    router.push({
-      pathname: '/new-request',
-      params: { customerId: item.customer_id, productType: item.policy_type, renewalPolicyId: item.id },
-    });
+  async function teklif(item: RenewalItem) {
+    setQuotingId(item.id);
+    try {
+      const runId = await startQuoteRun({
+        customerId: item.customer_id, createCustomer: false,
+        name: item.customerName, phone: item.customerPhone,
+        productType: item.policy_type, renewalPolicyId: item.id,
+      });
+      router.push(`/quote-run/${runId}`);
+    } catch (e) {
+      Alert.alert('Teklif başlatılamadı', e instanceof Error ? e.message : 'Sunucu hatası — köprü yayınlanmış olmalı.');
+    } finally {
+      setQuotingId(null);
+    }
   }
   function policelestir(item: RenewalItem) {
     router.push({
@@ -165,7 +176,7 @@ export default function RenewalsScreen() {
                   <View style={styles.actions}>
                     <ActionBtn emoji="📞" label="Ara" onPress={() => call(item)} />
                     <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(item)} />
-                    <ActionBtn emoji="📋" label="Teklif" onPress={() => teklif(item)} />
+                    <ActionBtn emoji="📋" label="Teklif" loading={quotingId === item.id} onPress={() => teklif(item)} />
                     <ActionBtn emoji="⚡" label="Poliçe" tint={Colors.primary} onPress={() => policelestir(item)} />
                   </View>
                 </View>
@@ -178,10 +189,10 @@ export default function RenewalsScreen() {
   );
 }
 
-function ActionBtn({ emoji, label, onPress, tint }: { emoji: string; label: string; onPress: () => void; tint?: string }) {
+function ActionBtn({ emoji, label, onPress, tint, loading }: { emoji: string; label: string; onPress: () => void; tint?: string; loading?: boolean }) {
   return (
-    <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7}>
-      <Text style={styles.actionEmoji}>{emoji}</Text>
+    <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7} disabled={loading}>
+      {loading ? <ActivityIndicator size="small" color={Colors.primary} /> : <Text style={styles.actionEmoji}>{emoji}</Text>}
       <Text style={[styles.actionLabel, tint ? { color: tint } : null]} numberOfLines={1}>{label}</Text>
     </TouchableOpacity>
   );

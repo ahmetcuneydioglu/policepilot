@@ -94,6 +94,7 @@ export type StartQuoteParams = {
   tc?: string;
   plaka?: string;
   productType: string;
+  renewalPolicyId?: string | null;
 };
 
 /** Demo motorunu çalıştır + /api/quote-runs'a POST et → runId döndür. */
@@ -117,6 +118,7 @@ export async function startQuoteRun(p: StartQuoteParams): Promise<string> {
     provider_type: 'demo',
     success_count,
     error_count,
+    renewal_of_policy_id: p.renewalPolicyId ?? null,
     results,
   };
   const res = await apiPost<{ ok: boolean; runId: string }>('/api/quote-runs', body);

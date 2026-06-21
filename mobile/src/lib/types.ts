@@ -41,6 +41,7 @@ export type Request = {
   price_offer: number | null;
   agency_id: string | null;
   created_at: string;
+  next_follow_up_date?: string | null;
   customers?: { name: string; phone: string | null; insurance_type: string | null } | null;
 };
 

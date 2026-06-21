@@ -93,6 +93,7 @@ function RequestDetailModal({
   const [updating, setUpdating] = useState(false);
   const [priceInput, setPriceInput] = useState(item.price_offer != null ? String(item.price_offer) : '');
   const [savingPrice, setSavingPrice] = useState(false);
+  const [followUp, setFollowUp] = useState<string | null>(item.next_follow_up_date ?? null);
 
   const actions = nextStages(status);
   const customer = item.customers;
@@ -121,6 +122,12 @@ function RequestDetailModal({
     await (supabase.from('requests') as any).update({ price_offer: val }).eq('id', item.id);
     setSavingPrice(false);
     onUpdated();
+  }
+
+  async function setFollow(days: number | null) {
+    const d = days == null ? null : new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+    setFollowUp(d);
+    await (supabase.from('requests') as any).update({ next_follow_up_date: d }).eq('id', item.id);
   }
 
   return (
@@ -208,6 +215,27 @@ function RequestDetailModal({
               <TouchableOpacity style={[styles.priceSaveBtn, savingPrice && { opacity: 0.6 }]} onPress={savePrice} disabled={savingPrice}>
                 {savingPrice ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.priceSaveBtnText}>Kaydet</Text>}
               </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardTitle}>Takip Tarihi</Text>
+            <Text style={styles.followCurrent}>
+              {followUp
+                ? `📅 ${new Date(followUp).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                : 'Belirlenmedi — Görevler listesine düşmesi için bir tarih seç.'}
+            </Text>
+            <View style={styles.followRow}>
+              {([['Bugün', 0], ['3 gün', 3], ['7 gün', 7], ['15 gün', 15]] as [string, number][]).map(([label, d]) => (
+                <TouchableOpacity key={label} style={styles.followChip} onPress={() => setFollow(d)} activeOpacity={0.7}>
+                  <Text style={styles.followChipText}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+              {followUp && (
+                <TouchableOpacity style={[styles.followChip, { borderColor: Colors.danger }]} onPress={() => setFollow(null)} activeOpacity={0.7}>
+                  <Text style={[styles.followChipText, { color: Colors.danger }]}>Temizle</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -492,6 +520,10 @@ const styles = StyleSheet.create({
   actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   infoCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   infoCardTitle: { fontSize: 11, fontWeight: '700', color: Colors.secondary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: Spacing.sm },
+  followCurrent: { fontSize: 14, color: Colors.heading, fontWeight: '600', marginBottom: Spacing.sm },
+  followRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  followChip: { backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
+  followChipText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderColor: Colors.border },
   infoLabel: { fontSize: 12, color: Colors.secondary, fontWeight: '500' },
   infoValue: { fontSize: 13, color: Colors.heading, fontWeight: '600', flex: 1, textAlign: 'right' },
