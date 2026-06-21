@@ -27,6 +27,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { supabase } from '@/lib/supabase';
 import { useProfile } from '@/lib/useProfile';
 import { Colors, Spacing, Radius } from '@/lib/theme';
@@ -959,6 +960,7 @@ const sum = StyleSheet.create({
 // ─── Ana ekran ────────────────────────────────────────────────────────────────
 export default function AdminScreen() {
   const { role } = useProfile();
+  const tabBarHeight = useBottomTabBarHeight();
 
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -1198,7 +1200,7 @@ export default function AdminScreen() {
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + Spacing.md }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={

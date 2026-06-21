@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Colors, Spacing, Radius, Type, Shadow, Dark } from '@/lib/theme';
 import { apiPost, ApiError } from '@/lib/api';
 import DarkHero, { heroGlass } from '@/components/DarkHero';
@@ -21,6 +22,7 @@ export default function AiScreen() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const tabBarHeight = useBottomTabBarHeight();
 
   async function send(text: string) {
     const q = text.trim();
@@ -49,7 +51,7 @@ export default function AiScreen() {
   return (
     <View style={styles.safe}>
       <DarkHero
-        bg="#3A2A66"
+        colors={['#3A2A66', '#241845']}
         title="SigortaOS AI"
         subtitle="Verilerinle konuşan asistanın"
         right={
@@ -108,7 +110,7 @@ export default function AiScreen() {
           )}
         </ScrollView>
 
-        <View style={styles.inputBar}>
+        <View style={[styles.inputBar, { paddingBottom: tabBarHeight + Spacing.sm }]}>
           <TextInput
             style={styles.input}
             value={input}

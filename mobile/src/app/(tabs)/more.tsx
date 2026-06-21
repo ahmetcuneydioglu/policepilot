@@ -1,6 +1,8 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, Href } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Spacing, Radius, Type, Shadow, Dark } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import DarkHero, { heroGlassStrong } from '@/components/DarkHero';
@@ -9,6 +11,7 @@ type Row = { emoji: string; label: string; href?: Href; soon?: boolean; danger?:
 
 export default function MoreScreen() {
   const router = useRouter();
+  const tabBarHeight = useBottomTabBarHeight();
   const { profile, role } = useProfile();
   const isSuperAdmin = role === 'super_admin';
   const isManager = isSuperAdmin || profile?.agency_role === 'owner' || profile?.agency_role === 'manager';
@@ -57,9 +60,9 @@ export default function MoreScreen() {
         title={displayName}
         subtitle={isSuperAdmin ? 'Süper Admin' : 'Acente Kullanıcısı'}
         right={(
-          <View style={styles.heroAvatar}>
+          <LinearGradient colors={['#5B8DEF', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroAvatar}>
             <Text style={styles.heroAvatarText}>{displayName.trim().slice(0, 1).toUpperCase()}</Text>
-          </View>
+          </LinearGradient>
         )}
       >
         <View style={styles.heroWelcome}>
@@ -67,7 +70,7 @@ export default function MoreScreen() {
         </View>
       </DarkHero>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + Spacing.md }]} showsVerticalScrollIndicator={false}>
         {sections.map((sec) => (
           <View key={sec.title} style={{ marginTop: Spacing.lg }}>
             <Text style={styles.sectionLabel}>{sec.title}</Text>
@@ -107,7 +110,7 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl },
 
   // Hero (koyu glass)
-  heroAvatar: { width: 44, height: 44, borderRadius: Radius.full, ...heroGlassStrong, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
+  heroAvatar: { width: 44, height: 44, borderRadius: Radius.full, borderWidth: 1, borderColor: Dark.glassBorder, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
   heroAvatarText: { color: Dark.textOnDark, fontSize: 18, fontWeight: '800' },
   heroWelcome: { ...heroGlassStrong, borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: Spacing.md, marginTop: Spacing.md },
   heroWelcomeText: { color: Dark.subOnDark, fontSize: 13, fontWeight: '600' },

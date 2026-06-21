@@ -4,6 +4,7 @@ import {
   RefreshControl, ActivityIndicator, Linking, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Colors, Spacing, Radius, Type, Shadow, Dark, renewalUrgency } from '@/lib/theme';
 import DarkHero, { heroGlass } from '@/components/DarkHero';
 import { useProfile } from '@/lib/useProfile';
@@ -29,6 +30,7 @@ function initials(name: string): string {
 export default function RenewalsScreen() {
   const router = useRouter();
   const { agencyId } = useProfile();
+  const tabBarHeight = useBottomTabBarHeight();
 
   const [items, setItems] = useState<RenewalItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,7 +141,7 @@ export default function RenewalsScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + Spacing.md }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           showsVerticalScrollIndicator={false}
         >

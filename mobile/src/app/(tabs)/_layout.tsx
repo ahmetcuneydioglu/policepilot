@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
-import { Text, Platform } from 'react-native';
+import { Text, Platform, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Colors } from '@/lib/theme';
 import { useNotificationStore } from '@/lib/NotificationContext';
 
@@ -18,13 +19,19 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.secondary,
+        tabBarHideOnKeyboard: true,
+        // Yüzen buzlu cam tab bar — içerik altından geçer (ekranlarda alt boşluk var)
         tabBarStyle: {
-          backgroundColor: Colors.card,
-          borderTopColor: Colors.border,
-          borderTopWidth: 1,
+          position: 'absolute',
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
           paddingBottom: Platform.OS === 'ios' ? 0 : 8,
           height: Platform.OS === 'ios' ? 82 : 64,
         },
+        tabBarBackground: () => (
+          <BlurView tint="light" intensity={80} style={[StyleSheet.absoluteFill, styles.tabBlur]} />
+        ),
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: '600',
@@ -91,3 +98,11 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBlur: {
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+  },
+});

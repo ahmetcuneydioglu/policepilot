@@ -7,6 +7,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Dark } from '@/lib/theme';
 import DarkHero, { heroGlass } from '@/components/DarkHero';
@@ -365,6 +366,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 export default function RequestsScreen() {
   const { agencyId, role, userId } = useProfile();
   const router = useRouter();
+  const tabBarHeight = useBottomTabBarHeight();
   const { markAllRead } = useNotificationStore();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -476,7 +478,7 @@ export default function RequestsScreen() {
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <RequestCard item={item} onPress={() => setSelected(item)} />}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + Spacing.md }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           ListEmptyComponent={
             <View style={styles.centered}>

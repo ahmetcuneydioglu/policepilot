@@ -4,7 +4,9 @@ import {
   RefreshControl, Alert, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Href } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Type, Shadow, Dark } from '@/lib/theme';
@@ -30,6 +32,7 @@ type Home = {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { unreadCount } = useNotificationStore();
   const { profile, agencyId } = useProfile();
@@ -111,12 +114,17 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <StatusBar style="light" />
       <ScrollView
-        contentContainerStyle={{ paddingBottom: Spacing.xl }}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + Spacing.md }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── Koyu Hero ─── */}
-        <View style={[styles.hero, { paddingTop: insets.top + 14 }]}>
+        {/* ─── Koyu Hero (gradient) ─── */}
+        <LinearGradient
+          colors={[Dark.hero, Dark.heroDeep]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { paddingTop: insets.top + 14 }]}
+        >
           <View style={styles.heroTop}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroDate}>{formatLongDateTR()}</Text>
@@ -155,7 +163,7 @@ export default function HomeScreen() {
               <Text style={styles.primPolice}>{m.aktifPolice}</Text>
             </View>
           </View>
-        </View>
+        </LinearGradient>
 
         {loading ? (
           <View style={{ paddingVertical: 60, alignItems: 'center' }}><ActivityIndicator size="large" color={Colors.primary} /></View>
@@ -216,7 +224,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
 
   // Hero
-  hero: { backgroundColor: Dark.hero, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  hero: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   heroTop: { flexDirection: 'row', alignItems: 'flex-start' },
   heroDate: { color: Dark.subOnDark, fontSize: 12, fontWeight: '600' },
   heroGreet: { color: Dark.textOnDark, fontSize: 24, fontWeight: '800', marginTop: 4, letterSpacing: -0.4 },

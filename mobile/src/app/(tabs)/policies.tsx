@@ -17,6 +17,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
@@ -723,6 +724,7 @@ function AddModal({
 
 export default function PoliciesScreen() {
   const { role, agencyId, userId } = useProfile();
+  const tabBarHeight = useBottomTabBarHeight();
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -883,7 +885,7 @@ export default function PoliciesScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(p) => p.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + Spacing.md }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (

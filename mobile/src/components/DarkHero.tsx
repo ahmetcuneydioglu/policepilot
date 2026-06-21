@@ -3,6 +3,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Figma redesign'ın ortak koyu glass hero başlığı. Her ekranın en üstüne konur;
  * kendi güvenli-alan üst boşluğunu yönetir (root'ta SafeAreaView top edge GEREKMEZ).
+ * Gerçek gradient → expo-linear-gradient; koyu hero üstünde light status bar.
  *
  * Kullanım:
  *   <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -16,21 +17,34 @@
 import { ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { Spacing, Radius, Dark } from '@/lib/theme';
 
 export default function DarkHero({
-  title, subtitle, onBack, right, children, bg = Dark.hero,
+  title, subtitle, onBack, right, children, colors, bg,
 }: {
   title: string;
   subtitle?: string;
   onBack?: () => void;
   right?: ReactNode;
   children?: ReactNode;
+  /** Hero gradient renkleri (en az 2). Verilmezse bg'den ya da koyu navy'den türetilir. */
+  colors?: readonly [string, string, ...string[]];
+  /** Tek renkli hero için kısayol (gradient verilmezse bg→[bg,bg]). */
   bg?: string;
 }) {
   const insets = useSafeAreaInsets();
+  const gradient: readonly [string, string, ...string[]] =
+    colors ?? (bg ? [bg, bg] : [Dark.hero, Dark.heroDeep]);
   return (
-    <View style={[styles.hero, { backgroundColor: bg, paddingTop: insets.top + 12 }]}>
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.hero, { paddingTop: insets.top + 12 }]}
+    >
+      <StatusBar style="light" />
       <View style={styles.row}>
         {onBack && (
           <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.7}>
@@ -44,7 +58,7 @@ export default function DarkHero({
         {right}
       </View>
       {children}
-    </View>
+    </LinearGradient>
   );
 }
 

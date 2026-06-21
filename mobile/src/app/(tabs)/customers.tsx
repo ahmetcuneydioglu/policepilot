@@ -5,6 +5,7 @@ import {
   Alert, Linking, RefreshControl, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Dark } from '@/lib/theme';
@@ -476,6 +477,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CustomersScreen() {
   const router = useRouter();
+  const tabBarHeight = useBottomTabBarHeight();
   const { agencyId, role, userId } = useProfile();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filtered, setFiltered]   = useState<Customer[]>([]);
@@ -579,7 +581,7 @@ export default function CustomersScreen() {
               onWA={() => Linking.openURL(`whatsapp://send?phone=${waNumber(item.phone)}`)}
             />
           )}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + Spacing.md }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           ListEmptyComponent={
             <View style={styles.centered}>
