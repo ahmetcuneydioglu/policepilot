@@ -3,9 +3,9 @@ import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   RefreshControl, ActivityIndicator, Linking, Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Colors, Spacing, Radius, Type, Shadow, renewalUrgency } from '@/lib/theme';
+import { Colors, Spacing, Radius, Type, Shadow, Dark, renewalUrgency } from '@/lib/theme';
+import DarkHero, { heroGlass } from '@/components/DarkHero';
 import { useProfile } from '@/lib/useProfile';
 import { formatTRY, formatShortTRY } from '@/lib/format';
 import {
@@ -94,45 +94,44 @@ export default function RenewalsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Yenilemeler</Text>
-          <Text style={styles.subtitle}>Para kazandıran ekran</Text>
-        </View>
-        <View style={styles.primPill}>
-          <Text style={styles.primLabel}>TAHMİNİ PRİM</Text>
-          <Text style={styles.primValue}>{formatShortTRY(tahminiPrim)}</Text>
-        </View>
-      </View>
-
-      {/* Segment filtre */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.segScroll}
-        contentContainerStyle={styles.segRow}
+    <View style={styles.safe}>
+      <DarkHero
+        title="Yenilemeler"
+        subtitle="Para kazandıran ekran"
+        right={
+          <View style={[styles.primPill, heroGlass]}>
+            <Text style={styles.primLabel}>TAHMİNİ PRİM</Text>
+            <Text style={styles.primValue}>{formatShortTRY(tahminiPrim)}</Text>
+          </View>
+        }
       >
-        {SEGMENTS.map((s) => {
-          const active = segment === s.key;
-          return (
-            <TouchableOpacity
-              key={String(s.key)}
-              style={[styles.chip, active && styles.chipActive]}
-              onPress={() => setSegment(s.key)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{s.label}</Text>
-              <View style={[styles.chipCount, active && styles.chipCountActive]}>
-                <Text style={[styles.chipCountText, active && styles.chipCountTextActive]}>
-                  {counts[String(s.key)] ?? 0}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+        {/* Segment filtre */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.segScroll}
+          contentContainerStyle={styles.segRow}
+        >
+          {SEGMENTS.map((s) => {
+            const active = segment === s.key;
+            return (
+              <TouchableOpacity
+                key={String(s.key)}
+                style={[styles.chip, heroGlass, active && styles.chipActive]}
+                onPress={() => setSegment(s.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{s.label}</Text>
+                <View style={[styles.chipCount, active && styles.chipCountActive]}>
+                  <Text style={[styles.chipCountText, active && styles.chipCountTextActive]}>
+                    {counts[String(s.key)] ?? 0}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </DarkHero>
 
       {loading ? (
         <View style={styles.loadingBox}>
@@ -185,7 +184,7 @@ export default function RenewalsScreen() {
           )}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -200,30 +199,23 @@ function ActionBtn({ emoji, label, onPress, tint, loading }: { emoji: string; la
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing.md,
-  },
-  title: { ...Type.title },
-  subtitle: { ...Type.caption, marginTop: 2 },
-  primPill: { alignItems: 'flex-end', backgroundColor: Colors.primaryLight, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 8 },
-  primLabel: { fontSize: 9, fontWeight: '700', color: Colors.primary, letterSpacing: 0.6 },
-  primValue: { fontSize: 18, fontWeight: '800', color: Colors.primaryDark },
+  primPill: { alignItems: 'flex-end', borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 8 },
+  primLabel: { fontSize: 9, fontWeight: '700', color: Dark.subOnDark, letterSpacing: 0.6 },
+  primValue: { fontSize: 18, fontWeight: '800', color: Dark.textOnDark },
 
-  segScroll: { maxHeight: 48, flexGrow: 0 },
-  segRow: { paddingHorizontal: Spacing.lg, gap: 8, paddingBottom: Spacing.sm },
+  segScroll: { maxHeight: 48, flexGrow: 0, marginTop: Spacing.md, marginHorizontal: -Spacing.lg },
+  segRow: { paddingHorizontal: Spacing.lg, gap: 8 },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border,
     borderRadius: Radius.full, paddingHorizontal: 14, height: 34,
   },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { ...Type.caption, color: Colors.text },
-  chipTextActive: { color: '#fff' },
-  chipCount: { backgroundColor: Colors.surface, borderRadius: Radius.full, minWidth: 20, paddingHorizontal: 5, height: 18, alignItems: 'center', justifyContent: 'center' },
-  chipCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  chipCountText: { fontSize: 10, fontWeight: '800', color: Colors.secondary },
-  chipCountTextActive: { color: '#fff' },
+  chipActive: { backgroundColor: '#fff', borderColor: '#fff' },
+  chipText: { ...Type.caption, color: Dark.subOnDark },
+  chipTextActive: { color: Dark.hero },
+  chipCount: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: Radius.full, minWidth: 20, paddingHorizontal: 5, height: 18, alignItems: 'center', justifyContent: 'center' },
+  chipCountActive: { backgroundColor: 'rgba(15,23,42,0.12)' },
+  chipCountText: { fontSize: 10, fontWeight: '800', color: Dark.textOnDark },
+  chipCountTextActive: { color: Dark.hero },
 
   loadingBox: { paddingVertical: 80, alignItems: 'center' },
   list: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },

@@ -1,9 +1,9 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Href } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
+import { Colors, Spacing, Radius, Type, Shadow, Dark } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
+import DarkHero, { heroGlassStrong } from '@/components/DarkHero';
 
 type Row = { emoji: string; label: string; href?: Href; soon?: boolean; danger?: boolean; onPress?: () => void };
 
@@ -49,24 +49,25 @@ export default function MoreScreen() {
     },
   ];
 
+  const displayName = profile?.full_name || 'SigortaOS Kullanıcısı';
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Daha</Text>
-
-        {/* Profil özeti */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {(profile?.full_name ?? 'S').trim().slice(0, 1).toUpperCase()}
-            </Text>
+    <View style={styles.safe}>
+      <DarkHero
+        title={displayName}
+        subtitle={isSuperAdmin ? 'Süper Admin' : 'Acente Kullanıcısı'}
+        right={(
+          <View style={styles.heroAvatar}>
+            <Text style={styles.heroAvatarText}>{displayName.trim().slice(0, 1).toUpperCase()}</Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.profileName}>{profile?.full_name || 'SigortaOS Kullanıcısı'}</Text>
-            <Text style={styles.profileRole}>{isSuperAdmin ? 'Süper Admin' : 'Acente Kullanıcısı'}</Text>
-          </View>
+        )}
+      >
+        <View style={styles.heroWelcome}>
+          <Text style={styles.heroWelcomeText}>Hesabını ve menülerini buradan yönet 👋</Text>
         </View>
+      </DarkHero>
 
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {sections.map((sec) => (
           <View key={sec.title} style={{ marginTop: Spacing.lg }}>
             <Text style={styles.sectionLabel}>{sec.title}</Text>
@@ -97,20 +98,19 @@ export default function MoreScreen() {
 
         <Text style={styles.version}>SigortaOS Mobile · v1.0</Text>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: Spacing.lg, paddingBottom: Spacing.xl },
-  title: { ...Type.title, marginBottom: Spacing.md },
+  content: { padding: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl },
 
-  profileCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, ...Shadow.sm },
-  avatar: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  avatarText: { fontSize: 20, fontWeight: '800', color: Colors.primary },
-  profileName: { ...Type.subhead },
-  profileRole: { ...Type.caption, marginTop: 2 },
+  // Hero (koyu glass)
+  heroAvatar: { width: 44, height: 44, borderRadius: Radius.full, ...heroGlassStrong, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
+  heroAvatarText: { color: Dark.textOnDark, fontSize: 18, fontWeight: '800' },
+  heroWelcome: { ...heroGlassStrong, borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: Spacing.md, marginTop: Spacing.md },
+  heroWelcomeText: { color: Dark.subOnDark, fontSize: 13, fontWeight: '600' },
 
   sectionLabel: { ...Type.label, marginBottom: Spacing.sm },
   card: { backgroundColor: Colors.card, borderRadius: Radius.lg, ...Shadow.sm, overflow: 'hidden' },

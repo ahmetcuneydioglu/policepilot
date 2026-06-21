@@ -3,9 +3,9 @@ import {
   View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
+import { Colors, Spacing, Radius, Type, Shadow, Dark } from '@/lib/theme';
 import { apiPost, ApiError } from '@/lib/api';
+import DarkHero, { heroGlass } from '@/components/DarkHero';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
@@ -47,17 +47,22 @@ export default function AiScreen() {
   const empty = messages.length === 0;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <View style={styles.logoBadge}><Text style={styles.logoEmoji}>✨</Text></View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>SigortaOS AI</Text>
-          <Text style={styles.subtitle}>Verilerinle konuşan asistanın</Text>
-        </View>
-        {!empty && (
-          <TouchableOpacity onPress={() => setMessages([])} style={styles.clearBtn}><Text style={styles.clearText}>Temizle</Text></TouchableOpacity>
-        )}
-      </View>
+    <View style={styles.safe}>
+      <DarkHero
+        bg="#3A2A66"
+        title="SigortaOS AI"
+        subtitle="Verilerinle konuşan asistanın"
+        right={
+          <View style={styles.heroRight}>
+            {!empty && (
+              <TouchableOpacity onPress={() => setMessages([])} style={styles.clearBtn} activeOpacity={0.7}>
+                <Text style={styles.clearText}>Temizle</Text>
+              </TouchableOpacity>
+            )}
+            <View style={styles.heroBadge}><Text style={styles.heroBadgeEmoji}>✨</Text></View>
+          </View>
+        }
+      />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
         <ScrollView
@@ -76,8 +81,9 @@ export default function AiScreen() {
               </Text>
               {PROMPTS.map((p) => (
                 <TouchableOpacity key={p.text} style={styles.promptChip} onPress={() => send(p.text)} activeOpacity={0.7}>
-                  <Text style={styles.promptEmoji}>{p.emoji}</Text>
+                  <View style={styles.promptIcon}><Text style={styles.promptEmoji}>{p.emoji}</Text></View>
                   <Text style={styles.promptText}>{p.text}</Text>
+                  <Text style={styles.promptChevron}>›</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -123,7 +129,7 @@ export default function AiScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -170,20 +176,20 @@ function RichText({ text }: { text: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
 
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingVertical: 12, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  logoBadge: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  logoEmoji: { fontSize: 20 },
-  title: { ...Type.heading, fontSize: 17 },
-  subtitle: { ...Type.caption, marginTop: 1 },
-  clearBtn: { paddingHorizontal: 10, paddingVertical: 6 },
-  clearText: { ...Type.caption, color: Colors.primary, fontWeight: '700' },
+  heroRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroBadge: { ...heroGlass, width: 40, height: 40, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  heroBadgeEmoji: { fontSize: 18 },
+  clearBtn: { ...heroGlass, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full },
+  clearText: { color: Dark.textOnDark, fontSize: 12, fontWeight: '700' },
 
   scroll: { padding: Spacing.lg, paddingBottom: Spacing.md, flexGrow: 1 },
   intro: { paddingTop: Spacing.sm },
   introLead: { ...Type.body, color: Colors.text, lineHeight: 21, marginBottom: Spacing.lg },
-  promptChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.lg, paddingVertical: 14, paddingHorizontal: Spacing.md, marginBottom: 10, ...Shadow.sm },
-  promptEmoji: { fontSize: 18, width: 30 },
+  promptChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, paddingVertical: 12, paddingHorizontal: Spacing.md, marginBottom: 10, ...Shadow.sm },
+  promptIcon: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  promptEmoji: { fontSize: 18 },
   promptText: { ...Type.subhead, fontSize: 14, flex: 1 },
+  promptChevron: { fontSize: 20, color: Colors.placeholder, fontWeight: '700', marginLeft: 8 },
 
   bubbleRow: { marginBottom: 10, flexDirection: 'row' },
   rowRight: { justifyContent: 'flex-end' },

@@ -8,7 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
-import { Colors, Spacing, Radius } from '@/lib/theme';
+import { Colors, Spacing, Radius, Dark } from '@/lib/theme';
+import DarkHero, { heroGlass } from '@/components/DarkHero';
 import { Request, RequestStatus } from '@/lib/types';
 import { useProfile } from '@/lib/useProfile';
 import { useNotificationStore } from '@/lib/NotificationContext';
@@ -400,22 +401,45 @@ export default function RequestsScreen() {
 
   const filterChips: (RequestStatus | 'Tümü')[] = ['Tümü', ...STAGE_KEYS];
 
+  // ─── Hero istatistik pill'leri (mevcut `requests` state'inden) ─────────────
+  const total = requests.length;
+  const won = requests.filter((r) => r.status === 'Kazanıldı').length;
+  const lost = requests.filter((r) => r.status === 'Kaybedildi').length;
+  const pending = requests.filter((r) => r.status !== 'Kazanıldı' && r.status !== 'Kaybedildi').length;
+  const conversion = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
+  const heroStats = [
+    { dot: Dark.subOnDark, value: String(total),       label: 'Toplam' },
+    { dot: Dark.dotAmber,  value: String(pending),     label: 'Bekleyen' },
+    { dot: Dark.dotGreen,  value: String(won),         label: 'Kazanıldı' },
+    { dot: Dark.dotMoney,  value: `%${conversion}`,    label: 'Dönüşüm' },
+  ];
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Teklifler</Text>
-          <Text style={styles.subtitle}>{filtered.length} kayıt</Text>
+    <View style={styles.safe}>
+      <DarkHero
+        title="Teklifler"
+        subtitle={`${filtered.length} kayıt`}
+        right={
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={[styles.heroBtn, heroGlass]} onPress={() => router.push('/quote-center')} activeOpacity={0.8}>
+              <Text style={styles.heroBtnText}>🧮 Merkez</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.heroBtnLight} onPress={() => router.push('/new-request')} activeOpacity={0.8}>
+              <Text style={styles.heroBtnLightText}>+ Ekle</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      >
+        <View style={styles.heroStatRow}>
+          {heroStats.map((s) => (
+            <View key={s.label} style={[styles.heroStat, heroGlass]}>
+              <View style={[styles.heroStatDot, { backgroundColor: s.dot }]} />
+              <Text style={styles.heroStatValue} numberOfLines={1} adjustsFontSizeToFit>{s.value}</Text>
+              <Text style={styles.heroStatLabel}>{s.label}</Text>
+            </View>
+          ))}
         </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity style={[styles.addBtn, { backgroundColor: Colors.primaryLight }]} onPress={() => router.push('/quote-center')} activeOpacity={0.8}>
-            <Text style={[styles.addBtnText, { color: Colors.primary }]}>🧮 Merkez</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/new-request')} activeOpacity={0.8}>
-            <Text style={styles.addBtnText}>+ Ekle</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      </DarkHero>
 
       <View style={styles.searchWrapper}>
         <Text style={styles.searchIcon}>🔍</Text>
@@ -474,19 +498,27 @@ export default function RequestsScreen() {
       {addVisible && (
         <AddRequestModal agencyId={agencyId} onClose={() => setAddVisible(false)} onSaved={() => { setAddVisible(false); fetchRequests(); }} />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.heading },
-  subtitle: { fontSize: 13, color: Colors.secondary, marginTop: 2 },
   addBtn: { backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.md },
   addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
-  searchWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.md, marginHorizontal: Spacing.lg, marginBottom: Spacing.sm, paddingHorizontal: Spacing.md, borderWidth: 1, borderColor: Colors.border },
+  // Hero başlık butonları + istatistik pill'leri
+  heroBtn: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  heroBtnText: { color: Dark.textOnDark, fontWeight: '700', fontSize: 13 },
+  heroBtnLight: { backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  heroBtnLightText: { color: Dark.hero, fontWeight: '800', fontSize: 13 },
+  heroStatRow: { flexDirection: 'row', gap: 8, marginTop: Spacing.lg },
+  heroStat: { flex: 1, borderRadius: Radius.lg, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center' },
+  heroStatDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
+  heroStatValue: { color: Dark.textOnDark, fontSize: 20, fontWeight: '800' },
+  heroStatLabel: { color: Dark.subOnDark, fontSize: 11, marginTop: 2 },
+
+  searchWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.md, marginHorizontal: Spacing.lg, marginTop: Spacing.md, marginBottom: Spacing.sm, paddingHorizontal: Spacing.md, borderWidth: 1, borderColor: Colors.border },
   searchIcon: { fontSize: 15, marginRight: 8 },
   searchInput: { flex: 1, paddingVertical: 11, fontSize: 14, color: Colors.heading },
 

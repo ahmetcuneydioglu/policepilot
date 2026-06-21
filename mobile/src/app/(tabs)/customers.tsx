@@ -7,9 +7,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Colors, Spacing, Radius } from '@/lib/theme';
+import { Colors, Spacing, Radius, Dark } from '@/lib/theme';
 import { Customer } from '@/lib/types';
 import { useProfile } from '@/lib/useProfile';
+import DarkHero, { heroGlass } from '@/components/DarkHero';
 import LimitModal from '@/components/LimitModal';
 import BulkPolicyImportMobile from '@/components/BulkPolicyImportMobile';
 import { checkLimit, limitErrorMessage } from '@/lib/limits';
@@ -531,36 +532,36 @@ export default function CustomersScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Müşteriler</Text>
-          <Text style={styles.subtitle}>{customers.length} kayıt</Text>
+    <View style={styles.safe}>
+      {/* ─── Koyu Hero ─── */}
+      <DarkHero
+        title="Müşteriler"
+        subtitle={`${customers.length} müşteri`}
+        right={
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={styles.heroBulkBtn} onPress={() => setBulkOpen(true)} activeOpacity={0.8}>
+              <Text style={styles.heroBulkText}>📦 Toplu</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.heroAddBtn} onPress={() => setAddVisible(true)} activeOpacity={0.8}>
+              <Text style={styles.heroAddText}>+ Ekle</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      >
+        {/* Search */}
+        <View style={styles.searchWrapper}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Ad, telefon, sigorta türü, plaka..."
+            placeholderTextColor={Dark.subOnDark}
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+          />
         </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity style={{ backgroundColor: Colors.primaryLight, paddingHorizontal: 12, paddingVertical: 10, borderRadius: Radius.md, justifyContent: 'center' }} onPress={() => setBulkOpen(true)} activeOpacity={0.8}>
-            <Text style={{ color: Colors.primary, fontWeight: '700', fontSize: 13 }}>📦 Toplu</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setAddVisible(true)} activeOpacity={0.8}>
-            <Text style={styles.addBtnText}>+ Ekle</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchWrapper}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Ad, telefon, sigorta türü, plaka..."
-          placeholderTextColor={Colors.secondary}
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-          clearButtonMode="while-editing"
-        />
-      </View>
+      </DarkHero>
 
       {/* List */}
       {loading ? (
@@ -602,7 +603,7 @@ export default function CustomersScreen() {
           onSaved={() => { setAddVisible(false); fetchCustomers(); }}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -617,14 +618,29 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: Colors.secondary, marginTop: 2 },
   addBtn: { backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.md },
   addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+  // Hero buttons (koyu hero üstünde)
+  heroBulkBtn: {
+    ...heroGlass, paddingHorizontal: 12, paddingVertical: 9,
+    borderRadius: Radius.md, justifyContent: 'center',
+  },
+  heroBulkText: { color: Dark.textOnDark, fontWeight: '700', fontSize: 13 },
+  heroAddBtn: {
+    backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: Radius.md, justifyContent: 'center',
+  },
+  heroAddText: { color: Colors.primary, fontWeight: '800', fontSize: 13 },
+
+  // Search (koyu glass — hero içi)
   searchWrapper: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card,
-    borderRadius: Radius.md, marginHorizontal: Spacing.lg, marginBottom: Spacing.sm,
-    paddingHorizontal: Spacing.md, borderWidth: 1, borderColor: Colors.border,
+    ...heroGlass,
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: Radius.lg, marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
   },
   searchIcon: { fontSize: 15, marginRight: 8 },
-  searchInput: { flex: 1, paddingVertical: 11, fontSize: 14, color: Colors.heading },
-  listContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
+  searchInput: { flex: 1, paddingVertical: 11, fontSize: 14, color: Dark.textOnDark },
+  listContent: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.xl },
 
   // Card
   card: {
