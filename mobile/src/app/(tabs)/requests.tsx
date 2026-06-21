@@ -407,9 +407,14 @@ export default function RequestsScreen() {
           <Text style={styles.title}>Teklifler</Text>
           <Text style={styles.subtitle}>{filtered.length} kayıt</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/new-request')} activeOpacity={0.8}>
-          <Text style={styles.addBtnText}>+ Ekle</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={[styles.addBtn, { backgroundColor: Colors.primaryLight }]} onPress={() => router.push('/quote-center')} activeOpacity={0.8}>
+            <Text style={[styles.addBtnText, { color: Colors.primary }]}>🧮 Merkez</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/new-request')} activeOpacity={0.8}>
+            <Text style={styles.addBtnText}>+ Ekle</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchWrapper}>
