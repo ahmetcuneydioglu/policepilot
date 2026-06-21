@@ -1,44 +1,69 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  RefreshControl,
-  Alert,
-  Dimensions,
-  ActivityIndicator,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  RefreshControl, Alert, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { useRouter, Href } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
+import { Colors, Spacing, Radius, Type, Shadow, Dark } from '@/lib/theme';
 import { useNotificationStore } from '@/lib/NotificationContext';
 import { useProfile } from '@/lib/useProfile';
 import { fetchOperationMetrics, OperationMetrics } from '@/lib/dashboard';
+import { fetchUpcomingRenewals, filterByWindow } from '@/lib/renewals';
+import { fetchTasks } from '@/lib/tasks';
+import { apiGet } from '@/lib/api';
 import { formatShortTRY, greetingTR, formatLongDateTR } from '@/lib/format';
-
-const CARD_WIDTH = (Dimensions.get('window').width - Spacing.lg * 2 - 12) / 2;
 
 const EMPTY: OperationMetrics = {
   yenilemeSayisi: 0, bekleyenTeklif: 0, bugunKesilen: 0, potansiyelKomisyon: 0,
   tahminiPrim: 0, buAyPrim: 0, buAyKomisyon: 0, aktifPolice: 0, donusum: 0, yeniTalep: 0,
 };
 
-export default function DashboardScreen() {
+type Home = {
+  m: OperationMetrics;
+  cal: { w3: number; w7: number; w15: number; w30: number; tahminiPrim: number };
+  taskCount: number;
+  waPending: number;
+};
+
+export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { unreadCount } = useNotificationStore();
   const { profile, agencyId } = useProfile();
 
-  const [metrics, setMetrics] = useState<OperationMetrics>(EMPTY);
+  const [data, setData] = useState<Home | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [email, setEmail] = useState('');
 
   const load = useCallback(async () => {
-    const m = await fetchOperationMetrics(agencyId);
-    setMetrics(m);
+    const [m, renewals, tasks] = await Promise.all([
+      fetchOperationMetrics(agencyId),
+      fetchUpcomingRenewals(agencyId),
+      fetchTasks(agencyId).catch(() => []),
+    ]);
+    let waPending = 0;
+    try {
+      const q = await apiGet<{ items: { status: string }[] }>('/api/whatsapp/queue?status=pending&limit=200');
+      waPending = (q.items ?? []).length;
+    } catch { /* yetki yoksa 0 */ }
+
+    const w30Items = filterByWindow(renewals, 30);
+    setData({
+      m,
+      cal: {
+        w3: filterByWindow(renewals, 3).length,
+        w7: filterByWindow(renewals, 7).length,
+        w15: filterByWindow(renewals, 15).length,
+        w30: w30Items.length,
+        tahminiPrim: w30Items.reduce((s, i) => s + Number(i.premium ?? 0), 0),
+      },
+      taskCount: tasks.length,
+      waPending,
+    });
     setLoading(false);
   }, [agencyId]);
 
@@ -47,147 +72,198 @@ export default function DashboardScreen() {
     supabase.auth.getUser().then(({ data: { user } }) => setEmail(user?.email ?? ''));
   }, [load]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
+  const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
 
-  function handleSignOut() {
+  function signOut() {
     Alert.alert('Çıkış Yap', 'Hesabınızdan çıkmak istediğinize emin misiniz?', [
       { text: 'İptal', style: 'cancel' },
       { text: 'Çıkış Yap', style: 'destructive', onPress: () => supabase.auth.signOut() },
     ]);
   }
 
-  const name = profile?.full_name?.trim() || email.split('@')[0] || 'Ahmet';
+  const name = profile?.full_name?.trim()?.split(' ')[0] || email.split('@')[0] || 'Ahmet';
+  const m = data?.m ?? EMPTY;
+  const cal = data?.cal ?? { w3: 0, w7: 0, w15: 0, w30: 0, tahminiPrim: 0 };
 
-  // Bugün yapılacaklar (aksiyona yönlendiren hero satırları)
-  const todos = [
-    { dot: '🔴', value: String(metrics.yenilemeSayisi), label: 'Yenileme Takibi',     onPress: () => router.push('/(tabs)/renewals') },
-    { dot: '🟡', value: String(metrics.bekleyenTeklif),  label: 'Bekleyen Teklif',      onPress: () => router.push('/(tabs)/requests') },
-    { dot: '🟢', value: String(metrics.bugunKesilen),    label: 'Bugün Kesilen Poliçe', onPress: () => router.push('/(tabs)/policies') },
-    { dot: '💰', value: formatShortTRY(metrics.potansiyelKomisyon), label: 'Potansiyel Komisyon', onPress: () => router.push('/(tabs)/renewals') },
+  const pills = [
+    { dot: Dark.dotRed,   value: String(m.yenilemeSayisi), label: 'Yenileme' },
+    { dot: Dark.dotAmber, value: String(m.bekleyenTeklif),  label: 'Bekleyen' },
+    { dot: Dark.dotGreen, value: String(m.yeniTalep),       label: 'Yeni' },
+    { dot: Dark.dotMoney, value: formatShortTRY(m.potansiyelKomisyon), label: 'Komisyon', money: true },
   ];
 
-  // Canlı kartlar
-  const cards = [
-    { label: 'BU AY PRİM',    value: formatShortTRY(metrics.buAyPrim),     accent: Colors.primary },
-    { label: 'BU AY KOMİSYON', value: formatShortTRY(metrics.buAyKomisyon), accent: Colors.success },
-    { label: 'AKTİF POLİÇE',  value: String(metrics.aktifPolice),          accent: Colors.heading },
-    { label: 'BEKLEYEN TEKLİF', value: String(metrics.bekleyenTeklif),     accent: Colors.warning },
-    { label: 'DÖNÜŞÜM ORANI', value: `%${metrics.donusum}`,                accent: Colors.primary },
-    { label: 'YENİ TALEP',    value: String(metrics.yeniTalep),            accent: Colors.danger },
+  const tasks: { emoji: string; bg: string; title: string; count: number; badge: string; href: Href }[] = [
+    { emoji: '🔄', bg: '#FEE2E2', title: 'Yenileme Takibi',    count: m.yenilemeSayisi, badge: Dark.dotRed,   href: '/(tabs)/renewals' },
+    { emoji: '📋', bg: '#FEF3C7', title: 'Bekleyen Teklifler',  count: m.bekleyenTeklif,  badge: Dark.dotAmber, href: '/(tabs)/requests' },
+    { emoji: '💬', bg: '#DCFCE7', title: 'WhatsApp Gönderimleri', count: data?.waPending ?? 0, badge: Dark.dotGreen, href: '/whatsapp' },
+    { emoji: '✅', bg: '#E0E7FF', title: 'Görevler',            count: data?.taskCount ?? 0, badge: Colors.primary, href: '/gorevler' },
   ];
+
+  const calRows = [
+    { label: '3 gün içinde',  count: cal.w3,  color: Dark.dotRed },
+    { label: '7 gün içinde',  count: cal.w7,  color: Dark.dotAmber },
+    { label: '15 gün içinde', count: cal.w15, color: Colors.primary },
+    { label: '30 gün içinde', count: cal.w30, color: Dark.dotGreen },
+  ];
+  const calMax = Math.max(1, cal.w30);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <View style={styles.root}>
+      <StatusBar style="light" />
       <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+        contentContainerStyle={{ paddingBottom: Spacing.xl }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>{greetingTR()} {name} 👋</Text>
-            <Text style={styles.date}>{formatLongDateTR()}</Text>
+        {/* ─── Koyu Hero ─── */}
+        <View style={[styles.hero, { paddingTop: insets.top + 14 }]}>
+          <View style={styles.heroTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroDate}>{formatLongDateTR()}</Text>
+              <Text style={styles.heroGreet}>{greetingTR()}, {name} 👋</Text>
+              <Text style={styles.heroSub}>Bugün seni bekleyen işler</Text>
+            </View>
+            <TouchableOpacity style={styles.heroIcon} onPress={() => router.push('/notifications')}>
+              <Text style={styles.heroIconEmoji}>🔔</Text>
+              {unreadCount > 0 && <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text></View>}
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.heroIcon, { marginLeft: 8 }]} onPress={signOut}>
+              <Text style={styles.heroIconEmoji}>⏻</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/notifications')}>
-            <Text style={styles.iconEmoji}>🔔</Text>
-            {unreadCount > 0 && (
-              <View style={styles.bellBadge}>
-                <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+
+          {/* 4 glass pill */}
+          <View style={styles.pillRow}>
+            {pills.map((p) => (
+              <View key={p.label} style={styles.pill}>
+                <View style={[styles.pillDot, { backgroundColor: p.dot }]} />
+                <Text style={[styles.pillValue, p.money && { fontSize: 15 }]} numberOfLines={1} adjustsFontSizeToFit>{p.value}</Text>
+                <Text style={styles.pillLabel}>{p.label}</Text>
               </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.iconBtn, { marginLeft: 8 }]} onPress={handleSignOut}>
-            <Text style={styles.iconEmoji}>⏻</Text>
-          </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Prim bar */}
+          <View style={styles.primBar}>
+            <View style={styles.primIcon}><Text style={{ fontSize: 16 }}>📈</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.primLabel}>BU AY PRİM</Text>
+              <Text style={styles.primValue}>{formatShortTRY(m.buAyPrim)} · Komisyon: {formatShortTRY(m.buAyKomisyon)}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.primLabel}>Aktif Poliçe</Text>
+              <Text style={styles.primPolice}>{m.aktifPolice}</Text>
+            </View>
+          </View>
         </View>
 
         {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-          </View>
+          <View style={{ paddingVertical: 60, alignItems: 'center' }}><ActivityIndicator size="large" color={Colors.primary} /></View>
         ) : (
-          <>
-            {/* Bugün Yapılacaklar */}
-            <Text style={styles.sectionLabel}>BUGÜN YAPILACAKLAR</Text>
-            <View style={styles.todoCard}>
-              {todos.map((t, i) => (
-                <TouchableOpacity
-                  key={t.label}
-                  style={[styles.todoRow, i < todos.length - 1 && styles.todoRowBorder]}
-                  onPress={t.onPress}
-                  activeOpacity={0.6}
-                >
-                  <Text style={styles.todoDot}>{t.dot}</Text>
-                  <Text style={styles.todoValue}>{t.value}</Text>
-                  <Text style={styles.todoLabel}>{t.label}</Text>
-                  <Text style={styles.todoChevron}>›</Text>
+          <View style={styles.body}>
+            {/* Görev Merkezi */}
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionLabel}>GÖREV MERKEZİ</Text>
+              <Text style={styles.sectionRight}>{tasks.filter((t) => t.count > 0).length} aktif</Text>
+            </View>
+            <View style={styles.card}>
+              {tasks.map((t, i) => (
+                <TouchableOpacity key={t.title} style={[styles.taskRow, i < tasks.length - 1 && styles.taskBorder]} onPress={() => router.push(t.href)} activeOpacity={0.6}>
+                  <View style={[styles.taskIcon, { backgroundColor: t.bg }]}><Text style={{ fontSize: 18 }}>{t.emoji}</Text></View>
+                  <Text style={styles.taskTitle}>{t.title}</Text>
+                  <View style={[styles.taskCount, { backgroundColor: t.badge }]}><Text style={styles.taskCountText}>{t.count}</Text></View>
+                  <View style={styles.taskAc}><Text style={styles.taskAcText}>Aç ›</Text></View>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Canlı Kartlar */}
-            <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>CANLI DURUM</Text>
-            <View style={styles.grid}>
-              {cards.map((c, i) => (
-                <View key={c.label} style={[styles.statCard, i % 2 === 0 ? { marginRight: 12 } : {}]}>
-                  <Text style={styles.statLabel}>{c.label}</Text>
-                  <Text style={[styles.statValue, { color: c.accent }]} numberOfLines={1} adjustsFontSizeToFit>
-                    {c.value}
-                  </Text>
+            {/* Yenileme Takvimi */}
+            <View style={[styles.sectionHead, { marginTop: Spacing.lg }]}>
+              <Text style={styles.sectionLabel}>YENİLEME TAKVİMİ</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/renewals')}><Text style={styles.sectionLink}>Tümünü Gör</Text></TouchableOpacity>
+            </View>
+            <View style={styles.card}>
+              <View style={styles.calHead}>
+                <View style={styles.calIcon}><Text style={{ fontSize: 16 }}>📅</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.calTitle}>Bu Ay Yenilemeler</Text>
+                  <Text style={styles.calSub}>{cal.w30} poliçe yenilenecek</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.calSub}>Tahmini Prim</Text>
+                  <Text style={styles.calPrim}>{formatShortTRY(cal.tahminiPrim)}</Text>
+                </View>
+              </View>
+              <View style={styles.calDivider} />
+              {calRows.map((r) => (
+                <View key={r.label} style={styles.calRow}>
+                  <Text style={styles.calRowLabel}>{r.label}</Text>
+                  <View style={styles.calTrack}>
+                    <View style={[styles.calFill, { width: `${Math.round((r.count / calMax) * 100)}%`, backgroundColor: r.color }]} />
+                  </View>
+                  <Text style={[styles.calRowCount, { color: r.color }]}>{r.count}</Text>
                 </View>
               ))}
             </View>
-          </>
+          </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: Spacing.lg, paddingBottom: Spacing.xl },
+  root: { flex: 1, backgroundColor: Colors.background },
 
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.lg },
-  greeting: { ...Type.title },
-  date: { ...Type.caption, marginTop: 2, textTransform: 'capitalize' },
-  iconBtn: {
-    width: 42, height: 42, borderRadius: Radius.md,
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  iconEmoji: { fontSize: 18 },
-  bellBadge: {
-    position: 'absolute', top: -4, right: -4,
-    backgroundColor: Colors.danger, borderRadius: 9, minWidth: 18, height: 18,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
-    borderWidth: 2, borderColor: Colors.background,
-  },
-  bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  // Hero
+  hero: { backgroundColor: Dark.hero, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  heroTop: { flexDirection: 'row', alignItems: 'flex-start' },
+  heroDate: { color: Dark.subOnDark, fontSize: 12, fontWeight: '600' },
+  heroGreet: { color: Dark.textOnDark, fontSize: 24, fontWeight: '800', marginTop: 4, letterSpacing: -0.4 },
+  heroSub: { color: Dark.subOnDark, fontSize: 13, marginTop: 3 },
+  heroIcon: { width: 40, height: 40, borderRadius: Radius.full, backgroundColor: Dark.glass, borderWidth: 1, borderColor: Dark.glassBorder, alignItems: 'center', justifyContent: 'center' },
+  heroIconEmoji: { fontSize: 17 },
+  heroBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: Dark.dotRed, borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: Dark.hero },
+  heroBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 
-  loadingBox: { paddingVertical: 80, alignItems: 'center' },
-  sectionLabel: { ...Type.label, marginBottom: Spacing.sm },
+  pillRow: { flexDirection: 'row', gap: 8, marginTop: Spacing.lg },
+  pill: { flex: 1, backgroundColor: Dark.glass, borderWidth: 1, borderColor: Dark.glassBorder, borderRadius: Radius.lg, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center' },
+  pillDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
+  pillValue: { color: Dark.textOnDark, fontSize: 20, fontWeight: '800' },
+  pillLabel: { color: Dark.subOnDark, fontSize: 11, marginTop: 2 },
 
-  // Bugün Yapılacaklar
-  todoCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, ...Shadow.md, overflow: 'hidden' },
-  todoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: Spacing.md },
-  todoRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
-  todoDot: { fontSize: 18, width: 28 },
-  todoValue: { ...Type.title, fontSize: 20, minWidth: 64 },
-  todoLabel: { ...Type.body, flex: 1, color: Colors.text },
-  todoChevron: { fontSize: 24, color: Colors.placeholder, fontWeight: '300' },
+  primBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: Dark.glassStrong, borderWidth: 1, borderColor: Dark.glassBorder, borderRadius: Radius.lg, padding: Spacing.md, marginTop: 10 },
+  primIcon: { width: 34, height: 34, borderRadius: Radius.md, backgroundColor: 'rgba(52,211,153,0.18)', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  primLabel: { color: Dark.subOnDark, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  primValue: { color: Dark.textOnDark, fontSize: 15, fontWeight: '800', marginTop: 2 },
+  primPolice: { color: Dark.dotMoney, fontSize: 18, fontWeight: '800', marginTop: 2 },
 
-  // Canlı kartlar
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  statCard: {
-    width: CARD_WIDTH, backgroundColor: Colors.card, borderRadius: Radius.lg,
-    padding: Spacing.md, marginBottom: 12, ...Shadow.sm,
-  },
-  statLabel: { ...Type.label, fontSize: 10, marginBottom: 6 },
-  statValue: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  // Body
+  body: { padding: Spacing.lg },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
+  sectionLabel: { ...Type.label },
+  sectionRight: { ...Type.caption, color: Colors.secondary },
+  sectionLink: { ...Type.caption, color: Colors.primary, fontWeight: '700' },
+
+  card: { backgroundColor: Colors.card, borderRadius: Radius.lg, ...Shadow.md, overflow: 'hidden' },
+  taskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, paddingHorizontal: Spacing.md },
+  taskBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  taskIcon: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  taskTitle: { ...Type.subhead, fontSize: 14, flex: 1 },
+  taskCount: { minWidth: 26, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, marginRight: 8 },
+  taskCountText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  taskAc: { backgroundColor: Colors.heading, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 6 },
+  taskAcText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+
+  calHead: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md },
+  calIcon: { width: 34, height: 34, borderRadius: Radius.md, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  calTitle: { ...Type.subhead, fontSize: 14 },
+  calSub: { ...Type.caption, marginTop: 1 },
+  calPrim: { ...Type.subhead, fontSize: 15, color: Colors.primary, marginTop: 1 },
+  calDivider: { height: 1, backgroundColor: Colors.border },
+  calRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, paddingHorizontal: Spacing.md },
+  calRowLabel: { ...Type.caption, color: Colors.text, width: 92 },
+  calTrack: { flex: 1, height: 7, borderRadius: 4, backgroundColor: Colors.surface, overflow: 'hidden', marginHorizontal: 10 },
+  calFill: { height: '100%', borderRadius: 4 },
+  calRowCount: { fontSize: 13, fontWeight: '800', width: 24, textAlign: 'right' },
 });

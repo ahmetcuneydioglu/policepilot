@@ -37,6 +37,22 @@ export const Radius = {
   full: 999,
 };
 
+// ─── Koyu glass hero paleti (Figma redesign — koyu hero + açık gövde) ─────────
+export const Dark = {
+  hero: '#13253F',          // hero ana koyu navy (gradient'in native modülle gelir)
+  heroDeep: '#0E1B2E',      // gradient alt tonu (fake/solid için)
+  glass: 'rgba(255,255,255,0.07)',     // hero üstü cam kartlar
+  glassStrong: 'rgba(255,255,255,0.10)',
+  glassBorder: 'rgba(255,255,255,0.14)',
+  textOnDark: '#FFFFFF',
+  subOnDark: 'rgba(255,255,255,0.62)',
+  // aksan noktaları (özet pill'leri)
+  dotRed: '#F2555A',
+  dotAmber: '#F5B441',
+  dotGreen: '#34D17A',
+  dotMoney: '#34D399',
+};
+
 // ─── Tipografi ölçeği (premium, tutarlı) ─────────────────────────────────────
 export const Type = {
   display: { fontSize: 28, fontWeight: '800', lineHeight: 34, color: Colors.heading },
