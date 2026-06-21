@@ -29,6 +29,7 @@ export type CustomerRequest = {
   request_type: string;
   status: string;
   price_offer: number | null;
+  next_follow_up_date: string | null;
   created_at: string;
 };
 
@@ -56,7 +57,7 @@ export async function fetchCustomerBundle(id: string): Promise<CustomerBundle> {
       .select('id,policy_type,status,start_date,end_date,premium,commission,insurance_company,policy_no,created_at')
       .eq('customer_id', id).order('created_at', { ascending: false }),
     (supabase.from('requests') as any)
-      .select('id,request_type,status,price_offer,created_at')
+      .select('id,request_type,status,price_offer,next_follow_up_date,created_at')
       .eq('customer_id', id).order('created_at', { ascending: false }),
     (supabase.from('documents') as any)
       .select('id,file_name,created_at')

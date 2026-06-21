@@ -15,7 +15,10 @@ import {
   fetchCustomerBundle, buildTimeline, upcomingRenewals,
   CustomerBundle, TimelineEvent,
 } from '@/lib/customer';
+import { apiGet } from '@/lib/api';
 import DocumentSection from '@/components/DocumentSection';
+
+type WaMsg = { id: string; phone: string; message: string; status: string; created_at: string };
 
 function initials(name: string) {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -39,6 +42,7 @@ export default function CustomerDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [note, setNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [waMsgs, setWaMsgs] = useState<WaMsg[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -47,6 +51,14 @@ export default function CustomerDetailScreen() {
     setTimeline(buildTimeline(b));
     setNote(b.customer?.note ?? '');
     setLoading(false);
+    // WhatsApp geçmişi — arka planda (manager-uyumlu; yetkisizde boş döner)
+    const last10 = (b.customer?.phone ?? '').replace(/\D/g, '').slice(-10);
+    if (last10) {
+      try {
+        const res = await apiGet<{ items: WaMsg[] }>('/api/whatsapp/queue?limit=200');
+        setWaMsgs((res.items ?? []).filter((m) => (m.phone ?? '').replace(/\D/g, '').slice(-10) === last10));
+      } catch { /* sessiz — yetki yoksa boş */ }
+    }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
@@ -96,6 +108,16 @@ export default function CustomerDetailScreen() {
   const activePolicies = policies.filter((p) => p.status === 'Aktif');
   const renewals = upcomingRenewals(policies);
   const openReqs = requests.filter((r) => r.status !== 'Kazanıldı' && r.status !== 'Kaybedildi');
+  const taskRows = [
+    ...renewals.map((p) => {
+      const u = renewalUrgency(p.end_date ? daysUntil(p.end_date) : 0);
+      return { id: 'rn-' + p.id, icon: '🔄', title: `${p.policy_type} yenileme`, sub: p.end_date ? `Bitiş ${fmtDate(p.end_date)}` : '', badge: u };
+    }),
+    ...requests.filter((r) => r.next_follow_up_date).map((r) => {
+      const u = renewalUrgency(daysUntil(r.next_follow_up_date as string));
+      return { id: 'fu-' + r.id, icon: '📞', title: `${r.request_type} takip`, sub: `Takip: ${fmtDate(r.next_follow_up_date as string)}`, badge: u };
+    }),
+  ];
   const extra = c.extra_data ? Object.entries(c.extra_data).filter(([, v]) => v) : [];
 
   return (
@@ -226,10 +248,38 @@ export default function CustomerDetailScreen() {
           )}
         </Section>
 
-        {/* Yakında */}
-        <Section label="YAKINDA">
-          <View style={styles.soonRow}><Text style={styles.soonEmoji}>✅</Text><Text style={styles.soonText}>Görevler</Text><Badge text="Yakında" /></View>
-          <View style={styles.soonRow}><Text style={styles.soonEmoji}>💬</Text><Text style={styles.soonText}>WhatsApp Geçmişi</Text><Badge text="Yakında" /></View>
+        {/* Görevler / Takip */}
+        <Section label="GÖREVLER / TAKİP">
+          {taskRows.length === 0 ? (
+            <Text style={styles.muted}>Bekleyen görev yok.</Text>
+          ) : (
+            taskRows.map((t) => (
+              <View key={t.id} style={styles.rowItem}>
+                <Text style={{ fontSize: 16, width: 28 }}>{t.icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowTitle}>{t.title}</Text>
+                  {!!t.sub && <Text style={styles.rowSub}>{t.sub}</Text>}
+                </View>
+                <View style={[styles.miniBadge, { backgroundColor: t.badge.bg }]}>
+                  <Text style={[styles.miniBadgeText, { color: t.badge.text }]}>{t.badge.label}</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </Section>
+
+        {/* WhatsApp Geçmişi */}
+        <Section label="WHATSAPP GEÇMİŞİ">
+          {waMsgs.length === 0 ? (
+            <Text style={styles.muted}>Henüz WhatsApp mesajı yok.</Text>
+          ) : (
+            waMsgs.map((m) => (
+              <View key={m.id} style={styles.waRow}>
+                <Text style={styles.waMsg} numberOfLines={2}>{m.message}</Text>
+                <Text style={styles.waMeta}>{m.status === 'sent' ? '✓ Gönderildi' : m.status === 'failed' ? '✕ Hata' : m.status} · {fmtDate(m.created_at)}</Text>
+              </View>
+            ))
+          )}
         </Section>
       </ScrollView>
     </SafeAreaView>
@@ -332,6 +382,9 @@ const styles = StyleSheet.create({
   tlSub: { ...Type.caption, marginTop: 1 },
   tlDate: { ...Type.caption, color: Colors.placeholder, marginTop: 2 },
 
+  waRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  waMsg: { ...Type.body, color: Colors.heading, lineHeight: 19 },
+  waMeta: { ...Type.caption, color: Colors.placeholder, marginTop: 3 },
   soonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   soonEmoji: { fontSize: 18, width: 30 },
   soonText: { ...Type.body, flex: 1, color: Colors.heading, fontWeight: '600' },

@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
-import { formatTRY } from '@/lib/format';
+import { formatTRY, formatShortTRY } from '@/lib/format';
 import {
   getQuoteRun, updateRunStatus, issuePolicyFromResult, runStatusMeta,
   isSuccessResult, isErrorResult, resultStatusLabel, bestPrice,
@@ -53,6 +53,13 @@ export default function QuoteRunDetailScreen() {
     return [...ok, ...rest];
   }, [results]);
   const best = useMemo(() => bestPrice(results.filter(isSuccessResult)), [results]);
+  const summary = useMemo(() => {
+    const ok = results.filter(isSuccessResult);
+    const prices = ok.map((r) => Number(r.price)).filter((n) => n > 0);
+    const avg = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
+    const max = prices.length ? Math.max(...prices) : 0;
+    return { okCount: ok.length, errCount: results.filter(isErrorResult).length, avg, max };
+  }, [results]);
   const isWon = run?.status === 'Kazanıldı';
 
   async function changeStatus(status: string) {
@@ -123,6 +130,13 @@ export default function QuoteRunDetailScreen() {
           <View style={styles.bestBox}><Text style={styles.bestLabel}>EN İYİ TEKLİF</Text><Text style={styles.bestValue}>{formatTRY(best)}</Text></View>
         )}
 
+        <View style={styles.sumRow}>
+          <SumStat label="TEKLİF" value={String(summary.okCount)} />
+          <SumStat label="HATA" value={String(summary.errCount)} accent={summary.errCount > 0 ? Colors.danger : Colors.heading} />
+          <SumStat label="ORTALAMA" value={summary.avg ? formatShortTRY(summary.avg) : '—'} />
+          <SumStat label="EN YÜKSEK" value={summary.max ? formatShortTRY(summary.max) : '—'} />
+        </View>
+
         {/* Aksiyonlar */}
         <View style={styles.actionRow}>
           <TouchableOpacity style={[styles.actBtn, styles.actWA]} onPress={sendWhatsapp} activeOpacity={0.8}><Text style={styles.actWAText}>💬 Müşteriye Gönder</Text></TouchableOpacity>
@@ -175,6 +189,15 @@ export default function QuoteRunDetailScreen() {
   );
 }
 
+function SumStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <View style={styles.sumStat}>
+      <Text style={[styles.sumValue, accent ? { color: accent } : null]}>{value}</Text>
+      <Text style={styles.sumLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -195,6 +218,10 @@ const styles = StyleSheet.create({
   bestBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.successBg, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md },
   bestLabel: { fontSize: 11, fontWeight: '800', color: Colors.success, letterSpacing: 0.6 },
   bestValue: { fontSize: 22, fontWeight: '800', color: Colors.success },
+  sumRow: { flexDirection: 'row', gap: 8, marginTop: Spacing.md },
+  sumStat: { flex: 1, backgroundColor: Colors.card, borderRadius: Radius.lg, paddingVertical: 12, alignItems: 'center', ...Shadow.sm },
+  sumValue: { fontSize: 17, fontWeight: '800', color: Colors.heading },
+  sumLabel: { fontSize: 9, fontWeight: '700', color: Colors.secondary, letterSpacing: 0.4, marginTop: 2 },
 
   actionRow: { flexDirection: 'row', marginTop: Spacing.md },
   actBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, paddingVertical: 12 },
