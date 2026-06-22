@@ -51,7 +51,7 @@ export default function AiScreen() {
   return (
     <View style={styles.safe}>
       <DarkHero
-        colors={['#3A2A66', '#241845']}
+        colors={['#5B3AAE', '#241845']}
         title="SigortaOS AI"
         subtitle="Verilerinle konuşan asistanın"
         right={

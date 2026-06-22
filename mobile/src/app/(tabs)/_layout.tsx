@@ -30,7 +30,7 @@ export default function TabsLayout() {
           height: Platform.OS === 'ios' ? 82 : 64,
         },
         tabBarBackground: () => (
-          <BlurView tint="light" intensity={80} style={[StyleSheet.absoluteFill, styles.tabBlur]} />
+          <BlurView tint="light" intensity={95} style={[StyleSheet.absoluteFill, styles.tabBlur]} />
         ),
         tabBarLabelStyle: {
           fontSize: 10,
@@ -101,7 +101,7 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   tabBlur: {
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: 'rgba(255,255,255,0.4)',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(0,0,0,0.08)',
   },

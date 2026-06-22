@@ -39,8 +39,9 @@ export const Radius = {
 
 // ─── Koyu glass hero paleti (Figma redesign — koyu hero + açık gövde) ─────────
 export const Dark = {
-  hero: '#13253F',          // hero ana koyu navy (gradient'in native modülle gelir)
-  heroDeep: '#0E1B2E',      // gradient alt tonu (fake/solid için)
+  hero: '#13253F',          // koyu navy (beyaz çip/buton üstü METİN rengi olarak da kullanılır)
+  heroTop: '#244B86',       // gradient ÜST tonu (belirgin mavi-navy)
+  heroDeep: '#0A1626',      // gradient ALT tonu (derin navy)
   glass: 'rgba(255,255,255,0.07)',     // hero üstü cam kartlar
   glassStrong: 'rgba(255,255,255,0.10)',
   glassBorder: 'rgba(255,255,255,0.14)',

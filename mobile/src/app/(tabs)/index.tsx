@@ -120,7 +120,7 @@ export default function HomeScreen() {
       >
         {/* ─── Koyu Hero (gradient) ─── */}
         <LinearGradient
-          colors={[Dark.hero, Dark.heroDeep]}
+          colors={[Dark.heroTop, Dark.heroDeep]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + 14 }]}

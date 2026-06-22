@@ -36,7 +36,7 @@ export default function DarkHero({
 }) {
   const insets = useSafeAreaInsets();
   const gradient: readonly [string, string, ...string[]] =
-    colors ?? (bg ? [bg, bg] : [Dark.hero, Dark.heroDeep]);
+    colors ?? (bg ? [bg, bg] : [Dark.heroTop, Dark.heroDeep]);
   return (
     <LinearGradient
       colors={gradient}
