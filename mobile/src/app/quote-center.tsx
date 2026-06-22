@@ -3,13 +3,14 @@
  * Demo motoru (quoteDemo) + web /api/quote-runs köprüsü. Detay: /quote-run/[id].
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
   ActivityIndicator, Alert, RefreshControl, Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
@@ -33,16 +34,21 @@ export default function QuoteCenterScreen() {
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [statusTab, setStatusTab] = useState('Tümü');
+  const [issuedRunIds, setIssuedRunIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setError(null);
-    try { setRuns(await listQuoteRuns()); }
-    catch (e) {
+    try {
+      setRuns(await listQuoteRuns());
+      // Poliçeleştirilen teklif çalışmaları (policies.quote_run_id) listeden gizlenir — Poliçeler'de yaşar
+      const { data: pol } = await (supabase.from('policies') as any).select('quote_run_id').not('quote_run_id', 'is', null);
+      setIssuedRunIds(new Set((pol ?? []).map((p: any) => p.quote_run_id).filter(Boolean)));
+    } catch (e) {
       setError(e instanceof ApiError && e.status === 401 ? 'Sunucuya bağlanılamadı — web köprüsü yayınlanmalı.' : e instanceof Error ? e.message : 'Hata');
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
 
   const kpi = useMemo(() => {
@@ -56,15 +62,18 @@ export default function QuoteCenterScreen() {
     return { total, active, won, winRate, month };
   }, [runs]);
 
+  // Poliçeleştirilenler hariç — liste/sekme/sayım tabanı
+  const visibleRuns = useMemo(() => runs.filter((r) => !issuedRunIds.has(r.id)), [runs, issuedRunIds]);
+
   const statusCounts = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const r of runs) c[r.status] = (c[r.status] ?? 0) + 1;
+    for (const r of visibleRuns) c[r.status] = (c[r.status] ?? 0) + 1;
     return c;
-  }, [runs]);
+  }, [visibleRuns]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return runs.filter((r) => {
+    return visibleRuns.filter((r) => {
       if (statusTab !== 'Tümü' && r.status !== statusTab) return false;
       if (q) {
         const hay = `${r.customer_name ?? ''} ${r.product_type ?? ''}`.toLowerCase();
@@ -72,7 +81,7 @@ export default function QuoteCenterScreen() {
       }
       return true;
     });
-  }, [runs, query, statusTab]);
+  }, [visibleRuns, query, statusTab]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -97,7 +106,7 @@ export default function QuoteCenterScreen() {
             <Kpi label="BU AY" value={String(kpi.month)} accent={Colors.secondary} />
           </View>
 
-          {runs.length > 0 && (
+          {visibleRuns.length > 0 && (
             <>
               {/* Arama */}
               <TextInput
@@ -119,7 +128,7 @@ export default function QuoteCenterScreen() {
               >
                 {STATUS_TABS.map((t) => {
                   const active = statusTab === t;
-                  const n = t === 'Tümü' ? runs.length : (statusCounts[t] ?? 0);
+                  const n = t === 'Tümü' ? visibleRuns.length : (statusCounts[t] ?? 0);
                   return (
                     <TouchableOpacity
                       key={t}
@@ -144,6 +153,12 @@ export default function QuoteCenterScreen() {
               <Text style={styles.emptyTitle}>Henüz teklif çalışması yok</Text>
               <Text style={styles.emptySub}>“+ Yeni” ile müşteri ve ürün seçip 12 şirketten demo teklif al.</Text>
               <TouchableOpacity style={styles.emptyBtn} onPress={() => setNewOpen(true)}><Text style={styles.emptyBtnText}>Yeni Teklif Çalışması</Text></TouchableOpacity>
+            </View>
+          ) : visibleRuns.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyEmoji}>📄</Text>
+              <Text style={styles.emptyTitle}>Tüm teklifler poliçeleştirildi</Text>
+              <Text style={styles.emptySub}>Kesilen poliçeler “Poliçeler” ekranında listelenir.</Text>
             </View>
           ) : filtered.length === 0 ? (
             <View style={styles.noResult}>
