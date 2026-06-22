@@ -1,7 +1,8 @@
 /**
- * src/app/quote-run/[id].tsx — Teklif çalışması detayı
- * Şirket karşılaştırması (en iyi vurgulu) + Poliçeleştir (/api/policy-issue) +
- * durum güncelleme (/api/quote-runs PATCH) + WhatsApp ile müşteriye gönder.
+ * src/app/quote-run/[id].tsx — Teklif çalışması sonuç ekranı (tamamliyo görünümü)
+ * Şirket kartları: Yapay Zeka Skoru + 5 metrik bar + "Yapay Zeka Önerisi"/"En Uygun"
+ * rozetleri + kazanç. İş aksiyonları korunur: Poliçeleştir (/api/policy-issue),
+ * durum güncelleme (/api/quote-runs PATCH), WhatsApp ile müşteriye gönder.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -10,18 +11,33 @@ import {
   ActivityIndicator, Alert, RefreshControl, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
-import { formatTRY, formatShortTRY } from '@/lib/format';
+import { formatTRY } from '@/lib/format';
 import {
   getQuoteRun, updateRunStatus, issuePolicyFromResult, runStatusMeta,
-  isSuccessResult, isErrorResult, resultStatusLabel, bestPrice,
+  isSuccessResult, resultStatusLabel, bestPrice,
   QuoteRun, QuoteResult,
 } from '@/lib/quoteCenter';
+import { scoreFor, priceCtx, QuoteScore } from '@/lib/quoteScore';
 
 function waNumber(phone: string) {
   const c = (phone ?? '').replace(/\D/g, '');
   return c.startsWith('0') ? '90' + c.slice(1) : c.startsWith('90') ? c : c.length === 10 ? '90' + c : c;
+}
+function initials(name: string): string {
+  const w = name.trim().split(/\s+/);
+  if (w.length >= 2 && w[0] && w[1]) return (w[0][0] + w[1][0]).toUpperCase();
+  return name.trim().slice(0, 2).toUpperCase();
+}
+function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.max(1, Math.round(diff / 1000));
+  if (s < 60) return `${s} sn önce`;
+  const mn = Math.round(s / 60); if (mn < 60) return `${mn} dk önce`;
+  const hr = Math.round(mn / 60); if (hr < 24) return `${hr} saat önce`;
+  return `${Math.round(hr / 24)} gün önce`;
 }
 
 export default function QuoteRunDetailScreen() {
@@ -47,19 +63,22 @@ export default function QuoteRunDetailScreen() {
   useEffect(() => { load(); }, [load]);
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
 
-  const sorted = useMemo(() => {
-    const ok = results.filter(isSuccessResult).sort((a, b) => (a.price ?? 1e12) - (b.price ?? 1e12));
-    const rest = results.filter((r) => !isSuccessResult(r));
-    return [...ok, ...rest];
-  }, [results]);
-  const best = useMemo(() => bestPrice(results.filter(isSuccessResult)), [results]);
-  const summary = useMemo(() => {
+  const { ordered, scoreMap, recommendedId, best, okCount } = useMemo(() => {
     const ok = results.filter(isSuccessResult);
-    const prices = ok.map((r) => Number(r.price)).filter((n) => n > 0);
-    const avg = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
-    const max = prices.length ? Math.max(...prices) : 0;
-    return { okCount: ok.length, errCount: results.filter(isErrorResult).length, avg, max };
+    const ctx = priceCtx(ok.map((r) => Number(r.price)).filter((n) => n > 0));
+    const map = new Map<string, QuoteScore>();
+    ok.forEach((r) => map.set(r.id, scoreFor(r.company_name, r.price, ctx)));
+    const okSorted = [...ok].sort((a, b) => (map.get(b.id)?.aiScore ?? 0) - (map.get(a.id)?.aiScore ?? 0));
+    const rest = results.filter((r) => !isSuccessResult(r));
+    return {
+      ordered: [...okSorted, ...rest],
+      scoreMap: map,
+      recommendedId: okSorted[0]?.id ?? null,
+      best: bestPrice(ok),
+      okCount: ok.length,
+    };
   }, [results]);
+
   const isWon = run?.status === 'Kazanıldı';
 
   async function changeStatus(status: string) {
@@ -112,37 +131,33 @@ export default function QuoteRunDetailScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.hBtn}><Text style={styles.hBack}>‹ Geri</Text></TouchableOpacity>
-        <Text style={styles.hTitle}>Teklif Detayı</Text>
+        <Text style={styles.hTitle}>Teklif Sonuçları</Text>
         <View style={styles.hBtn} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />} showsVerticalScrollIndicator={false}>
-        {/* Çalışma özeti */}
+        {/* Müşteri özeti */}
         <View style={styles.summary}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.sumName}>{run.customer_name ?? 'Müşteri'}</Text>
-            <Text style={styles.sumMeta}>{run.product_type} · {run.success_count} teklif · {run.error_count} hata</Text>
+            <Text style={styles.sumName} numberOfLines={1}>{run.customer_name ?? 'Müşteri'}</Text>
+            <Text style={styles.sumMeta}>{run.product_type}</Text>
           </View>
           <View style={[styles.badge, { backgroundColor: m.bg }]}><Text style={[styles.badgeText, { color: m.fg }]}>{run.status}</Text></View>
         </View>
 
-        {best != null && (
-          <View style={styles.bestBox}><Text style={styles.bestLabel}>EN İYİ TEKLİF</Text><Text style={styles.bestValue}>{formatTRY(best)}</Text></View>
-        )}
-
-        <View style={styles.sumRow}>
-          <SumStat label="TEKLİF" value={String(summary.okCount)} />
-          <SumStat label="HATA" value={String(summary.errCount)} accent={summary.errCount > 0 ? Colors.danger : Colors.heading} />
-          <SumStat label="ORTALAMA" value={summary.avg ? formatShortTRY(summary.avg) : '—'} />
-          <SumStat label="EN YÜKSEK" value={summary.max ? formatShortTRY(summary.max) : '—'} />
-        </View>
+        {/* Gradient AI banner */}
+        <LinearGradient colors={['#7C3AED', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.banner}>
+          <View style={styles.bannerIcon}><Text style={{ fontSize: 18 }}>✨</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bannerTitle}>{run.product_type} · Yapay Zeka Analizi</Text>
+            <Text style={styles.bannerSub}>{okCount} şirket karşılaştırıldı{best != null ? ` · En iyi ${formatTRY(best)}` : ''}</Text>
+          </View>
+        </LinearGradient>
 
         {/* Aksiyonlar */}
         <View style={styles.actionRow}>
-          <TouchableOpacity style={[styles.actBtn, styles.actWA]} onPress={sendWhatsapp} activeOpacity={0.8}><Text style={styles.actWAText}>💬 Müşteriye Gönder</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.actBtn, styles.actWA]} onPress={sendWhatsapp} activeOpacity={0.85}><Text style={styles.actWAText}>💬 Müşteriye Gönder</Text></TouchableOpacity>
         </View>
-
-        {/* Durum güncelleme */}
         {!isWon && (
           <View style={styles.statusRow}>
             {['Teklif Verildi', 'Müşteri Düşünüyor', 'Kaybedildi'].map((s) => (
@@ -153,48 +168,89 @@ export default function QuoteRunDetailScreen() {
           </View>
         )}
 
-        <Text style={styles.sectionLabel}>ŞİRKET KARŞILAŞTIRMASI</Text>
-        {sorted.map((r) => {
+        {/* Şirket kartları */}
+        {ordered.map((r) => {
           const ok = isSuccessResult(r);
-          const isBest = ok && r.price != null && r.price === best;
           const won = run.won_result_id === r.id;
-          const sl = resultStatusLabel(r);
-          return (
-            <View key={r.id} style={[styles.resCard, isBest && styles.resBest, won && styles.resWon]}>
-              <View style={styles.resTop}>
-                <Text style={styles.resCompany} numberOfLines={1}>{r.company_name}{isBest ? '  🏆' : ''}{won ? '  ✓' : ''}</Text>
-                <View style={[styles.resBadge, { backgroundColor: sl.bg }]}><Text style={[styles.resBadgeText, { color: sl.fg }]}>{sl.label}</Text></View>
-              </View>
-              {ok ? (
-                <>
-                  <View style={styles.resPriceRow}>
-                    <Text style={styles.resPrice}>{formatTRY(r.price)}</Text>
-                    {!!r.installment && <Text style={styles.resInst}>{r.installment}</Text>}
+          const isRec = ok && r.id === recommendedId;
+          const score = scoreMap.get(r.id);
+
+          if (!ok || !score) {
+            const sl = resultStatusLabel(r);
+            return (
+              <View key={r.id} style={styles.card}>
+                <View style={styles.cardTop}>
+                  <View style={[styles.avatar, styles.avatarErr]}><Text style={styles.avatarText}>{initials(r.company_name)}</Text></View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.company} numberOfLines={1}>{r.company_name}</Text>
+                    <Text style={styles.errMsg} numberOfLines={2}>{r.error_message ?? 'Teklif alınamadı.'}</Text>
                   </View>
-                  {!isWon && (
-                    <TouchableOpacity style={[styles.issueBtn, busy === r.id && { opacity: 0.6 }]} onPress={() => policelestir(r)} disabled={!!busy}>
-                      {busy === r.id ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.issueBtnText}>⚡ Poliçeleştir</Text>}
-                    </TouchableOpacity>
-                  )}
-                  {won && <Text style={styles.wonText}>✓ Bu tekliften poliçe kesildi</Text>}
-                </>
-              ) : (
-                <Text style={styles.resErr} numberOfLines={3}>{r.error_message ?? 'Teklif alınamadı.'}{r.action_hint ? `\n💡 ${r.action_hint}` : ''}</Text>
+                  <View style={[styles.resBadge, { backgroundColor: sl.bg }]}><Text style={[styles.resBadgeText, { color: sl.fg }]}>{sl.label}</Text></View>
+                </View>
+                {!!r.action_hint && <Text style={styles.hint}>💡 {r.action_hint}</Text>}
+              </View>
+            );
+          }
+
+          return (
+            <View key={r.id} style={[styles.card, isRec && styles.cardRec, won && styles.cardWon]}>
+              {isRec && (
+                <LinearGradient colors={['#7C3AED', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.recBadge}>
+                  <Text style={styles.recBadgeText}>🏅 Yapay Zeka Önerisi</Text>
+                </LinearGradient>
               )}
+              <View style={styles.cardTop}>
+                <LinearGradient colors={['#60A5FA', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
+                  <Text style={styles.avatarText}>{initials(r.company_name)}</Text>
+                </LinearGradient>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.company} numberOfLines={1}>{r.company_name}</Text>
+                    {isRec && <View style={styles.enUygun}><Text style={styles.enUygunText}>En Uygun</Text></View>}
+                    {won && <Text style={styles.wonTick}>✓</Text>}
+                  </View>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.price}>{formatTRY(r.price)}</Text>
+                    {score.kazanc > 0 && <Text style={styles.kazanc}>↗ {formatTRY(score.kazanc)} kazanç</Text>}
+                  </View>
+                </View>
+                <View style={styles.scoreCol}>
+                  <Text style={styles.scoreVal}>{score.aiScore.toFixed(1)}</Text>
+                  <Text style={styles.scoreCap}>YAPAY ZEKA{'\n'}SKOR</Text>
+                </View>
+              </View>
+
+              <View style={styles.metricsRow}>
+                {score.metrics.map((mtr) => (
+                  <View key={mtr.key} style={styles.metric}>
+                    <Text style={styles.metricLabel} numberOfLines={1}>{mtr.label}</Text>
+                    <View style={styles.metricTrack}>
+                      <LinearGradient colors={['#3B82F6', '#2DD4BF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.metricFill, { width: `${mtr.value}%` }]} />
+                    </View>
+                    <Text style={styles.metricVal}>{mtr.value}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {won ? (
+                <Text style={styles.wonText}>✓ Bu tekliften poliçe kesildi</Text>
+              ) : !isWon ? (
+                <TouchableOpacity style={[styles.issueBtn, busy === r.id && { opacity: 0.6 }]} onPress={() => policelestir(r)} disabled={!!busy}>
+                  {busy === r.id ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.issueBtnText}>⚡ Poliçeleştir</Text>}
+                </TouchableOpacity>
+              ) : null}
             </View>
           );
         })}
+
+        {/* Altbilgi */}
+        <View style={styles.footer}>
+          <View style={styles.footDot} />
+          <Text style={styles.footText}>{results.length} sigorta şirketi karşılaştırıldı</Text>
+          <Text style={styles.footTime}>{relTime(run.created_at)} analiz edildi</Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function SumStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
-  return (
-    <View style={styles.sumStat}>
-      <Text style={[styles.sumValue, accent ? { color: accent } : null]}>{value}</Text>
-      <Text style={styles.sumLabel}>{label}</Text>
-    </View>
   );
 }
 
@@ -215,13 +271,11 @@ const styles = StyleSheet.create({
   badge: { borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 5, marginLeft: 8 },
   badgeText: { fontSize: 11, fontWeight: '700' },
 
-  bestBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.successBg, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md },
-  bestLabel: { fontSize: 11, fontWeight: '800', color: Colors.success, letterSpacing: 0.6 },
-  bestValue: { fontSize: 22, fontWeight: '800', color: Colors.success },
-  sumRow: { flexDirection: 'row', gap: 8, marginTop: Spacing.md },
-  sumStat: { flex: 1, backgroundColor: Colors.card, borderRadius: Radius.lg, paddingVertical: 12, alignItems: 'center', ...Shadow.sm },
-  sumValue: { fontSize: 17, fontWeight: '800', color: Colors.heading },
-  sumLabel: { fontSize: 9, fontWeight: '700', color: Colors.secondary, letterSpacing: 0.4, marginTop: 2 },
+  // Gradient AI banner
+  banner: { flexDirection: 'row', alignItems: 'center', borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md, ...Shadow.md },
+  bannerIcon: { width: 38, height: 38, borderRadius: Radius.full, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  bannerTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  bannerSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
 
   actionRow: { flexDirection: 'row', marginTop: Spacing.md },
   actBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, paddingVertical: 12 },
@@ -233,19 +287,49 @@ const styles = StyleSheet.create({
   statusChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   statusChipText: { ...Type.caption, color: Colors.text, fontSize: 11 },
 
-  sectionLabel: { ...Type.label, marginTop: Spacing.lg, marginBottom: Spacing.sm },
-  resCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
-  resBest: { borderColor: Colors.success, borderWidth: 1.5 },
-  resWon: { backgroundColor: Colors.successBg },
-  resTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  resCompany: { ...Type.subhead, fontSize: 14, flex: 1, marginRight: 8 },
-  resBadge: { borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 3 },
-  resBadgeText: { fontSize: 10, fontWeight: '700' },
-  resPriceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 8 },
-  resPrice: { fontSize: 22, fontWeight: '800', color: Colors.heading },
-  resInst: { ...Type.caption, color: Colors.secondary },
-  issueBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center', marginTop: 10 },
+  // Kart
+  card: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm },
+  cardRec: { borderColor: '#C4B5FD', borderWidth: 1.5, marginTop: 22 },
+  cardWon: { backgroundColor: Colors.successBg, borderColor: Colors.success },
+  recBadge: { position: 'absolute', top: -12, left: 14, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 5 },
+  recBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+
+  cardTop: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  avatarErr: { backgroundColor: '#CBD5E1' },
+  avatarText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  company: { ...Type.subhead, fontSize: 16, flexShrink: 1 },
+  enUygun: { backgroundColor: Colors.successBg, borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3 },
+  enUygunText: { color: Colors.success, fontSize: 11, fontWeight: '800' },
+  wonTick: { color: Colors.success, fontSize: 14, fontWeight: '800' },
+  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 3 },
+  price: { fontSize: 17, fontWeight: '800', color: Colors.heading },
+  kazanc: { fontSize: 13, fontWeight: '700', color: Colors.success },
+
+  scoreCol: { alignItems: 'flex-end', marginLeft: 8 },
+  scoreVal: { fontSize: 26, fontWeight: '900', color: '#4F46E5', letterSpacing: -0.5 },
+  scoreCap: { fontSize: 8, fontWeight: '800', color: Colors.secondary, letterSpacing: 0.4, textAlign: 'right', marginTop: -2 },
+
+  metricsRow: { flexDirection: 'row', gap: 6, marginTop: 16 },
+  metric: { flex: 1, alignItems: 'center' },
+  metricLabel: { fontSize: 8.5, fontWeight: '600', color: Colors.secondary, marginBottom: 5 },
+  metricTrack: { width: '100%', height: 5, borderRadius: 3, backgroundColor: '#E5E7EB', overflow: 'hidden' },
+  metricFill: { height: '100%', borderRadius: 3 },
+  metricVal: { fontSize: 12, fontWeight: '800', color: Colors.heading, marginTop: 5 },
+
+  issueBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 11, alignItems: 'center', marginTop: 14 },
   issueBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  wonText: { ...Type.caption, color: Colors.success, fontWeight: '700', marginTop: 8 },
-  resErr: { ...Type.caption, color: Colors.danger, marginTop: 8, lineHeight: 18 },
+  wonText: { ...Type.caption, color: Colors.success, fontWeight: '700', marginTop: 12, textAlign: 'center' },
+
+  resBadge: { borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 8 },
+  resBadgeText: { fontSize: 10, fontWeight: '700' },
+  errMsg: { ...Type.caption, color: Colors.danger, marginTop: 3, lineHeight: 17 },
+  hint: { ...Type.caption, color: Colors.secondary, marginTop: 10 },
+
+  footer: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.lg, paddingHorizontal: 4 },
+  footDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success, marginRight: 8 },
+  footText: { ...Type.caption, color: Colors.text, flex: 1 },
+  footTime: { ...Type.caption, color: Colors.placeholder },
 });
