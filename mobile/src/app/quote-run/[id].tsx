@@ -203,7 +203,7 @@ export default function QuoteRunDetailScreen() {
         {/* Ürün/Not Kartı */}
         {(() => {
           const pm = productMeta(run.product_type);
-          const pdEntries = run.product_data ? Object.entries(run.product_data).filter(([, v]) => v != null && String(v).trim() !== '') : [];
+          const pdEntries = run.product_data ? Object.entries(run.product_data).filter(([k, v]) => k !== 'group' && v != null && String(v).trim() !== '') : [];
           const hasNotes = !!run.notes && run.notes.trim() !== '';
           if (pdEntries.length === 0 && !hasNotes) return null;
           return (

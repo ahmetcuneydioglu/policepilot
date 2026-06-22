@@ -8,6 +8,7 @@
 
 import { apiGet, apiPost, apiPatch } from './api';
 import { runQuoteDemo } from './quoteDemo';
+import { groupOf } from './quoteFields';
 import { Colors } from './theme';
 
 export type QuoteRun = {
@@ -118,20 +119,23 @@ export type StartQuoteParams = {
   name: string;
   phone: string;
   tc?: string;
+  email?: string;
   plaka?: string;
   productType: string;
+  productData?: Record<string, string>;
+  notes?: string;
   renewalPolicyId?: string | null;
 };
 
 /** Demo motorunu çalıştır + /api/quote-runs'a POST et → runId döndür. */
 export async function startQuoteRun(p: StartQuoteParams): Promise<string> {
-  const seed = (p.tc || p.plaka || p.name || 'seed').trim();
+  const productData: Record<string, string> = { ...(p.productData ?? {}), group: groupOf(p.productType) };
+  if (p.plaka && !productData.plaka) productData.plaka = p.plaka.toUpperCase();
+
+  const seed = (p.tc || productData.plaka || p.name || 'seed').trim();
   const results = runQuoteDemo(p.productType, seed);
   const success_count = results.filter((r) => r.status === 'success').length;
   const error_count = results.filter((r) => ['company_error', 'sbm_error', 'timeout'].includes(r.status)).length;
-
-  const productData: Record<string, string> = {};
-  if (p.plaka) productData.plaka = p.plaka.toUpperCase();
 
   const body = {
     customer_id: p.customerId ?? null,
@@ -139,8 +143,10 @@ export async function startQuoteRun(p: StartQuoteParams): Promise<string> {
     customer_name: p.name,
     customer_phone: p.phone,
     customer_tc: p.tc ?? '',
+    customer_email: p.email ?? '',
     product_type: p.productType,
     product_data: productData,
+    notes: p.notes ?? '',
     provider_type: 'demo',
     success_count,
     error_count,

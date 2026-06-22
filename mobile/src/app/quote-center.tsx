@@ -16,6 +16,8 @@ import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import { formatTRY, formatShortTRY } from '@/lib/format';
 import { QUOTE_PRODUCTS } from '@/lib/quoteDemo';
+import { groupOf, FIELDS_BY_GROUP, FieldDef } from '@/lib/quoteFields';
+import { getPersonFromTc, getVehicleFromPlaka } from '@/lib/quoteLookup';
 import { listQuoteRuns, startQuoteRun, runStatusMeta, bestPrice, productMeta, QuoteRun } from '@/lib/quoteCenter';
 import { ApiError } from '@/lib/api';
 
@@ -213,15 +215,22 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent?: 
 
 // ─── Yeni teklif çalışması ────────────────────────────────────────────────────
 function NewQuoteModal({ agencyId, onClose, onStarted }: { agencyId: string | null; onClose: () => void; onStarted: (runId: string) => void }) {
+  const [step, setStep] = useState<1 | 2>(1);
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [search, setSearch] = useState('');
   const [suggestions, setSuggestions] = useState<{ id: string; name: string; phone: string | null; identity_no: string | null }[]>([]);
   const [selected, setSelected] = useState<{ id: string; name: string; phone: string; tc: string } | null>(null);
-  const [newName, setNewName] = useState('');
-  const [newPhone, setNewPhone] = useState('');
-  const [plaka, setPlaka] = useState('');
+  const [cust, setCust] = useState<Record<string, string>>({ name: '', phone: '', email: '', tc: '', dob: '', city: '', district: '' });
   const [product, setProduct] = useState('');
+  const [pdata, setPdata] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState('');
   const [running, setRunning] = useState(false);
+  const [tcBusy, setTcBusy] = useState(false);
+  const [plakaBusy, setPlakaBusy] = useState(false);
+
+  const group = product ? groupOf(product) : null;
+  const setCustField = (k: string, v: string) => setCust((s) => ({ ...s, [k]: v }));
+  const setPField = (k: string, v: string) => setPdata((s) => ({ ...s, [k]: v }));
 
   async function searchCustomers(q: string) {
     setSearch(q); setSelected(null);
@@ -232,20 +241,53 @@ function NewQuoteModal({ agencyId, onClose, onStarted }: { agencyId: string | nu
     setSuggestions(data ?? []);
   }
 
+  function tcLookup() {
+    const tc = cust.tc.trim();
+    if (tc.length < 10) { Alert.alert('TC gerekli', 'Sorgu için en az 10 haneli TC/VKN girin.'); return; }
+    setTcBusy(true);
+    setTimeout(() => {
+      const d = getPersonFromTc(tc);
+      setCust((s) => ({ ...s, name: s.name || d.name, city: s.city || d.city, district: s.district || d.district, dob: s.dob || d.dob }));
+      setTcBusy(false);
+    }, 450);
+  }
+
+  function plakaLookup() {
+    const pl = (pdata.plaka ?? '').replace(/\s/g, '');
+    if (pl.length < 5) { Alert.alert('Plaka gerekli', 'Sorgu için geçerli bir plaka girin.'); return; }
+    setPlakaBusy(true);
+    setTimeout(() => {
+      const v = getVehicleFromPlaka(pl);
+      setPdata((s) => ({ ...s, marka: s.marka || v.marka, model: s.model || v.model, modelYili: s.modelYili || v.modelYili, kullanimTarzi: s.kullanimTarzi || v.kullanimTarzi, motorNo: s.motorNo || v.motorNo, sasiNo: s.sasiNo || v.sasiNo, tescilTarihi: s.tescilTarihi || v.tescilTarihi }));
+      setPlakaBusy(false);
+    }, 450);
+  }
+
+  function goNext() {
+    const name = mode === 'existing' ? selected?.name : cust.name.trim();
+    if (!name) { Alert.alert('Müşteri gerekli', mode === 'existing' ? 'Bir müşteri seçin.' : 'Ad Soyad girin.'); return; }
+    setStep(2);
+  }
+
   async function start() {
-    const name = mode === 'existing' ? selected?.name : newName.trim();
-    if (!name) { Alert.alert('Müşteri gerekli', mode === 'existing' ? 'Müşteri seçin.' : 'Ad Soyad girin.'); return; }
-    if (!product) { Alert.alert('Ürün gerekli', 'Bir ürün seçin.'); return; }
+    if (!product || !group) { Alert.alert('Ürün gerekli', 'Bir ürün seçin.'); return; }
+    for (const f of FIELDS_BY_GROUP[group]) {
+      if (f.required && !(pdata[f.key] ?? '').trim()) { Alert.alert(`${f.label} gerekli`, `${f.label} alanını doldurun.`); return; }
+    }
+    const name = mode === 'existing' ? (selected?.name ?? '') : cust.name.trim();
+    const cleanData = Object.fromEntries(Object.entries(pdata).filter(([, v]) => (v ?? '').trim() !== ''));
     setRunning(true);
     try {
       const runId = await startQuoteRun({
         customerId: mode === 'existing' ? selected?.id : null,
         createCustomer: mode === 'new',
         name,
-        phone: mode === 'existing' ? (selected?.phone ?? '') : newPhone.trim(),
-        tc: mode === 'existing' ? (selected?.tc ?? '') : '',
-        plaka: plaka.trim() || undefined,
+        phone: mode === 'existing' ? (selected?.phone ?? '') : cust.phone.trim(),
+        tc: mode === 'existing' ? (selected?.tc ?? '') : cust.tc.trim(),
+        email: mode === 'new' ? cust.email.trim() : '',
         productType: product,
+        productData: cleanData,
+        notes: notes.trim(),
       });
       onStarted(runId);
     } catch (e) {
@@ -258,56 +300,131 @@ function NewQuoteModal({ agencyId, onClose, onStarted }: { agencyId: string | nu
       <SafeAreaView style={styles.safe} edges={['top']}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.header}>
-            <View style={styles.hBtn} />
-            <Text style={styles.hTitle}>Yeni Teklif</Text>
+            {step === 2 ? (
+              <TouchableOpacity onPress={() => setStep(1)} style={styles.hBtn}><Text style={styles.hBack}>‹ Geri</Text></TouchableOpacity>
+            ) : <View style={styles.hBtn} />}
+            <Text style={styles.hTitle}>{step === 1 ? 'Yeni Teklif · Müşteri' : 'Yeni Teklif · Ürün'}</Text>
             <TouchableOpacity onPress={onClose} style={styles.hBtn}><Text style={styles.hAdd}>Kapat</Text></TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            <View style={styles.toggleRow}>
-              <TouchableOpacity style={[styles.toggle, mode === 'existing' && styles.toggleActive]} onPress={() => setMode('existing')}><Text style={[styles.toggleText, mode === 'existing' && styles.toggleTextActive]}>Mevcut Müşteri</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.toggle, mode === 'new' && styles.toggleActive]} onPress={() => setMode('new')}><Text style={[styles.toggleText, mode === 'new' && styles.toggleTextActive]}>Yeni Müşteri</Text></TouchableOpacity>
-            </View>
 
-            {mode === 'existing' ? (
-              selected ? (
-                <View style={styles.selectedBox}><Text style={styles.selectedText}>✅ {selected.name}</Text><TouchableOpacity onPress={() => setSelected(null)}><Text style={{ color: Colors.danger, fontSize: 13 }}>Değiştir</Text></TouchableOpacity></View>
-              ) : (
-                <>
-                  <TextInput style={styles.input} value={search} onChangeText={searchCustomers} placeholder="Müşteri adı ara…" placeholderTextColor={Colors.placeholder} />
-                  {suggestions.map((c) => (
-                    <TouchableOpacity key={c.id} style={styles.suggestion} onPress={() => { setSelected({ id: c.id, name: c.name, phone: c.phone ?? '', tc: c.identity_no ?? '' }); setSuggestions([]); setSearch(''); }}>
-                      <Text style={styles.suggestionText}>{c.name}</Text>{c.phone ? <Text style={styles.suggestionSub}>{c.phone}</Text> : null}
-                    </TouchableOpacity>
-                  ))}
-                </>
-              )
+          <View style={styles.stepRow}>
+            <View style={[styles.stepDot, styles.stepDotActive]} />
+            <View style={[styles.stepBar, step === 2 && styles.stepBarActive]} />
+            <View style={[styles.stepDot, step === 2 && styles.stepDotActive]} />
+          </View>
+
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            {step === 1 ? (
+              <>
+                <View style={styles.toggleRow}>
+                  <TouchableOpacity style={[styles.toggle, mode === 'existing' && styles.toggleActive]} onPress={() => setMode('existing')}><Text style={[styles.toggleText, mode === 'existing' && styles.toggleTextActive]}>Mevcut Müşteri</Text></TouchableOpacity>
+                  <TouchableOpacity style={[styles.toggle, mode === 'new' && styles.toggleActive]} onPress={() => setMode('new')}><Text style={[styles.toggleText, mode === 'new' && styles.toggleTextActive]}>Yeni Müşteri</Text></TouchableOpacity>
+                </View>
+
+                {mode === 'existing' ? (
+                  selected ? (
+                    <View style={styles.selectedBox}><Text style={styles.selectedText}>✅ {selected.name}</Text><TouchableOpacity onPress={() => setSelected(null)}><Text style={{ color: Colors.danger, fontSize: 13 }}>Değiştir</Text></TouchableOpacity></View>
+                  ) : (
+                    <>
+                      <TextInput style={styles.input} value={search} onChangeText={searchCustomers} placeholder="Müşteri adı ara…" placeholderTextColor={Colors.placeholder} />
+                      {suggestions.map((c) => (
+                        <TouchableOpacity key={c.id} style={styles.suggestion} onPress={() => { setSelected({ id: c.id, name: c.name, phone: c.phone ?? '', tc: c.identity_no ?? '' }); setSuggestions([]); setSearch(''); }}>
+                          <Text style={styles.suggestionText}>{c.name}</Text>{c.phone ? <Text style={styles.suggestionSub}>{c.phone}</Text> : null}
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  )
+                ) : (
+                  <>
+                    <Text style={styles.fieldLabel}>TC / VKN</Text>
+                    <View style={styles.lookupRow}>
+                      <TextInput style={[styles.input, { flex: 1 }]} value={cust.tc} onChangeText={(v) => setCustField('tc', v)} placeholder="11 haneli TC veya VKN" placeholderTextColor={Colors.placeholder} keyboardType="numeric" />
+                      <TouchableOpacity style={styles.lookupBtn} onPress={tcLookup} disabled={tcBusy}>{tcBusy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.lookupBtnText}>Sorgula</Text>}</TouchableOpacity>
+                    </View>
+                    <LabeledInput label="Ad Soyad *" value={cust.name} onChange={(v) => setCustField('name', v)} placeholder="Ad Soyad" />
+                    <LabeledInput label="Telefon" value={cust.phone} onChange={(v) => setCustField('phone', v)} placeholder="05..." keyboardType="phone-pad" />
+                    <LabeledInput label="E-posta" value={cust.email} onChange={(v) => setCustField('email', v)} placeholder="ornek@eposta.com" keyboardType="email-address" />
+                    <LabeledInput label="Doğum Tarihi" value={cust.dob} onChange={(v) => setCustField('dob', v)} placeholder="GG.AA.YYYY" />
+                    <LabeledInput label="İl" value={cust.city} onChange={(v) => setCustField('city', v)} placeholder="İSTANBUL" autoCap />
+                    <LabeledInput label="İlçe" value={cust.district} onChange={(v) => setCustField('district', v)} placeholder="KADIKÖY" autoCap />
+                  </>
+                )}
+
+                <TouchableOpacity style={styles.startBtn} onPress={goNext}><Text style={styles.startBtnText}>Devam →</Text></TouchableOpacity>
+              </>
             ) : (
               <>
-                <TextInput style={styles.input} value={newName} onChangeText={setNewName} placeholder="Ad Soyad" placeholderTextColor={Colors.placeholder} />
-                <TextInput style={[styles.input, { marginTop: 8 }]} value={newPhone} onChangeText={setNewPhone} placeholder="Telefon (05...)" placeholderTextColor={Colors.placeholder} keyboardType="phone-pad" />
+                <Text style={styles.sectionLabel}>ÜRÜN</Text>
+                <View style={styles.prodGrid}>
+                  {QUOTE_PRODUCTS.map((p) => (
+                    <TouchableOpacity key={p} style={[styles.prodChip, product === p && styles.prodChipActive]} onPress={() => setProduct(p)} activeOpacity={0.7}>
+                      <Text style={[styles.prodChipText, product === p && styles.prodChipTextActive]}>{p}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {group && (
+                  <>
+                    <Text style={styles.sectionLabel}>{product.toUpperCase()} BİLGİLERİ</Text>
+                    {FIELDS_BY_GROUP[group].length === 0 && <Text style={styles.hint}>Bu ürün için ek bilgi gerekmiyor.</Text>}
+                    {FIELDS_BY_GROUP[group].map((f) => (
+                      f.key === 'plaka' ? (
+                        <View key="plaka">
+                          <Text style={styles.fieldLabel}>{f.label} *</Text>
+                          <View style={styles.lookupRow}>
+                            <TextInput style={[styles.input, { flex: 1 }]} value={pdata.plaka ?? ''} onChangeText={(v) => setPField('plaka', v)} placeholder={f.placeholder} placeholderTextColor={Colors.placeholder} autoCapitalize="characters" />
+                            <TouchableOpacity style={styles.lookupBtn} onPress={plakaLookup} disabled={plakaBusy}>{plakaBusy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.lookupBtnText}>Sorgula</Text>}</TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : (
+                        <DynField key={f.key} def={f} value={pdata[f.key] ?? ''} onChange={(v) => setPField(f.key, v)} />
+                      )
+                    ))}
+
+                    <Text style={styles.sectionLabel}>NOTLAR</Text>
+                    <TextInput style={[styles.input, styles.notesInput]} value={notes} onChangeText={setNotes} placeholder="Opsiyonel not…" placeholderTextColor={Colors.placeholder} multiline />
+
+                    <TouchableOpacity style={[styles.startBtn, running && { opacity: 0.6 }]} onPress={start} disabled={running}>
+                      {running ? <ActivityIndicator color="#fff" /> : <Text style={styles.startBtnText}>⚡ 12 Şirketten Teklif Al</Text>}
+                    </TouchableOpacity>
+                    <Text style={styles.hint}>Demo motoru: deterministik fiyatlar + gerçekçi şirket hataları (Allianz/Mapfre/Aksigorta/Sompo). Sonuçlar kaydedilir.</Text>
+                  </>
+                )}
               </>
             )}
-
-            <Text style={styles.sectionLabel}>ÜRÜN</Text>
-            <View style={styles.prodGrid}>
-              {QUOTE_PRODUCTS.map((p) => (
-                <TouchableOpacity key={p} style={[styles.prodChip, product === p && styles.prodChipActive]} onPress={() => setProduct(p)} activeOpacity={0.7}>
-                  <Text style={[styles.prodChipText, product === p && styles.prodChipTextActive]}>{p}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.sectionLabel}>PLAKA / SEED (opsiyonel)</Text>
-            <TextInput style={styles.input} value={plaka} onChangeText={setPlaka} placeholder="34 ABC 123 (araç ürünleri için)" placeholderTextColor={Colors.placeholder} autoCapitalize="characters" />
-
-            <TouchableOpacity style={[styles.startBtn, running && { opacity: 0.6 }]} onPress={start} disabled={running}>
-              {running ? <ActivityIndicator color="#fff" /> : <Text style={styles.startBtnText}>⚡ 12 Şirketten Teklif Al</Text>}
-            </TouchableOpacity>
-            <Text style={styles.hint}>Demo motoru: deterministik fiyatlar + gerçekçi şirket hataları (Allianz/Mapfre/Aksigorta/Sompo). Sonuçlar kaydedilir.</Text>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
+  );
+}
+
+// ─── Etiketli input + dinamik alan ────────────────────────────────────────────
+function LabeledInput({ label, value, onChange, placeholder, keyboardType, autoCap }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; keyboardType?: 'default' | 'numeric' | 'phone-pad' | 'email-address'; autoCap?: boolean }) {
+  return (
+    <View style={{ marginTop: 10 }}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput style={styles.input} value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={Colors.placeholder} keyboardType={keyboardType ?? 'default'} autoCapitalize={autoCap ? 'characters' : 'none'} />
+    </View>
+  );
+}
+
+function DynField({ def, value, onChange }: { def: FieldDef; value: string; onChange: (v: string) => void }) {
+  return (
+    <View style={{ marginTop: 10 }}>
+      <Text style={styles.fieldLabel}>{def.label}{def.required ? ' *' : ''}</Text>
+      {def.type === 'select' ? (
+        <View style={styles.segRow}>
+          {(def.options ?? []).map((o) => (
+            <TouchableOpacity key={o} style={[styles.segChip, value === o && styles.segChipActive]} onPress={() => onChange(o)} activeOpacity={0.7}>
+              <Text style={[styles.segChipText, value === o && styles.segChipTextActive]}>{o}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+        <TextInput style={styles.input} value={value} onChangeText={onChange} placeholder={def.placeholder} placeholderTextColor={Colors.placeholder} keyboardType={def.type === 'number' ? 'numeric' : 'default'} autoCapitalize={def.autoCap ? 'characters' : 'none'} />
+      )}
+    </View>
   );
 }
 
@@ -392,4 +509,21 @@ const styles = StyleSheet.create({
   startBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', marginTop: Spacing.lg },
   startBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   hint: { ...Type.caption, color: Colors.placeholder, marginTop: Spacing.md, lineHeight: 17 },
+
+  // Çok adımlı yeni-teklif formu
+  stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, gap: 6, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  stepDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.border },
+  stepDotActive: { backgroundColor: Colors.primary },
+  stepBar: { width: 40, height: 3, borderRadius: 2, backgroundColor: Colors.border },
+  stepBarActive: { backgroundColor: Colors.primary },
+  fieldLabel: { ...Type.caption, color: Colors.secondary, fontWeight: '700', marginBottom: 5 },
+  lookupRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  lookupBtn: { backgroundColor: Colors.heading, borderRadius: Radius.md, paddingHorizontal: 16, height: 46, alignItems: 'center', justifyContent: 'center' },
+  lookupBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  segRow: { flexDirection: 'row', gap: 8 },
+  segChip: { flex: 1, alignItems: 'center', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, paddingVertical: 11 },
+  segChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  segChipText: { ...Type.subhead, fontSize: 13, color: Colors.text },
+  segChipTextActive: { color: '#fff' },
+  notesInput: { minHeight: 70, paddingTop: 12, textAlignVertical: 'top' },
 });
