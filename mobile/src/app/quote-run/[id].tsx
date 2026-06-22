@@ -146,10 +146,10 @@ export default function QuoteRunDetailScreen() {
         </View>
 
         {/* Gradient AI banner */}
-        <LinearGradient colors={['#7C3AED', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.banner}>
-          <View style={styles.bannerIcon}><Text style={{ fontSize: 18 }}>✨</Text></View>
+        <LinearGradient colors={['#2563EB', '#1E3A8A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.banner}>
+          <View style={styles.bannerIcon}><Text style={{ fontSize: 18 }}>📊</Text></View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.bannerTitle}>{run.product_type} · Yapay Zeka Analizi</Text>
+            <Text style={styles.bannerTitle}>{run.product_type} · SigortaOS Analizi</Text>
             <Text style={styles.bannerSub}>{okCount} şirket karşılaştırıldı{best != null ? ` · En iyi ${formatTRY(best)}` : ''}</Text>
           </View>
         </LinearGradient>
@@ -195,18 +195,18 @@ export default function QuoteRunDetailScreen() {
           return (
             <View key={r.id} style={[styles.card, isRec && styles.cardRec, won && styles.cardWon]}>
               {isRec && (
-                <LinearGradient colors={['#7C3AED', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.recBadge}>
-                  <Text style={styles.recBadgeText}>🏅 Yapay Zeka Önerisi</Text>
+                <LinearGradient colors={['#1D4ED8', '#1E3A8A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.recBadge}>
+                  <Text style={styles.recBadgeText}>⭐ SigortaOS Önerisi</Text>
                 </LinearGradient>
               )}
               <View style={styles.cardTop}>
-                <LinearGradient colors={['#60A5FA', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
+                <LinearGradient colors={['#3B82F6', '#1D4ED8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
                   <Text style={styles.avatarText}>{initials(r.company_name)}</Text>
                 </LinearGradient>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <View style={styles.nameRow}>
                     <Text style={styles.company} numberOfLines={1}>{r.company_name}</Text>
-                    {isRec && <View style={styles.enUygun}><Text style={styles.enUygunText}>En Uygun</Text></View>}
+                    {isRec && <View style={styles.enUygun}><Text style={styles.enUygunText}>En İyi Değer</Text></View>}
                     {won && <Text style={styles.wonTick}>✓</Text>}
                   </View>
                   <View style={styles.priceRow}>
@@ -216,7 +216,7 @@ export default function QuoteRunDetailScreen() {
                 </View>
                 <View style={styles.scoreCol}>
                   <Text style={styles.scoreVal}>{score.aiScore.toFixed(1)}</Text>
-                  <Text style={styles.scoreCap}>YAPAY ZEKA{'\n'}SKOR</Text>
+                  <Text style={styles.scoreCap}>SigortaOS{'\n'}SKORU</Text>
                 </View>
               </View>
 
@@ -225,7 +225,7 @@ export default function QuoteRunDetailScreen() {
                   <View key={mtr.key} style={styles.metric}>
                     <Text style={styles.metricLabel} numberOfLines={1}>{mtr.label}</Text>
                     <View style={styles.metricTrack}>
-                      <LinearGradient colors={['#3B82F6', '#2DD4BF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.metricFill, { width: `${mtr.value}%` }]} />
+                      <LinearGradient colors={['#1D4ED8', '#60A5FA']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.metricFill, { width: `${mtr.value}%` }]} />
                     </View>
                     <Text style={styles.metricVal}>{mtr.value}</Text>
                   </View>
@@ -247,7 +247,7 @@ export default function QuoteRunDetailScreen() {
         <View style={styles.footer}>
           <View style={styles.footDot} />
           <Text style={styles.footText}>{results.length} sigorta şirketi karşılaştırıldı</Text>
-          <Text style={styles.footTime}>{relTime(run.created_at)} analiz edildi</Text>
+          <Text style={styles.footTime}>SigortaOS · {relTime(run.created_at)}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
 
   // Kart
   card: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm },
-  cardRec: { borderColor: '#C4B5FD', borderWidth: 1.5, marginTop: 22 },
+  cardRec: { borderColor: '#93C5FD', borderWidth: 1.5, marginTop: 22 },
   cardWon: { backgroundColor: Colors.successBg, borderColor: Colors.success },
   recBadge: { position: 'absolute', top: -12, left: 14, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 5 },
   recBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
@@ -301,15 +301,15 @@ const styles = StyleSheet.create({
 
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   company: { ...Type.subhead, fontSize: 16, flexShrink: 1 },
-  enUygun: { backgroundColor: Colors.successBg, borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3 },
-  enUygunText: { color: Colors.success, fontSize: 11, fontWeight: '800' },
+  enUygun: { backgroundColor: Colors.primaryLight, borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3 },
+  enUygunText: { color: Colors.primary, fontSize: 11, fontWeight: '800' },
   wonTick: { color: Colors.success, fontSize: 14, fontWeight: '800' },
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 3 },
   price: { fontSize: 17, fontWeight: '800', color: Colors.heading },
   kazanc: { fontSize: 13, fontWeight: '700', color: Colors.success },
 
   scoreCol: { alignItems: 'flex-end', marginLeft: 8 },
-  scoreVal: { fontSize: 26, fontWeight: '900', color: '#4F46E5', letterSpacing: -0.5 },
+  scoreVal: { fontSize: 26, fontWeight: '900', color: '#1E40AF', letterSpacing: -0.5 },
   scoreCap: { fontSize: 8, fontWeight: '800', color: Colors.secondary, letterSpacing: 0.4, textAlign: 'right', marginTop: -2 },
 
   metricsRow: { flexDirection: 'row', gap: 6, marginTop: 16 },

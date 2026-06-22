@@ -56,10 +56,10 @@ export function scoreFor(companyName: string, price: number | null, ctx: PriceCt
   }
 
   const metrics: Metric[] = [
-    { key: 'guvenilirlik', label: 'Güvenilirlik', value: guvenilirlik },
+    { key: 'guvenilirlik', label: 'Güven', value: guvenilirlik },
     { key: 'hasar', label: 'Hasar', value: hasar },
     { key: 'fiyat', label: 'Fiyat', value: fiyat },
-    { key: 'teminat', label: 'Teminat', value: teminat },
+    { key: 'teminat', label: 'Kapsam', value: teminat },
     { key: 'memnuniyet', label: 'Memnuniyet', value: memnuniyet },
   ];
 
