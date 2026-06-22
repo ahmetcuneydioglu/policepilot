@@ -15,10 +15,11 @@ import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import { formatTRY, formatShortTRY } from '@/lib/format';
 import { QUOTE_PRODUCTS } from '@/lib/quoteDemo';
-import { listQuoteRuns, startQuoteRun, runStatusMeta, bestPrice, QuoteRun } from '@/lib/quoteCenter';
+import { listQuoteRuns, startQuoteRun, runStatusMeta, bestPrice, productMeta, QuoteRun } from '@/lib/quoteCenter';
 import { ApiError } from '@/lib/api';
 
 const ACTIVE = ['Yeni', 'Teklif Verildi', 'Müşteri Düşünüyor'];
+const STATUS_TABS = ['Tümü', 'Yeni', 'Teklif Verildi', 'Müşteri Düşünüyor', 'Kazanıldı', 'Kaybedildi', 'İptal'];
 
 function initials(n: string) { return n.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase(); }
 
@@ -30,6 +31,8 @@ export default function QuoteCenterScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [statusTab, setStatusTab] = useState('Tümü');
 
   const load = useCallback(async () => {
     setError(null);
@@ -53,6 +56,24 @@ export default function QuoteCenterScreen() {
     return { total, active, won, winRate, month };
   }, [runs]);
 
+  const statusCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const r of runs) c[r.status] = (c[r.status] ?? 0) + 1;
+    return c;
+  }, [runs]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return runs.filter((r) => {
+      if (statusTab !== 'Tümü' && r.status !== statusTab) return false;
+      if (q) {
+        const hay = `${r.customer_name ?? ''} ${r.product_type ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [runs, query, statusTab]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -73,7 +94,49 @@ export default function QuoteCenterScreen() {
             <Kpi label="AKTİF" value={String(kpi.active)} accent={Colors.primary} />
             <Kpi label="KAZANILDI" value={String(kpi.won)} accent={Colors.success} />
             <Kpi label="ORAN" value={`%${kpi.winRate}`} accent={Colors.warning} />
+            <Kpi label="BU AY" value={String(kpi.month)} accent={Colors.secondary} />
           </View>
+
+          {runs.length > 0 && (
+            <>
+              {/* Arama */}
+              <TextInput
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Müşteri veya ürün ara…"
+                placeholderTextColor={Colors.placeholder}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+              />
+
+              {/* Durum filtre çipleri */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.tabsRow}
+                style={styles.tabsScroll}
+              >
+                {STATUS_TABS.map((t) => {
+                  const active = statusTab === t;
+                  const n = t === 'Tümü' ? runs.length : (statusCounts[t] ?? 0);
+                  return (
+                    <TouchableOpacity
+                      key={t}
+                      style={[styles.tabChip, active && styles.tabChipActive]}
+                      onPress={() => setStatusTab(t)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{t}</Text>
+                      <View style={[styles.tabBadge, active && styles.tabBadgeActive]}>
+                        <Text style={[styles.tabBadgeText, active && styles.tabBadgeTextActive]}>{n}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
 
           {runs.length === 0 ? (
             <View style={styles.empty}>
@@ -82,9 +145,15 @@ export default function QuoteCenterScreen() {
               <Text style={styles.emptySub}>“+ Yeni” ile müşteri ve ürün seçip 12 şirketten demo teklif al.</Text>
               <TouchableOpacity style={styles.emptyBtn} onPress={() => setNewOpen(true)}><Text style={styles.emptyBtnText}>Yeni Teklif Çalışması</Text></TouchableOpacity>
             </View>
+          ) : filtered.length === 0 ? (
+            <View style={styles.noResult}>
+              <Text style={styles.noResultEmoji}>🔍</Text>
+              <Text style={styles.noResultText}>Sonuç bulunamadı</Text>
+            </View>
           ) : (
-            runs.map((r) => {
+            filtered.map((r) => {
               const m = runStatusMeta(r.status);
+              const pm = productMeta(r.product_type);
               const bp = bestPrice(r.quote_results ?? []);
               const count = (r.quote_results ?? []).filter((x) => x.price != null).length;
               return (
@@ -93,7 +162,12 @@ export default function QuoteCenterScreen() {
                     <View style={styles.avatar}><Text style={styles.avatarText}>{initials(r.customer_name ?? '?')}</Text></View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.cardName} numberOfLines={1}>{r.customer_name ?? 'Müşteri'}</Text>
-                      <Text style={styles.cardMeta}>{r.product_type} · {count} teklif</Text>
+                      <View style={styles.cardMetaRow}>
+                        <View style={[styles.prodPill, { backgroundColor: pm.bg }]}>
+                          <Text style={[styles.prodPillText, { color: pm.fg }]} numberOfLines={1}>{pm.emoji} {r.product_type}</Text>
+                        </View>
+                        <Text style={styles.cardMeta}>· {count} teklif</Text>
+                      </View>
                     </View>
                     <View style={[styles.badge, { backgroundColor: m.bg }]}><Text style={[styles.badgeText, { color: m.fg }]}>{r.status}</Text></View>
                   </View>
@@ -237,22 +311,41 @@ const styles = StyleSheet.create({
   errText: { ...Type.caption, color: Colors.danger, lineHeight: 17 },
   errRetry: { ...Type.subhead, color: Colors.danger, marginTop: 6 },
 
-  kpiRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.md },
-  kpi: { flex: 1, backgroundColor: Colors.card, borderRadius: Radius.lg, paddingVertical: 12, alignItems: 'center', ...Shadow.sm },
-  kpiValue: { fontSize: 20, fontWeight: '800', color: Colors.heading },
-  kpiLabel: { fontSize: 9, fontWeight: '700', color: Colors.secondary, letterSpacing: 0.5, marginTop: 2 },
+  kpiRow: { flexDirection: 'row', gap: 6, marginBottom: Spacing.md },
+  kpi: { flex: 1, backgroundColor: Colors.card, borderRadius: Radius.lg, paddingVertical: 12, paddingHorizontal: 2, alignItems: 'center', ...Shadow.sm },
+  kpiValue: { fontSize: 16, fontWeight: '800', color: Colors.heading },
+  kpiLabel: { fontSize: 8, fontWeight: '700', color: Colors.secondary, letterSpacing: 0.3, marginTop: 2 },
+
+  searchInput: { backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 10, fontSize: 14, color: Colors.heading, marginBottom: Spacing.sm },
+  tabsScroll: { marginBottom: Spacing.md },
+  tabsRow: { gap: 8, paddingRight: Spacing.sm },
+  tabChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 7 },
+  tabChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  tabChipText: { ...Type.caption, fontWeight: '600', color: Colors.text },
+  tabChipTextActive: { color: '#fff' },
+  tabBadge: { marginLeft: 6, minWidth: 18, paddingHorizontal: 5, paddingVertical: 1, borderRadius: Radius.full, backgroundColor: Colors.background, alignItems: 'center' },
+  tabBadgeActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  tabBadgeText: { fontSize: 10, fontWeight: '800', color: Colors.secondary },
+  tabBadgeTextActive: { color: '#fff' },
 
   card: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 10, ...Shadow.sm },
   cardTop: { flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 40, height: 40, borderRadius: Radius.full, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   avatarText: { fontSize: 14, fontWeight: '800', color: Colors.primary },
   cardName: { ...Type.subhead, fontSize: 15 },
-  cardMeta: { ...Type.caption, marginTop: 2 },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 },
+  cardMeta: { ...Type.caption },
+  prodPill: { flexShrink: 1, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 3 },
+  prodPillText: { fontSize: 11, fontWeight: '700' },
   badge: { borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 4, marginLeft: 8 },
   badgeText: { fontSize: 11, fontWeight: '700' },
   cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
   cardDate: { ...Type.caption, color: Colors.placeholder },
   cardBest: { ...Type.subhead, fontSize: 14, color: Colors.success },
+
+  noResult: { alignItems: 'center', paddingVertical: 40 },
+  noResultEmoji: { fontSize: 32, marginBottom: 8 },
+  noResultText: { ...Type.caption, color: Colors.secondary, fontWeight: '600' },
 
   empty: { alignItems: 'center', paddingVertical: 50 },
   emptyEmoji: { fontSize: 44, marginBottom: 12 },

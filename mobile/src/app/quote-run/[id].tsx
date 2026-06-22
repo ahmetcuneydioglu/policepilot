@@ -17,7 +17,7 @@ import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { formatTRY } from '@/lib/format';
 import {
   getQuoteRun, updateRunStatus, issuePolicyFromResult, runStatusMeta,
-  isSuccessResult, resultStatusLabel, bestPrice,
+  isSuccessResult, resultStatusLabel, bestPrice, productMeta,
   QuoteRun, QuoteResult,
 } from '@/lib/quoteCenter';
 import { scoreFor, priceCtx, QuoteScore } from '@/lib/quoteScore';
@@ -89,6 +89,22 @@ export default function QuoteRunDetailScreen() {
     finally { setBusy(null); }
   }
 
+  async function selectResult(r: QuoteResult) {
+    if (!run) return;
+    setBusy(`sel-${r.id}`);
+    try { await updateRunStatus(run.id, 'Kazanıldı', r.id); await load(); }
+    catch (e) { Alert.alert('Hata', e instanceof Error ? e.message : 'Güncellenemedi'); }
+    finally { setBusy(null); }
+  }
+
+  async function resetRun() {
+    if (!run) return;
+    setBusy('status');
+    try { await updateRunStatus(run.id, 'Yeni', null); await load(); }
+    catch (e) { Alert.alert('Hata', e instanceof Error ? e.message : 'Güncellenemedi'); }
+    finally { setBusy(null); }
+  }
+
   function policelestir(r: QuoteResult) {
     if (!r.price) return;
     Alert.alert('Poliçeleştir', `${r.company_name} — ${formatTRY(r.price)} (${run?.product_type}) poliçesi kesilsin mi? (demo ödeme)`, [
@@ -132,7 +148,9 @@ export default function QuoteRunDetailScreen() {
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.hBtn}><Text style={styles.hBack}>‹ Geri</Text></TouchableOpacity>
         <Text style={styles.hTitle}>Teklif Sonuçları</Text>
-        <View style={styles.hBtn} />
+        <TouchableOpacity onPress={() => router.push(`/quote-summary/${id}`)} style={[styles.hBtn, styles.hBtnRight]}>
+          <Text style={styles.hSummary}>📄 Özet</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />} showsVerticalScrollIndicator={false}>
@@ -154,6 +172,65 @@ export default function QuoteRunDetailScreen() {
           </View>
         </LinearGradient>
 
+        {/* Müşteri Bilgi Kartı */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>MÜŞTERİ</Text>
+          {!!run.customer_phone && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Telefon</Text>
+              <Text style={styles.infoValue} numberOfLines={1}>{run.customer_phone}</Text>
+            </View>
+          )}
+          {!!run.customer_tc && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>TC</Text>
+              <Text style={styles.infoValue} numberOfLines={1}>{run.customer_tc}</Text>
+            </View>
+          )}
+          {!!run.customer_email && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>E-posta</Text>
+              <Text style={styles.infoValue} numberOfLines={1}>{run.customer_email}</Text>
+            </View>
+          )}
+          {!!run.customer_id && (
+            <TouchableOpacity style={styles.infoLink} onPress={() => router.push(`/customer/${run.customer_id}`)} activeOpacity={0.7}>
+              <Text style={styles.infoLinkText}>Müşteriyi Aç →</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Ürün/Not Kartı */}
+        {(() => {
+          const pm = productMeta(run.product_type);
+          const pdEntries = run.product_data ? Object.entries(run.product_data).filter(([, v]) => v != null && String(v).trim() !== '') : [];
+          const hasNotes = !!run.notes && run.notes.trim() !== '';
+          if (pdEntries.length === 0 && !hasNotes) return null;
+          return (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoTitle}>ÜRÜN BİLGİSİ</Text>
+              <View style={styles.prodHead}>
+                <View style={[styles.prodPill, { backgroundColor: pm.bg }]}>
+                  <Text style={styles.prodPillEmoji}>{pm.emoji}</Text>
+                  <Text style={[styles.prodPillText, { color: pm.fg }]}>{run.product_type}</Text>
+                </View>
+              </View>
+              {pdEntries.map(([k, v]) => (
+                <View key={k} style={styles.infoRow}>
+                  <Text style={styles.infoLabel} numberOfLines={1}>{k}</Text>
+                  <Text style={styles.infoValue} numberOfLines={1}>{String(v)}</Text>
+                </View>
+              ))}
+              {hasNotes && (
+                <View style={styles.noteBox}>
+                  <Text style={styles.noteLabel}>Not</Text>
+                  <Text style={styles.noteText}>{run.notes}</Text>
+                </View>
+              )}
+            </View>
+          );
+        })()}
+
         {/* Aksiyonlar */}
         <View style={styles.actionRow}>
           <TouchableOpacity style={[styles.actBtn, styles.actWA]} onPress={sendWhatsapp} activeOpacity={0.85}><Text style={styles.actWAText}>💬 Müşteriye Gönder</Text></TouchableOpacity>
@@ -166,6 +243,11 @@ export default function QuoteRunDetailScreen() {
               </TouchableOpacity>
             ))}
           </View>
+        )}
+        {run.status !== 'Yeni' && (
+          <TouchableOpacity style={styles.resetBtn} onPress={resetRun} disabled={busy === 'status'} activeOpacity={0.7}>
+            <Text style={styles.resetBtnText}>↺ Sıfırla</Text>
+          </TouchableOpacity>
         )}
 
         {/* Şirket kartları */}
@@ -235,9 +317,14 @@ export default function QuoteRunDetailScreen() {
               {won ? (
                 <Text style={styles.wonText}>✓ Bu tekliften poliçe kesildi</Text>
               ) : !isWon ? (
-                <TouchableOpacity style={[styles.issueBtn, busy === r.id && { opacity: 0.6 }]} onPress={() => policelestir(r)} disabled={!!busy}>
-                  {busy === r.id ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.issueBtnText}>⚡ Poliçeleştir</Text>}
-                </TouchableOpacity>
+                <View style={styles.btnRow}>
+                  <TouchableOpacity style={[styles.selectBtn, busy === `sel-${r.id}` && { opacity: 0.6 }]} onPress={() => selectResult(r)} disabled={!!busy}>
+                    {busy === `sel-${r.id}` ? <ActivityIndicator color={Colors.primary} size="small" /> : <Text style={styles.selectBtnText}>Seç</Text>}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.issueBtn, styles.issueBtnFlex, busy === r.id && { opacity: 0.6 }]} onPress={() => policelestir(r)} disabled={!!busy}>
+                    {busy === r.id ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.issueBtnText}>⚡ Poliçeleştir</Text>}
+                  </TouchableOpacity>
+                </View>
               ) : null}
             </View>
           );
@@ -262,7 +349,9 @@ const styles = StyleSheet.create({
 
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: 12, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
   hBtn: { minWidth: 64 },
+  hBtnRight: { alignItems: 'flex-end' },
   hBack: { ...Type.subhead, color: Colors.primary },
+  hSummary: { ...Type.subhead, color: Colors.primary, fontWeight: '700' },
   hTitle: { ...Type.heading, fontSize: 16 },
 
   summary: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, ...Shadow.sm },
@@ -277,6 +366,23 @@ const styles = StyleSheet.create({
   bannerTitle: { color: '#fff', fontSize: 15, fontWeight: '800' },
   bannerSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
 
+  // Bilgi kartları (müşteri / ürün)
+  infoCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm },
+  infoTitle: { fontSize: 11, fontWeight: '800', color: Colors.secondary, letterSpacing: 0.6, marginBottom: 10 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: Colors.border },
+  infoLabel: { ...Type.caption, color: Colors.secondary, flexShrink: 0, marginRight: 12, textTransform: 'capitalize' },
+  infoValue: { ...Type.subhead, color: Colors.text, flexShrink: 1, textAlign: 'right' },
+  infoLink: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  infoLinkText: { ...Type.subhead, color: Colors.primary, fontWeight: '700' },
+
+  prodHead: { flexDirection: 'row', marginBottom: 4 },
+  prodPill: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: Radius.full, paddingHorizontal: 11, paddingVertical: 6 },
+  prodPillEmoji: { fontSize: 14 },
+  prodPillText: { fontSize: 13, fontWeight: '800' },
+  noteBox: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  noteLabel: { fontSize: 11, fontWeight: '800', color: Colors.secondary, letterSpacing: 0.4, marginBottom: 4 },
+  noteText: { ...Type.body, color: Colors.text, lineHeight: 20 },
+
   actionRow: { flexDirection: 'row', marginTop: Spacing.md },
   actBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, paddingVertical: 12 },
   actWA: { backgroundColor: '#22C55E' },
@@ -286,6 +392,8 @@ const styles = StyleSheet.create({
   statusChip: { flex: 1, alignItems: 'center', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, paddingVertical: 9 },
   statusChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   statusChipText: { ...Type.caption, color: Colors.text, fontSize: 11 },
+  resetBtn: { alignSelf: 'flex-start', marginTop: Spacing.sm, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.card },
+  resetBtnText: { ...Type.caption, color: Colors.secondary, fontWeight: '700', fontSize: 12 },
 
   // Kart
   card: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm },
@@ -320,7 +428,11 @@ const styles = StyleSheet.create({
   metricVal: { fontSize: 12, fontWeight: '800', color: Colors.heading, marginTop: 5 },
 
   issueBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 11, alignItems: 'center', marginTop: 14 },
+  issueBtnFlex: { flex: 1, marginTop: 0 },
   issueBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  btnRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8, marginTop: 14 },
+  selectBtn: { paddingHorizontal: 18, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.primary, backgroundColor: Colors.card },
+  selectBtnText: { color: Colors.primary, fontWeight: '800', fontSize: 13 },
   wonText: { ...Type.caption, color: Colors.success, fontWeight: '700', marginTop: 12, textAlign: 'center' },
 
   resBadge: { borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 8 },

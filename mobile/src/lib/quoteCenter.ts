@@ -16,16 +16,42 @@ export type QuoteRun = {
   customer_name: string | null;
   customer_phone: string | null;
   customer_tc: string | null;
+  customer_email?: string | null;
   product_type: string;
+  product_data?: Record<string, string> | null;
+  notes?: string | null;
   status: string;
   won_result_id: string | null;
   provider_type: string;
   success_count: number;
   error_count: number;
   renewal_of_policy_id: string | null;
+  run_started_at?: string | null;
+  run_finished_at?: string | null;
+  updated_at?: string | null;
   created_at: string;
   quote_results?: { id: string; price: number | null }[];
 };
+
+/** Ürün tipi → ikon + renk (web'deki ikon/renk kodlamasıyla uyumlu). */
+export function productMeta(type: string): { emoji: string; bg: string; fg: string } {
+  const veh = { bg: '#E6F1FB', fg: '#185FA5' };
+  const prop = { bg: '#FAEEDA', fg: '#854F0B' };
+  const health = { bg: '#FBEAF0', fg: '#993556' };
+  const travel = { bg: '#E1F5EE', fg: '#0F6E56' };
+  switch (type) {
+    case 'Trafik': return { emoji: '🚗', ...veh };
+    case 'Kasko': return { emoji: '🚙', ...veh };
+    case 'İMM': return { emoji: '🛡️', ...veh };
+    case 'DASK': return { emoji: '🏠', ...prop };
+    case 'Konut': return { emoji: '🏡', ...prop };
+    case 'TSS': return { emoji: '❤️', ...health };
+    case 'Ferdi Kaza': return { emoji: '🩹', ...health };
+    case 'Özel Sağlık': return { emoji: '⚕️', ...health };
+    case 'Seyahat': return { emoji: '✈️', ...travel };
+    default: return { emoji: '📄', bg: Colors.surface, fg: Colors.secondary };
+  }
+}
 
 export type QuoteResult = {
   id: string;
