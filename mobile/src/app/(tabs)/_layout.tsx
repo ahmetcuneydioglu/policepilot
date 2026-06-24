@@ -1,8 +1,8 @@
 import { Tabs } from 'expo-router';
-import { Text, Platform, StyleSheet } from 'react-native';
+import { View, Text, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Colors } from '@/lib/theme';
-import { useNotificationStore } from '@/lib/NotificationContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, Shadow } from '@/lib/theme';
 
 function TabBarIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
@@ -10,9 +10,22 @@ function TabBarIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   );
 }
 
-export default function TabsLayout() {
-  const { unreadCount } = useNotificationStore();
+// Ortada yükseltilmiş "Teklif Al" aksiyon butonu (uygulamanın 1 numaralı işi)
+function TeklifTabButton({ onPress, accessibilityState }: { onPress?: (e?: any) => void; accessibilityState?: { selected?: boolean } }) {
+  const focused = accessibilityState?.selected;
+  return (
+    <View style={styles.teklifSlot} pointerEvents="box-none">
+      <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.teklifTouch} accessibilityRole="button" accessibilityLabel="Teklif Al">
+        <LinearGradient colors={[Colors.primary, '#1E3A8A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.teklifCircle}>
+          <Text style={styles.teklifIcon}>⚡</Text>
+        </LinearGradient>
+        <Text style={[styles.teklifLabel, focused && { color: Colors.primary }]}>Teklif</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
+export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
@@ -32,67 +45,33 @@ export default function TabsLayout() {
         tabBarBackground: () => (
           <BlurView tint="light" intensity={95} style={[StyleSheet.absoluteFill, styles.tabBlur]} />
         ),
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
-        },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: 'Ana Sayfa',
-          tabBarIcon: ({ focused }) => <TabBarIcon emoji="🏠" focused={focused} />,
-        }}
+        options={{ title: 'Ana Sayfa', tabBarIcon: ({ focused }) => <TabBarIcon emoji="🏠" focused={focused} /> }}
       />
       <Tabs.Screen
         name="renewals"
-        options={{
-          title: 'Yenilemeler',
-          tabBarIcon: ({ focused }) => <TabBarIcon emoji="🔄" focused={focused} />,
-        }}
+        options={{ title: 'Yenilemeler', tabBarIcon: ({ focused }) => <TabBarIcon emoji="🔄" focused={focused} /> }}
+      />
+      <Tabs.Screen
+        name="teklif"
+        options={{ title: 'Teklif', tabBarButton: (props) => <TeklifTabButton {...props} /> }}
       />
       <Tabs.Screen
         name="customers"
-        options={{
-          title: 'Müşteriler',
-          tabBarIcon: ({ focused }) => <TabBarIcon emoji="👥" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="requests"
-        options={{
-          title: 'Teklifler',
-          tabBarIcon: ({ focused }) => <TabBarIcon emoji="📋" focused={focused} />,
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-          tabBarBadgeStyle: {
-            backgroundColor: Colors.danger,
-            color: '#fff',
-            fontSize: 10,
-            fontWeight: '700',
-            minWidth: 18,
-            height: 18,
-            lineHeight: 18,
-            borderRadius: 9,
-          },
-        }}
-      />
-      <Tabs.Screen
-        name="ai"
-        options={{
-          title: 'AI',
-          tabBarIcon: ({ focused }) => <TabBarIcon emoji="✨" focused={focused} />,
-        }}
+        options={{ title: 'Müşteriler', tabBarIcon: ({ focused }) => <TabBarIcon emoji="👥" focused={focused} /> }}
       />
       <Tabs.Screen
         name="more"
-        options={{
-          title: 'Daha',
-          tabBarIcon: ({ focused }) => <TabBarIcon emoji="☰" focused={focused} />,
-        }}
+        options={{ title: 'Daha', tabBarIcon: ({ focused }) => <TabBarIcon emoji="☰" focused={focused} /> }}
       />
 
-      {/* Tab bar'da gizli ama "Daha" üzerinden erişilebilir rotalar */}
+      {/* Tab bar'da gizli ama "Daha" / merkez butondan erişilebilir rotalar */}
+      <Tabs.Screen name="requests" options={{ href: null }} />
+      <Tabs.Screen name="ai" options={{ href: null }} />
       <Tabs.Screen name="policies" options={{ href: null }} />
       <Tabs.Screen name="admin" options={{ href: null }} />
     </Tabs>
@@ -105,4 +84,9 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(0,0,0,0.08)',
   },
+  teklifSlot: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
+  teklifTouch: { alignItems: 'center', transform: [{ translateY: -18 }] },
+  teklifCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: '#fff', ...Shadow.md },
+  teklifIcon: { fontSize: 24, color: '#fff' },
+  teklifLabel: { fontSize: 10, fontWeight: '700', color: Colors.secondary, marginTop: 4 },
 });

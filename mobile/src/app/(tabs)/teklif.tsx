@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
@@ -29,6 +30,7 @@ function initials(n: string) { return n.trim().split(/\s+/).map((w) => w[0]).sli
 export default function QuoteCenterScreen() {
   const router = useRouter();
   const { agencyId } = useProfile();
+  const tabBarHeight = useBottomTabBarHeight();
   const [runs, setRuns] = useState<QuoteRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,7 +90,7 @@ export default function QuoteCenterScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.hBtn}><Text style={styles.hBack}>‹ Geri</Text></TouchableOpacity>
+        <View style={styles.hBtn} />
         <Text style={styles.hTitle}>Teklif Merkezi</Text>
         <TouchableOpacity onPress={() => setNewOpen(true)} style={styles.hBtn}><Text style={styles.hAdd}>+ Yeni</Text></TouchableOpacity>
       </View>
@@ -96,7 +98,7 @@ export default function QuoteCenterScreen() {
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={Colors.primary} /></View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + Spacing.md }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />} showsVerticalScrollIndicator={false}>
           {error && <View style={styles.errBanner}><Text style={styles.errText}>{error}</Text><TouchableOpacity onPress={load}><Text style={styles.errRetry}>Tekrar dene</Text></TouchableOpacity></View>}
 
           {/* KPI */}

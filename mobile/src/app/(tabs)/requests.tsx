@@ -419,12 +419,12 @@ export default function RequestsScreen() {
   return (
     <View style={styles.safe}>
       <DarkHero
-        title="Teklifler"
+        title="Fırsatlar"
         subtitle={`${filtered.length} kayıt`}
         right={
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={[styles.heroBtn, heroGlass]} onPress={() => router.push('/quote-center')} activeOpacity={0.8}>
-              <Text style={styles.heroBtnText}>🧮 Merkez</Text>
+            <TouchableOpacity style={[styles.heroBtn, heroGlass]} onPress={() => router.push('/teklif')} activeOpacity={0.8}>
+              <Text style={styles.heroBtnText}>⚡ Teklif</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.heroBtnLight} onPress={() => router.push('/new-request')} activeOpacity={0.8}>
               <Text style={styles.heroBtnLightText}>+ Ekle</Text>
