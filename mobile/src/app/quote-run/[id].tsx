@@ -5,7 +5,7 @@
  * durum güncelleme (/api/quote-runs PATCH), WhatsApp ile müşteriye gönder.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, RefreshControl, Linking,
@@ -13,10 +13,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { formatTRY } from '@/lib/format';
 import {
-  getQuoteRun, updateRunStatus, issuePolicyFromResult, runStatusMeta,
+  getQuoteRun, updateRunStatus, runStatusMeta,
   isSuccessResult, resultStatusLabel, bestPrice, productMeta,
   QuoteRun, QuoteResult,
 } from '@/lib/quoteCenter';
@@ -60,7 +61,7 @@ export default function QuoteRunDetailScreen() {
     } finally { setLoading(false); }
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
 
   const { ordered, scoreMap, recommendedId, best, okCount } = useMemo(() => {
@@ -107,22 +108,7 @@ export default function QuoteRunDetailScreen() {
 
   function policelestir(r: QuoteResult) {
     if (!r.price) return;
-    Alert.alert('Poliçeleştir', `${r.company_name} — ${formatTRY(r.price)} (${run?.product_type}) poliçesi kesilsin mi? (demo ödeme)`, [
-      { text: 'İptal', style: 'cancel' },
-      {
-        text: 'Poliçeleştir',
-        onPress: async () => {
-          setBusy(r.id);
-          try {
-            const { policyNo } = await issuePolicyFromResult(r.id, r.price as number, `${r.company_name} - ${run?.product_type ?? ''}`);
-            Alert.alert('✅ Poliçe Kesildi', `Poliçe No: ${policyNo}`);
-            await load();
-          } catch (e) {
-            Alert.alert('Kesilemedi', e instanceof Error ? e.message : 'Hata');
-          } finally { setBusy(null); }
-        },
-      },
-    ]);
+    router.push(`/quote-payment/${r.id}`); // web gibi: ödeme ekranı → ödeme sonrası poliçeleşir
   }
 
   function sendWhatsapp() {

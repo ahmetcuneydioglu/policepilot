@@ -161,8 +161,32 @@ export async function updateRunStatus(id: string, status: string, wonResultId?: 
   await apiPatch(`/api/quote-runs/${id}`, { status, won_result_id: wonResultId ?? null });
 }
 
-/** quote_result → poliçe kes (demo ödeme). */
+/** quote_result → poliçe kes (demo ödeme). Kart bilgisi GÖNDERİLMEZ — yalnız amount+description. */
 export async function issuePolicyFromResult(resultId: string, amount: number, description: string): Promise<{ policyNo: string }> {
   const res = await apiPost<{ ok: boolean; policyId: string; policyNo: string }>(`/api/policy-issue/${resultId}`, { amount, description });
   return { policyNo: res.policyNo };
+}
+
+export type IssueContext = {
+  context: {
+    result: { id: string; company_name: string; price: number | null; installment: string | null; expires_at?: string | null; source_type?: string | null };
+    run: {
+      product_type: string;
+      product_data?: Record<string, string> | null;
+      customer_id?: string | null;
+      customer_name: string | null;
+      customer_phone: string | null;
+      customer_email?: string | null;
+      customer_tc: string | null;
+    };
+  };
+  alreadyIssued: { issued: boolean; policyNo?: string | null };
+  isDemo: boolean;
+  isManual: boolean;
+  sourceType: string;
+};
+
+/** Poliçeleştirme ödeme ekranı için teklif bağlamını çek (GET /api/policy-issue/[id]). */
+export async function getIssueContext(resultId: string): Promise<IssueContext> {
+  return apiGet<IssueContext>(`/api/policy-issue/${resultId}`);
 }
