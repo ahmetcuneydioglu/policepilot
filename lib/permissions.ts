@@ -22,7 +22,8 @@ export type PermissionKey =
   | "reports.view"
   | "users.manage"
   | "settings.manage"
-  | "billing.manage";
+  | "billing.manage"
+  | "security.view";
 
 export type PermissionGroup =
   | "Müşteriler" | "Teklifler" | "Poliçeler"
@@ -57,6 +58,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: "users.manage",    label: "Kullanıcı Yönet",       group: "Yönetim" },
   { key: "settings.manage", label: "Acente Ayarlarını Yönet", group: "Yönetim" },
   { key: "billing.manage",  label: "Abonelik Yönet",        group: "Yönetim" },
+  { key: "security.view",   label: "Güvenlik Kayıtları",    group: "Yönetim" },
 ];
 
 /** UI gruplama sırası. */

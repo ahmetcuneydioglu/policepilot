@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { subscribePhoneVerified } from '@/lib/securityState';
 import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '@/lib/theme';
 import {
@@ -101,21 +102,29 @@ function NotificationSetup({
 
 // ─── Profile hook ──────────────────────────────────────────────────────────────
 function useSessionProfile(session: Session | null) {
-  const [role, setRole]         = useState<'super_admin' | 'agency_user' | null>(null);
-  const [agencyId, setAgencyId] = useState<string | null>(null);
+  const [role, setRole]                   = useState<'super_admin' | 'agency_user' | null>(null);
+  const [agencyId, setAgencyId]           = useState<string | null>(null);
+  const [verifiedPhone, setVerifiedPhone] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!session?.user) { setRole(null); setAgencyId(null); return; }
+    if (!session?.user) { setRole(null); setAgencyId(null); setVerifiedPhone(null); return; }
     (supabase.from('profiles') as any)
-      .select('role, agency_id')
+      .select('role, agency_id, verified_phone')
       .eq('id', session.user.id)
       .maybeSingle()
-      .then(({ data }: { data: { role: 'super_admin' | 'agency_user'; agency_id: string | null } | null }) => {
-        if (data) { setRole(data.role); setAgencyId(data.agency_id); }
+      .then(({ data, error }: { data: { role: 'super_admin' | 'agency_user'; agency_id: string | null; verified_phone: boolean | null } | null; error: unknown }) => {
+        // migration öncesi / sorgu hatası → fail-open (kimseyi kilitleme)
+        if (error || !data) { setVerifiedPhone(true); return; }
+        setRole(data.role);
+        setAgencyId(data.agency_id);
+        setVerifiedPhone(data.verified_phone ?? true);
       });
   }, [session?.user?.id]);
 
-  return { role, agencyId };
+  // Telefon doğrulanınca anında aç (DB'yi yeniden çekmeden gate'i geçir)
+  useEffect(() => subscribePhoneVerified(() => setVerifiedPhone(true)), []);
+
+  return { role, agencyId, verifiedPhone };
 }
 
 // ─── Root Layout içeriği (Provider altında) ────────────────────────────────────
@@ -124,7 +133,7 @@ function RootLayoutInner() {
   const [loading, setLoading] = useState(true);
   const router   = useRouter();
   const segments = useSegments();
-  const { role, agencyId } = useSessionProfile(session);
+  const { role, agencyId, verifiedPhone } = useSessionProfile(session);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -139,10 +148,15 @@ function RootLayoutInner() {
 
   useEffect(() => {
     if (loading) return;
-    const inAuth = segments[0] === 'login';
-    if (!session && !inAuth) router.replace('/login');
-    else if (session && inAuth) router.replace('/(tabs)');
-  }, [session, loading, segments]);
+    const seg0 = segments[0];
+    if (!session) { if (seg0 !== 'login') router.replace('/login'); return; }
+    if (verifiedPhone === null) return;                       // profil yüklenene kadar bekle
+    if (verifiedPhone === false) {                            // telefon doğrulanmamış → kapı
+      if (seg0 !== 'verify-phone') router.replace('/verify-phone');
+      return;
+    }
+    if (seg0 === 'login' || seg0 === 'verify-phone') router.replace('/(tabs)');
+  }, [session, loading, segments, verifiedPhone]);
 
   if (loading) {
     return (
@@ -157,6 +171,7 @@ function RootLayoutInner() {
       <NotificationSetup session={session} role={role} agencyId={agencyId} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" />
+        <Stack.Screen name="verify-phone" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="new-request"             options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/notifications"  options={{ presentation: 'card' }} />

@@ -19,6 +19,8 @@ export type Profile = {
   role: 'super_admin' | 'agency_user';
   agency_role: string | null; // owner | manager | sales | operations | viewer
   agency_id: string | null;
+  phone?: string | null;
+  verified_phone?: boolean;
   created_at: string;
 };
 
