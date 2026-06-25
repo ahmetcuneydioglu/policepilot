@@ -21,14 +21,27 @@ import { logSecurityEvent } from "./securityLog";
 import { SecurityError } from "./errors";
 import type { SecurityContext } from "./types";
 
-async function getProfile(userId: string): Promise<{ phone: string | null; agencyId: string | null }> {
+/**
+ * Doğrulanacak telefonu çöz: önce profiles.phone; boşsa acente telefonuna (agencies.phone)
+ * düş — kayıt formundaki numara oraya yazılıyor (bootstrap). fromAgency=true ise çağıran
+ * profiles.phone'u doldurur (tutarlılık).
+ */
+async function resolvePhone(userId: string): Promise<{ phone: string | null; agencyId: string | null; fromAgency: boolean }> {
   const admin = getSupabaseAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (admin.from("profiles") as any)
+  const { data: prof } = await (admin.from("profiles") as any)
     .select("phone, agency_id")
     .eq("id", userId)
     .maybeSingle();
-  return { phone: (data?.phone as string) ?? null, agencyId: (data?.agency_id as string) ?? null };
+  let phone = (prof?.phone as string) ?? null;
+  const agencyId = (prof?.agency_id as string) ?? null;
+  let fromAgency = false;
+  if (!phone && agencyId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: ag } = await (admin.from("agencies") as any).select("phone").eq("id", agencyId).maybeSingle();
+    if (ag?.phone) { phone = ag.phone as string; fromAgency = true; }
+  }
+  return { phone, agencyId, fromAgency };
 }
 
 export interface RequestOtpResult {
@@ -41,9 +54,15 @@ export interface RequestOtpResult {
 }
 
 export async function requestPhoneOtp(ctx: SecurityContext): Promise<RequestOtpResult> {
-  const { phone, agencyId } = await getProfile(ctx.userId);
+  const { phone, agencyId, fromAgency } = await resolvePhone(ctx.userId);
   if (!phone) {
-    throw new SecurityError("Profilinizde telefon numarası tanımlı değil.", 400, "no_phone");
+    throw new SecurityError("Telefon numarası bulunamadı. Lütfen acente telefonunuzu ekleyin.", 400, "no_phone");
+  }
+  // Profil telefonu boşsa acente telefonundan doldur (best-effort; doğrulama tutarlı olsun).
+  if (fromAgency) {
+    const admin = getSupabaseAdmin();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin.from("profiles") as any).update({ phone }).eq("id", ctx.userId);
   }
 
   // Yeniden-gönder bekleme süresi
@@ -107,7 +126,7 @@ export async function verifyPhoneOtp(ctx: SecurityContext, code: string): Promis
     throw new SecurityError("Aktif kod bulunamadı. Lütfen yeni kod isteyin.", 400, "no_active_code");
   }
 
-  const { agencyId } = await getProfile(ctx.userId);
+  const { agencyId } = await resolvePhone(ctx.userId);
 
   if (new Date(otp.expires_at).getTime() < Date.now()) {
     await otpRepo.consumeOtp(otp.id);
