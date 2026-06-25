@@ -23,6 +23,7 @@ export type Profile = {
   // Kullanıcı yönetimi (Faz 1) — opsiyonel; select("*") ile otomatik gelir
   email?: string | null;
   phone?: string | null;
+  verified_phone?: boolean;        // Security Center — telefon doğrulandı mı
   status?: string | null;          // 'active' | 'suspended' | 'invited'
   last_login_at?: string | null;
   agency_role?: string | null;     // 'owner'|'manager'|'sales'|'operations'|'viewer'

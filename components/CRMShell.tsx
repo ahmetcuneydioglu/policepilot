@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { AuthProvider } from "@/lib/AuthContext";
 import { NotificationProvider } from "@/lib/NotificationContext";
 import Sidebar from "@/components/Sidebar";
@@ -11,8 +12,15 @@ import { supabase } from "@/lib/supabase";
 
 // ─── Inner shell (needs AuthContext already mounted) ─────────────────────────
 function InnerShell({ children }: { children: ReactNode }) {
-  const { agencyId, role, loading: authLoading } = useAuth();
+  const { agencyId, role, profile, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [isActive, setIsActive] = useState<boolean | null>(null);
+
+  // Security Center: telefon doğrulanmamışsa doğrulama sayfasına yönlendir
+  useEffect(() => {
+    if (authLoading || !profile) return;
+    if (profile.verified_phone === false) router.replace("/guvenlik/dogrula");
+  }, [authLoading, profile, router]);
 
   useEffect(() => {
     if (authLoading || role !== "agency_user" || !agencyId) return;
