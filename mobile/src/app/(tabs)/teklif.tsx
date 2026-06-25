@@ -19,7 +19,7 @@ import { formatTRY, formatShortTRY } from '@/lib/format';
 import { QUOTE_PRODUCTS } from '@/lib/quoteDemo';
 import { groupOf, FIELDS_BY_GROUP, FieldDef } from '@/lib/quoteFields';
 import { getPersonFromTc, getVehicleFromPlaka } from '@/lib/quoteLookup';
-import { listQuoteRuns, startQuoteRun, runStatusMeta, bestPrice, productMeta, QuoteRun } from '@/lib/quoteCenter';
+import { listQuoteRuns, runStatusMeta, bestPrice, productMeta, QuoteRun, StartQuoteParams } from '@/lib/quoteCenter';
 import { ApiError } from '@/lib/api';
 
 const ACTIVE = ['Yeni', 'Teklif Verildi', 'Müşteri Düşünüyor'];
@@ -216,7 +216,8 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent?: 
 }
 
 // ─── Yeni teklif çalışması ────────────────────────────────────────────────────
-function NewQuoteModal({ agencyId, onClose, onStarted }: { agencyId: string | null; onClose: () => void; onStarted: (runId: string) => void }) {
+function NewQuoteModal({ agencyId, onClose }: { agencyId: string | null; onClose: () => void; onStarted?: (runId: string) => void }) {
+  const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [search, setSearch] = useState('');
@@ -271,30 +272,27 @@ function NewQuoteModal({ agencyId, onClose, onStarted }: { agencyId: string | nu
     setStep(2);
   }
 
-  async function start() {
+  function start() {
     if (!product || !group) { Alert.alert('Ürün gerekli', 'Bir ürün seçin.'); return; }
     for (const f of FIELDS_BY_GROUP[group]) {
       if (f.required && !(pdata[f.key] ?? '').trim()) { Alert.alert(`${f.label} gerekli`, `${f.label} alanını doldurun.`); return; }
     }
     const name = mode === 'existing' ? (selected?.name ?? '') : cust.name.trim();
-    const cleanData = Object.fromEntries(Object.entries(pdata).filter(([, v]) => (v ?? '').trim() !== ''));
-    setRunning(true);
-    try {
-      const runId = await startQuoteRun({
-        customerId: mode === 'existing' ? selected?.id : null,
-        createCustomer: mode === 'new',
-        name,
-        phone: mode === 'existing' ? (selected?.phone ?? '') : cust.phone.trim(),
-        tc: mode === 'existing' ? (selected?.tc ?? '') : cust.tc.trim(),
-        email: mode === 'new' ? cust.email.trim() : '',
-        productType: product,
-        productData: cleanData,
-        notes: notes.trim(),
-      });
-      onStarted(runId);
-    } catch (e) {
-      Alert.alert('Başarısız', e instanceof Error ? e.message : 'Teklif çalışması oluşturulamadı');
-    } finally { setRunning(false); }
+    const cleanData = Object.fromEntries(Object.entries(pdata).filter(([, v]) => (v ?? '').trim() !== '')) as Record<string, string>;
+    const params: StartQuoteParams = {
+      customerId: mode === 'existing' ? (selected?.id ?? null) : null,
+      createCustomer: mode === 'new',
+      name,
+      phone: mode === 'existing' ? (selected?.phone ?? '') : cust.phone.trim(),
+      tc: mode === 'existing' ? (selected?.tc ?? '') : cust.tc.trim(),
+      email: mode === 'new' ? cust.email.trim() : '',
+      productType: product,
+      productData: cleanData,
+      notes: notes.trim(),
+    };
+    onClose();
+    // Canlı teklif ekranına git (async simülasyon → poll → kaydet → detay)
+    router.push({ pathname: '/quote-live', params: { payload: JSON.stringify(params) } });
   }
 
   return (

@@ -73,20 +73,13 @@ export default function RenewalsScreen() {
       Alert.alert('WhatsApp açılamadı', 'Cihazda WhatsApp yüklü olmayabilir.')
     );
   }
-  async function teklif(item: RenewalItem) {
-    setQuotingId(item.id);
-    try {
-      const runId = await startQuoteRun({
-        customerId: item.customer_id, createCustomer: false,
-        name: item.customerName, phone: item.customerPhone,
-        productType: item.policy_type, renewalPolicyId: item.id,
-      });
-      router.push(`/quote-run/${runId}`);
-    } catch (e) {
-      Alert.alert('Teklif başlatılamadı', e instanceof Error ? e.message : 'Sunucu hatası — köprü yayınlanmış olmalı.');
-    } finally {
-      setQuotingId(null);
-    }
+  function teklif(item: RenewalItem) {
+    const params = {
+      customerId: item.customer_id, createCustomer: false,
+      name: item.customerName, phone: item.customerPhone,
+      productType: item.policy_type, renewalPolicyId: item.id,
+    };
+    router.push({ pathname: '/quote-live', params: { payload: JSON.stringify(params) } });
   }
   function policelestir(item: RenewalItem) {
     router.push({
