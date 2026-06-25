@@ -8,7 +8,7 @@ import { apiPost } from './api';
 export type SendOtpResponse = {
   ok: boolean;
   sent: boolean;
-  meta?: { phoneMasked?: string; cooldownMs?: number; expiresInMs?: number };
+  meta?: { phoneMasked?: string; cooldownMs?: number; expiresInMs?: number; devCode?: string };
 };
 
 export type VerifyOtpResponse = { ok: boolean; verified: boolean };

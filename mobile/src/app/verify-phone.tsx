@@ -27,6 +27,7 @@ export default function VerifyPhoneScreen() {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
+  const [devCode, setDevCode] = useState('');
   const inputRef = useRef<TextInput>(null);
 
   // ─── Kod gönder ───
@@ -35,6 +36,7 @@ export default function VerifyPhoneScreen() {
     try {
       const res = await sendPhoneOtp();
       if (res.meta?.phoneMasked) setMasked(res.meta.phoneMasked);
+      setDevCode(res.meta?.devCode ?? ''); // yalnız Mock SMS'te dolu
       setCountdown(RESEND_SECONDS);
       setCode('');
       setTimeout(() => inputRef.current?.focus(), 300);
@@ -87,6 +89,13 @@ export default function VerifyPhoneScreen() {
           <Text style={styles.subtitle}>
             {masked ? `${masked} numarasına gönderdiğimiz` : 'Telefonunuza gönderdiğimiz'} 6 haneli kodu girin.
           </Text>
+
+          {devCode ? (
+            <TouchableOpacity style={styles.devBanner} onPress={() => onChange(devCode)} activeOpacity={0.7}>
+              <Text style={styles.devBannerText}>🧪 Test modu (Mock SMS) — kod: <Text style={styles.devBannerCode}>{devCode}</Text></Text>
+              <Text style={styles.devBannerHint}>Otomatik doldurmak için dokun</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {/* 6 kutu (tek gizli input ile sürülür) */}
           <Pressable style={styles.boxes} onPress={() => inputRef.current?.focus()}>
@@ -159,6 +168,11 @@ const styles = StyleSheet.create({
   iconText: { fontSize: 32 },
   title: { fontSize: 24, fontWeight: '800', color: Colors.heading, letterSpacing: -0.4 },
   subtitle: { fontSize: 14, color: Colors.secondary, textAlign: 'center', marginTop: 8, lineHeight: 20, paddingHorizontal: 20 },
+
+  devBanner: { backgroundColor: Colors.amberBg, borderColor: '#FCD34D', borderWidth: 1, borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: 16, marginTop: Spacing.md, alignItems: 'center' },
+  devBannerText: { fontSize: 13, color: '#92400E', fontWeight: '600' },
+  devBannerCode: { fontWeight: '900', letterSpacing: 2, fontSize: 15, color: '#92400E' },
+  devBannerHint: { fontSize: 11, color: '#B45309', marginTop: 2 },
 
   boxes: { flexDirection: 'row', gap: 10, marginTop: Spacing.xl },
   box: { width: 46, height: 56, borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center' },

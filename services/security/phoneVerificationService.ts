@@ -36,6 +36,8 @@ export interface RequestOtpResult {
   phoneMasked: string;
   cooldownMs: number;
   expiresInMs: number;
+  /** YALNIZ Mock SMS sağlayıcıda dolar (geliştirme/test kolaylığı). Gerçek sağlayıcıda undefined. */
+  devCode?: string;
 }
 
 export async function requestPhoneOtp(ctx: SecurityContext): Promise<RequestOtpResult> {
@@ -83,7 +85,13 @@ export async function requestPhoneOtp(ctx: SecurityContext): Promise<RequestOtpR
     metadata: { phoneMasked: maskPhone(phone), provider: sms.name },
   });
 
-  return { sent: true, phoneMasked: maskPhone(phone), cooldownMs: OTP_RESEND_COOLDOWN_MS, expiresInMs: OTP_TTL_MS };
+  return {
+    sent: true,
+    phoneMasked: maskPhone(phone),
+    cooldownMs: OTP_RESEND_COOLDOWN_MS,
+    expiresInMs: OTP_TTL_MS,
+    devCode: sms.name === "mock" ? code : undefined, // yalnız mock — gerçek sağlayıcıda asla
+  };
 }
 
 export interface VerifyOtpResult { verified: boolean; }
