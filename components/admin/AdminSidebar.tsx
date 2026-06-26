@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Building2, Wallet, TrendingUp, MessageCircle,
-  Target, Bot, ServerCog, Settings, LogOut, ArrowLeftRight, Layers,
+  Target, Bot, ServerCog, Settings, LogOut, ArrowLeftRight, Layers, ShieldCheck,
 } from "lucide-react";
 
 const NAV = [
@@ -23,6 +23,7 @@ const NAV = [
   { href: "/admin/leads",    label: "Satış Merkezi",      Icon: Target },
   { href: "/admin/ai",       label: "AI Merkezi",         Icon: Bot },
   { href: "/admin/system",   label: "Sistem Merkezi",     Icon: ServerCog },
+  { href: "/admin/security", label: "Güvenlik",           Icon: ShieldCheck },
   { href: "/admin/settings", label: "Platform Ayarları",  Icon: Settings },
 ];
 
