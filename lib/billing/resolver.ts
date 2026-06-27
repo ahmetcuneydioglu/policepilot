@@ -16,7 +16,7 @@ import type { EffectiveLimits, EffectiveResolution } from "./types";
 export async function getEffectiveLimits(client: any, agencyId: string): Promise<EffectiveResolution | null> {
   const [agRes, addonRes] = await Promise.all([
     client.from("agencies")
-      .select("is_active, plan, expires_at, max_users, max_customers, max_requests, max_policies")
+      .select("is_active, plan, expires_at, max_users, max_customers, max_requests, max_policies, max_ai_credits")
       .eq("id", agencyId).maybeSingle(),
     client.from("agency_addons")
       .select("quantity, addon_catalog(grants_metric, grant_per_unit, is_entitlement)")
@@ -34,7 +34,7 @@ export async function getEffectiveLimits(client: any, agencyId: string): Promise
     customers:   ag.max_customers ?? planRow.base_customers,
     requests:    ag.max_requests  ?? planRow.base_requests,
     policies:    ag.max_policies  ?? planRow.base_policies,
-    ai_credits:  planRow.base_ai_credits,
+    ai_credits:  ag.max_ai_credits ?? planRow.base_ai_credits,
     wa_monthly:  planRow.base_wa_monthly,
     storage_mb:  planRow.base_storage_mb,
   };

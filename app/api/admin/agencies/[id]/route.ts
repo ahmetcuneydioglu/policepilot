@@ -11,7 +11,7 @@ import { planMonthlyRevenue, PLAN_LABELS } from "@/lib/planPricing";
 import { requireSuperAdmin } from "../../_lib/auth";
 import { changePlan, transition } from "@/lib/billing/subscription";
 import { getEffectiveLimits } from "@/lib/billing/resolver";
-import { getUsageSnapshot } from "@/lib/billing/usage";
+import { getUsageSnapshot, trPeriodStart } from "@/lib/billing/usage";
 
 export async function GET(
   request: NextRequest,
@@ -146,6 +146,18 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
+    // ── Aksiyon: bu ayki AI kredi kullanımını sıfırla ─────────────────────────
+    if (body.reset_ai_usage === true) {
+      const admin = getSupabaseAdmin();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin.from("usage_counters") as any)
+        .update({ used: 0 })
+        .eq("agency_id", id)
+        .eq("metric", "ai_credits")
+        .eq("period_start", trPeriodStart());
+      return NextResponse.json({ ok: true, reset: "ai_credits" });
+    }
+
     const update: Record<string, unknown> = {};
 
     // plan ve is_active billing motorundan geçer (durum/abonelik senkron + denetim)
@@ -171,6 +183,16 @@ export async function PATCH(
         }
         update[k] = n;
       }
+    }
+    // AI Kredisi limiti override — null/'' = plan tabanına dön, dolu = authoritative
+    if (body.max_ai_credits === null || body.max_ai_credits === "") {
+      update.max_ai_credits = null;
+    } else if (body.max_ai_credits != null) {
+      const n = parseInt(String(body.max_ai_credits), 10);
+      if (!Number.isFinite(n) || n < 0) {
+        return NextResponse.json({ error: "max_ai_credits sayısal olmalı." }, { status: 400 });
+      }
+      update.max_ai_credits = n;
     }
     if (typeof body.name === "string" && body.name.trim()) update.name = body.name.trim();
     if (typeof body.phone === "string") update.phone = body.phone.trim() || null;

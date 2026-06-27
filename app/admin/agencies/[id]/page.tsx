@@ -300,6 +300,7 @@ function SubscriptionEditor({ agency, onSaved }: {
     max_customers: String(agency.max_customers ?? 200),
     max_requests:  String(agency.max_requests ?? 500),
     max_policies:  String(agency.max_policies ?? 500),
+    max_ai_credits: agency.max_ai_credits != null ? String(agency.max_ai_credits) : "",
   });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -324,6 +325,7 @@ function SubscriptionEditor({ agency, onSaved }: {
           max_customers: form.max_customers,
           max_requests:  form.max_requests,
           max_policies:  form.max_policies,
+          max_ai_credits: form.max_ai_credits === "" ? null : form.max_ai_credits,
         }),
       });
       const json = await res.json();
@@ -335,6 +337,23 @@ function SubscriptionEditor({ agency, onSaved }: {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function resetAiUsage() {
+    if (!confirm("Bu acentenin bu ayki AI kredi kullanımını sıfırlamak istiyor musunuz?")) return;
+    setSaving(true); setMsg(null);
+    try {
+      const res = await fetch(`/api/admin/agencies/${agency.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset_ai_usage: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Sıfırlanamadı.");
+      setMsg({ ok: true, text: "AI kredi kullanımı sıfırlandı ✓" });
+      onSaved();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Sıfırlanamadı." });
+    } finally { setSaving(false); }
   }
 
   const INPUT = "w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40 bg-slate-50";
@@ -397,6 +416,22 @@ function SubscriptionEditor({ agency, onSaved }: {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* AI Kredisi (OCR) limiti override + bu ayki kullanımı sıfırla */}
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">AI Kredisi (OCR) Limiti</label>
+          <div className="flex gap-2">
+            <input type="number" min={0} value={form.max_ai_credits}
+              onChange={e => set("max_ai_credits", e.target.value)}
+              placeholder="Boş = plan varsayılanı"
+              className={INPUT} />
+            <button type="button" onClick={resetAiUsage} disabled={saving}
+              className="whitespace-nowrap px-3 py-2 rounded-xl border border-amber-200 text-amber-700 bg-amber-50 text-xs font-bold hover:bg-amber-100 transition-all disabled:opacity-50">
+              ↺ Bu ayki kullanımı sıfırla
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-1">Boş = plan tabanı (Starter 100 · Pro 1.000 · Enterprise 10.000) + eklentiler. Dolu = bu değer geçerli. Sıfırla bu ayki tüketimi 0&apos;a çeker.</p>
         </div>
 
         {msg && (
