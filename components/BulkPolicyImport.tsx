@@ -113,6 +113,7 @@ export default function BulkPolicyImport({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [summary, setSummary] = useState<{ saved: number; matched: number; failed: number; duplicate: number } | null>(null);
+  const [limitHit, setLimitHit] = useState<{ message: string } | null>(null);
 
   // Super admin için acente listesi (lazy)
   const loadAgencies = useCallback(async () => {
@@ -150,6 +151,7 @@ export default function BulkPolicyImport({
     if (isSuperAdmin && !selectedAgency) { setError("Önce acente seçin."); return; }
     setReading(true);
     setError("");
+    setLimitHit(null);
     setPhase("review");
 
     for (const row of rows) {
@@ -160,7 +162,15 @@ export default function BulkPolicyImport({
         fd.append("file", row.file);
         const res = await fetch("/api/ocr/policy", { method: "POST", body: fd });
         const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "OCR başarısız");
+        if (!res.ok) {
+          // AI kredi limiti → cryptic "❌ OCR" yerine net uyarı + DURDUR (kalanlar boşa denenmesin)
+          if (res.status === 403 && json.code === "ai_limit") {
+            setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: "queued" } : r));
+            setLimitHit({ message: json.error ?? "AI OCR krediniz doldu." });
+            break;
+          }
+          throw new Error(json.error ?? "OCR başarısız");
+        }
         const data = ocrToRow(json.fields ?? {});
         setRows(prev => prev.map(r => r.id === row.id ? {
           ...r, status: "ready", data,
@@ -259,6 +269,7 @@ export default function BulkPolicyImport({
   const readyCount = rows.filter(r => ["ready", "saved", "save_error", "duplicate"].includes(r.status)).length;
   // Kayda hazır: ready/save_error + geçerli; duplicate (zaten kayıtlı) hariç
   const validCount = rows.filter(r => (r.status === "ready" || r.status === "save_error") && isValidRow(r)).length;
+  const queuedCount = rows.filter(r => r.status === "queued").length;
 
   const INPUT = "w-full px-2 py-1 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white";
 
@@ -331,6 +342,23 @@ export default function BulkPolicyImport({
 
             {error && <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠️ {error}</p>}
 
+            {/* AI kredi limiti — net uyarı (cryptic ❌ OCR yerine) */}
+            {limitHit && (
+              <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 flex items-start gap-3">
+                <span className="text-xl leading-none">🚫</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-rose-700">AI OCR krediniz doldu</p>
+                  <p className="text-xs text-rose-600 mt-0.5">{limitHit.message}</p>
+                  <p className="text-[11px] text-rose-500 mt-1.5">
+                    <b>{readyCount}</b> poliçe okundu. Kalan <b>{queuedCount}</b> dosya için planınızı yükseltin veya ek AI kredisi alın — sonra <b>“Kalanları Oku”</b> ile kaldığınız yerden devam edin. (Kredi her ay yenilenir.)
+                  </p>
+                  <a href="/settings" className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors rounded-lg px-3 py-1.5">
+                    Aboneliği Yönet →
+                  </a>
+                </div>
+              </div>
+            )}
+
             {/* Aksiyon barı */}
             {rows.length > 0 && (
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -344,6 +372,12 @@ export default function BulkPolicyImport({
                     <button onClick={runOcr} disabled={reading}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-xs font-bold hover:from-violet-500 hover:to-indigo-500 transition-all disabled:opacity-50">
                       {reading ? "Okunuyor…" : `${rows.length} Poliçeyi Oku`}
+                    </button>
+                  )}
+                  {phase === "review" && queuedCount > 0 && (
+                    <button onClick={runOcr} disabled={reading || saving}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-violet-200 text-violet-700 bg-violet-50 text-xs font-bold hover:bg-violet-100 transition-all disabled:opacity-50">
+                      {reading ? "Okunuyor…" : `↻ Kalanları Oku (${queuedCount})`}
                     </button>
                   )}
                   {phase === "review" && (
