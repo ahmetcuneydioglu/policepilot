@@ -78,6 +78,22 @@ export async function getLatestOtp(
   return (data as OtpRow) ?? null;
 }
 
+/** sinceIso'dan beri (created_at >=) kullanıcının OTP istek sayısı — günlük cap için. */
+export async function countSince(
+  userId: string,
+  sinceIso: string,
+  purpose: VerificationPurpose = "phone_verify"
+): Promise<number> {
+  const admin = getSupabaseAdmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count } = await (admin.from("otp_requests") as any)
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("purpose", purpose)
+    .gte("created_at", sinceIso);
+  return (count as number) ?? 0;
+}
+
 export async function incrementAttempts(id: string): Promise<number> {
   const admin = getSupabaseAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

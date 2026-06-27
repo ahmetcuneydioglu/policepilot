@@ -11,6 +11,7 @@ export type SecurityEvent =
   | "PHONE_VERIFIED"
   | "OTP_FAILED"
   | "OTP_EXPIRED"
+  | "OTP_THROTTLED"
   | "NEW_DEVICE"
   | "PASSWORD_CHANGED"
   | "LOGOUT"

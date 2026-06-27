@@ -15,16 +15,26 @@ export const OTP_LENGTH = 6;
 export const OTP_TTL_MS = 5 * 60 * 1000;
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+/** Kullanıcı başına 24 saatte azami kod isteği (SMS/WhatsApp pumping & maliyet-DoS koruması). */
+export const OTP_MAX_PER_DAY = 12;
 
 function pepper(): string {
-  // server-only. Üretimde SECURITY_OTP_PEPPER ZORUNLU; yoksa dev fallback (uyarı).
+  // server-only. Üretimde SECURITY_OTP_PEPPER ZORUNLU.
   const p = process.env.SECURITY_OTP_PEPPER;
-  if (!p) {
-    // eslint-disable-next-line no-console
-    console.warn("[security] SECURITY_OTP_PEPPER tanımlı değil — geçici dev pepper kullanılıyor. Üretimde MUTLAKA tanımlayın.");
-    return "dev-insecure-pepper-change-me";
+  if (p) return p;
+
+  // Üretimde fail-closed: sessizce herkesçe bilinen dev pepper'a düşmek = güvenlik açığı
+  // (otp_requests sızarsa code_hash+salt'tan kod offline forge edilebilir). O yüzden patla.
+  const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+  if (isProd) {
+    throw new Error(
+      "[security] SECURITY_OTP_PEPPER tanımlı değil — üretimde ZORUNLU. " +
+      "Vercel env'e güçlü rastgele bir değer ekleyin: openssl rand -hex 32"
+    );
   }
-  return p;
+  // eslint-disable-next-line no-console
+  console.warn("[security] SECURITY_OTP_PEPPER tanımlı değil — geçici dev pepper kullanılıyor (yalnız non-prod). Üretimde MUTLAKA tanımlayın.");
+  return "dev-insecure-pepper-change-me";
 }
 
 /** 6 haneli, baştan sıfır korunan kod. */

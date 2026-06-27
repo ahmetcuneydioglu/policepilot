@@ -12,7 +12,7 @@ import { AuthProvider, useAuth } from "@/lib/AuthContext";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 
 function AdminShell({ children }: { children: React.ReactNode }) {
-  const { role, loading, user } = useAuth();
+  const { role, loading, user, profile } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -21,12 +21,17 @@ function AdminShell({ children }: { children: React.ReactNode }) {
       router.replace("/login?next=/admin");
       return;
     }
+    // Security Center kapısı /admin grubunu da kapsamalı — super_admin de doğrulanmamışsa geçemez
+    if (profile?.verified_phone === false) {
+      router.replace("/guvenlik/dogrula");
+      return;
+    }
     if (role && role !== "super_admin") {
       router.replace("/dashboard");
     }
-  }, [loading, role, user, router]);
+  }, [loading, role, user, profile, router]);
 
-  if (loading || role !== "super_admin") {
+  if (loading || role !== "super_admin" || profile?.verified_phone === false) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
         <div className="w-7 h-7 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />

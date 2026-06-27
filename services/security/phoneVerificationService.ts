@@ -10,10 +10,11 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { normalizePhone } from "@/lib/phone";
 import { resolveOtpChannels } from "./delivery";
 import {
   generateOtpCode, generateSalt, hashOtp, verifyOtpHash, otpExpiry, maskPhone,
-  OTP_RESEND_COOLDOWN_MS, OTP_MAX_ATTEMPTS, OTP_TTL_MS,
+  OTP_RESEND_COOLDOWN_MS, OTP_MAX_ATTEMPTS, OTP_TTL_MS, OTP_MAX_PER_DAY,
 } from "./otp/otpService";
 import * as otpRepo from "./repositories/otpRepository";
 import { recordVerification } from "./repositories/phoneVerificationRepository";
@@ -78,9 +79,20 @@ export async function requestPhoneOtp(ctx: SecurityContext): Promise<RequestOtpR
     }
   }
 
+  // Günlük kötüye-kullanım/maliyet sınırı (SMS/WhatsApp pumping'e karşı).
+  const dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  if ((await otpRepo.countSince(ctx.userId, dayAgoIso)) >= OTP_MAX_PER_DAY) {
+    await logSecurityEvent({
+      userId: ctx.userId, agencyId, event: "OTP_THROTTLED",
+      ip: ctx.ip, userAgent: ctx.userAgent, metadata: { limit: OTP_MAX_PER_DAY },
+    });
+    throw new SecurityError("Günlük kod isteme sınırına ulaştınız. Lütfen daha sonra tekrar deneyin.", 429, "daily_limit");
+  }
+
   const code = generateOtpCode();
   const salt = generateSalt();
   const ttlMinutes = Math.round(OTP_TTL_MS / 60_000);
+  const e164 = normalizePhone(phone); // Meta/SMS E.164 ister: 0532…→90532…
 
   // ── Teslimat: yapılandırılmış kanalları öncelik sırasıyla dene (WhatsApp → SMS) ──
   // Önce gönder, başaran kanal belli olunca OTP kaydını o kanalla oluştur (yetim kayıt yok).
@@ -92,7 +104,7 @@ export async function requestPhoneOtp(ctx: SecurityContext): Promise<RequestOtpR
   let delivered: { channel: VerificationChannel; provider: string; devCode?: string } | null = null;
   let lastError: string | undefined;
   for (const ch of channels) {
-    const res = await ch.deliver({ to: phone, code, ttlMinutes, appName: "SigortaOS" });
+    const res = await ch.deliver({ to: e164, code, ttlMinutes, appName: "SigortaOS" });
     if (res.success) {
       delivered = { channel: ch.channel, provider: ch.name, devCode: res.devCode };
       break;
@@ -110,15 +122,25 @@ export async function requestPhoneOtp(ctx: SecurityContext): Promise<RequestOtpR
   }
 
   await otpRepo.consumeActive(ctx.userId); // eski aktif kodları geçersiz kıl
-  await otpRepo.createOtp({
-    user_id: ctx.userId,
-    phone,
-    channel: delivered.channel,
-    code_hash: hashOtp(code, salt),
-    code_salt: salt,
-    expires_at: otpExpiry().toISOString(),
-    max_attempts: OTP_MAX_ATTEMPTS,
-  });
+  try {
+    await otpRepo.createOtp({
+      user_id: ctx.userId,
+      phone: e164,
+      channel: delivered.channel,
+      code_hash: hashOtp(code, salt),
+      code_salt: salt,
+      expires_at: otpExpiry().toISOString(),
+      max_attempts: OTP_MAX_ATTEMPTS,
+    });
+  } catch (err) {
+    // Kod gönderildi ama DB'ye yazılamadı → kullanıcı doğrulayamaz; tekrar denemesini iste.
+    await logSecurityEvent({
+      userId: ctx.userId, agencyId, event: "OTP_SENT", channel: delivered.channel,
+      ip: ctx.ip, userAgent: ctx.userAgent,
+      metadata: { phoneMasked: maskPhone(phone), provider: delivered.provider, persistFailed: true, error: err instanceof Error ? err.message : String(err) },
+    });
+    throw new SecurityError("Kod gönderildi ancak kaydedilemedi. Lütfen birkaç saniye sonra tekrar deneyin.", 500, "otp_persist_failed");
+  }
 
   await logSecurityEvent({
     userId: ctx.userId, agencyId, event: "OTP_SENT", channel: delivered.channel,

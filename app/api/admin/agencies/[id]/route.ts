@@ -150,11 +150,12 @@ export async function PATCH(
     if (body.reset_ai_usage === true) {
       const admin = getSupabaseAdmin();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (admin.from("usage_counters") as any)
+      const { error } = await (admin.from("usage_counters") as any)
         .update({ used: 0 })
         .eq("agency_id", id)
         .eq("metric", "ai_credits")
         .eq("period_start", trPeriodStart());
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ ok: true, reset: "ai_credits" });
     }
 

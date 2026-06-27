@@ -34,6 +34,15 @@ function InnerShell({ children }: { children: ReactNode }) {
       });
   }, [agencyId, role, authLoading]);
 
+  // Doğrulanmamışsa korumalı içeriği RENDER ETME (flash önle) — yönlendirme efekti devrede
+  if (!authLoading && profile?.verified_phone === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100 flex-col">
       {/* ── Pasif acente banner ───────────────────────────────────────────── */}
