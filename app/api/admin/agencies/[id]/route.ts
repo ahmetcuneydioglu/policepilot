@@ -10,6 +10,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { planMonthlyRevenue, PLAN_LABELS } from "@/lib/planPricing";
 import { requireSuperAdmin } from "../../_lib/auth";
 import { changePlan, transition } from "@/lib/billing/subscription";
+import { getEffectiveLimits } from "@/lib/billing/resolver";
+import { getUsageSnapshot } from "@/lib/billing/usage";
 
 export async function GET(
   request: NextRequest,
@@ -88,6 +90,16 @@ export async function GET(
       ],
     };
 
+    // ── Dönemsel limitler (AI kredisi, WhatsApp) — usage_counters TR ayı bazlı ──
+    const eff = await getEffectiveLimits(admin, id);
+    let aiUsage: { used: number; max: number } | null = null;
+    let waUsage: { used: number; max: number } | null = null;
+    if (eff?.limits) {
+      const snap = await getUsageSnapshot(admin, id, eff.limits);
+      aiUsage = snap.ai_credits;
+      waUsage = snap.wa_monthly;
+    }
+
     return NextResponse.json({
       agency,
       users:     usersRes.data ?? [],
@@ -102,10 +114,12 @@ export async function GET(
         monthly_revenue: agency.is_active ? planMonthlyRevenue(agency.plan) : 0,
         expires_at:      agency.expires_at,
         limits: {
-          users:     { used: (usersRes.data ?? []).length, max: agency.max_users },
-          customers: { used: (custRes.data ?? []).length,  max: agency.max_customers },
-          requests:  { used: quotes.length,                 max: agency.max_requests },
-          policies:  { used: policies.length,               max: agency.max_policies },
+          users:      { used: (usersRes.data ?? []).length, max: agency.max_users },
+          customers:  { used: (custRes.data ?? []).length,  max: agency.max_customers },
+          requests:   { used: quotes.length,                 max: agency.max_requests },
+          policies:   { used: policies.length,               max: agency.max_policies },
+          ai_credits: aiUsage ?? { used: 0, max: 0 },
+          wa_monthly: waUsage ?? { used: 0, max: 0 },
         },
       },
       logs,

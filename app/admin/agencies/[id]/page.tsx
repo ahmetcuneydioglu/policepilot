@@ -219,7 +219,7 @@ export default function AdminAgencyDetailPage() {
             <div className="p-5 space-y-3.5">
               {Object.entries(data.subscription.limits as Record<string, { used: number; max: number }>).map(([k, v]) => {
                 const pct = v.max ? Math.min(100, Math.round((v.used / v.max) * 100)) : 0;
-                const labels: Record<string, string> = { users: "Kullanıcı", customers: "Müşteri", requests: "Teklif", policies: "Poliçe" };
+                const labels: Record<string, string> = { users: "Kullanıcı", customers: "Müşteri", requests: "Teklif", policies: "Poliçe", ai_credits: "AI Kredisi (OCR)", wa_monthly: "WhatsApp / Ay" };
                 return (
                   <div key={k}>
                     <div className="flex justify-between text-xs mb-1">
