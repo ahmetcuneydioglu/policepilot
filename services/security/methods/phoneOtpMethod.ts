@@ -12,7 +12,7 @@ export class PhoneOtpMethod implements VerificationMethod {
 
   async challenge(ctx: SecurityContext): Promise<ChallengeResult> {
     const r = await requestPhoneOtp(ctx);
-    return { sent: r.sent, meta: { phoneMasked: r.phoneMasked, cooldownMs: r.cooldownMs, expiresInMs: r.expiresInMs, devCode: r.devCode } };
+    return { sent: r.sent, meta: { phoneMasked: r.phoneMasked, cooldownMs: r.cooldownMs, expiresInMs: r.expiresInMs, channel: r.channel, devCode: r.devCode } };
   }
 
   async verify(ctx: SecurityContext, input: VerifyInput): Promise<VerifyResult> {

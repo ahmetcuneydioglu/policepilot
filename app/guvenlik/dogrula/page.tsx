@@ -31,6 +31,7 @@ export default function VerifyPhonePage() {
   const [code, setCode] = useState("");
   const [masked, setMasked] = useState("");
   const [devCode, setDevCode] = useState("");
+  const [channel, setChannel] = useState<"sms" | "whatsapp" | "call" | "">("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -44,6 +45,7 @@ export default function VerifyPhonePage() {
     setSending(false);
     if (!r.ok) { setError(r.data?.error ?? "Kod gönderilemedi."); return; }
     if (r.data?.meta?.phoneMasked) setMasked(r.data.meta.phoneMasked);
+    setChannel(r.data?.meta?.channel ?? "");
     setDevCode(r.data?.meta?.devCode ?? "");
     setCountdown(RESEND_SECONDS);
     setCode("");
@@ -99,7 +101,9 @@ export default function VerifyPhonePage() {
         <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-5 text-3xl">🔐</div>
         <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Telefon Doğrulama</h1>
         <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-          {masked ? `${masked} numarasına gönderdiğimiz` : "Telefonunuza gönderdiğimiz"} 6 haneli kodu girin.
+          {masked ? `${masked} numaranıza` : "Telefonunuza"}{" "}
+          {channel === "whatsapp" ? "WhatsApp ile " : channel === "sms" ? "SMS ile " : ""}
+          gönderdiğimiz 6 haneli kodu girin.
         </p>
 
         {devCode && (
@@ -108,7 +112,7 @@ export default function VerifyPhonePage() {
             className="mt-4 w-full bg-amber-50 border border-amber-300 rounded-xl py-2.5 px-4 text-amber-800 hover:bg-amber-100 transition"
           >
             <span className="text-sm font-semibold">
-              🧪 Test modu (Mock SMS) — kod:{" "}
+              🧪 Test modu (Mock) — kod:{" "}
               <span className="font-mono font-black tracking-widest">{devCode}</span>
             </span>
             <span className="block text-[11px] text-amber-600 mt-0.5">Otomatik doldurmak için tıkla</span>

@@ -10,7 +10,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { getSmsProvider } from "./sms/providerFactory";
+import { resolveOtpChannels } from "./delivery";
 import {
   generateOtpCode, generateSalt, hashOtp, verifyOtpHash, otpExpiry, maskPhone,
   OTP_RESEND_COOLDOWN_MS, OTP_MAX_ATTEMPTS, OTP_TTL_MS,
@@ -19,7 +19,7 @@ import * as otpRepo from "./repositories/otpRepository";
 import { recordVerification } from "./repositories/phoneVerificationRepository";
 import { logSecurityEvent } from "./securityLog";
 import { SecurityError } from "./errors";
-import type { SecurityContext } from "./types";
+import type { SecurityContext, VerificationChannel } from "./types";
 
 /**
  * Doğrulanacak telefonu çöz: önce profiles.phone; boşsa acente telefonuna (agencies.phone)
@@ -49,7 +49,9 @@ export interface RequestOtpResult {
   phoneMasked: string;
   cooldownMs: number;
   expiresInMs: number;
-  /** YALNIZ Mock SMS sağlayıcıda dolar (geliştirme/test kolaylığı). Gerçek sağlayıcıda undefined. */
+  /** Kodun gönderildiği kanal — UI "WhatsApp'a/SMS ile gönderildi" der. */
+  channel: VerificationChannel;
+  /** YALNIZ Mock sağlayıcıda dolar (geliştirme/test kolaylığı). Gerçek sağlayıcıda undefined. */
   devCode?: string;
 }
 
@@ -76,32 +78,52 @@ export async function requestPhoneOtp(ctx: SecurityContext): Promise<RequestOtpR
     }
   }
 
-  await otpRepo.consumeActive(ctx.userId); // eski aktif kodları geçersiz kıl
-
   const code = generateOtpCode();
   const salt = generateSalt();
+  const ttlMinutes = Math.round(OTP_TTL_MS / 60_000);
+
+  // ── Teslimat: yapılandırılmış kanalları öncelik sırasıyla dene (WhatsApp → SMS) ──
+  // Önce gönder, başaran kanal belli olunca OTP kaydını o kanalla oluştur (yetim kayıt yok).
+  const channels = resolveOtpChannels().filter((c) => c.isConfigured());
+  if (channels.length === 0) {
+    throw new SecurityError("Doğrulama kodu gönderim kanalı yapılandırılmamış.", 500, "no_channel");
+  }
+
+  let delivered: { channel: VerificationChannel; provider: string; devCode?: string } | null = null;
+  let lastError: string | undefined;
+  for (const ch of channels) {
+    const res = await ch.deliver({ to: phone, code, ttlMinutes, appName: "SigortaOS" });
+    if (res.success) {
+      delivered = { channel: ch.channel, provider: ch.name, devCode: res.devCode };
+      break;
+    }
+    lastError = res.errorMessage;
+    // Başarısız denemeyi de logla (ör. WhatsApp düştü → SMS'e geçildi) — teşhis için.
+    await logSecurityEvent({
+      userId: ctx.userId, agencyId, event: "OTP_SENT", channel: ch.channel,
+      ip: ctx.ip, userAgent: ctx.userAgent,
+      metadata: { phoneMasked: maskPhone(phone), provider: ch.name, failed: true, error: res.errorMessage },
+    });
+  }
+  if (!delivered) {
+    throw new SecurityError("Doğrulama kodu gönderilemedi. Lütfen tekrar deneyin.", 502, "send_failed", { lastError });
+  }
+
+  await otpRepo.consumeActive(ctx.userId); // eski aktif kodları geçersiz kıl
   await otpRepo.createOtp({
     user_id: ctx.userId,
     phone,
+    channel: delivered.channel,
     code_hash: hashOtp(code, salt),
     code_salt: salt,
     expires_at: otpExpiry().toISOString(),
     max_attempts: OTP_MAX_ATTEMPTS,
   });
 
-  const sms = getSmsProvider();
-  const res = await sms.sendSms({
-    to: phone,
-    message: `SigortaOS doğrulama kodunuz: ${code}\nKod 5 dakika geçerlidir, kimseyle paylaşmayın.`,
-  });
-  if (!res.success) {
-    throw new SecurityError("SMS gönderilemedi. Lütfen tekrar deneyin.", 502, "sms_failed");
-  }
-
   await logSecurityEvent({
-    userId: ctx.userId, agencyId, event: "OTP_SENT", channel: "sms",
+    userId: ctx.userId, agencyId, event: "OTP_SENT", channel: delivered.channel,
     ip: ctx.ip, userAgent: ctx.userAgent,
-    metadata: { phoneMasked: maskPhone(phone), provider: sms.name },
+    metadata: { phoneMasked: maskPhone(phone), provider: delivered.provider },
   });
 
   return {
@@ -109,7 +131,8 @@ export async function requestPhoneOtp(ctx: SecurityContext): Promise<RequestOtpR
     phoneMasked: maskPhone(phone),
     cooldownMs: OTP_RESEND_COOLDOWN_MS,
     expiresInMs: OTP_TTL_MS,
-    devCode: sms.name === "mock" ? code : undefined, // yalnız mock — gerçek sağlayıcıda asla
+    channel: delivered.channel,
+    devCode: delivered.devCode, // yalnız mock — gerçek sağlayıcıda undefined
   };
 }
 
@@ -130,7 +153,7 @@ export async function verifyPhoneOtp(ctx: SecurityContext, code: string): Promis
 
   if (new Date(otp.expires_at).getTime() < Date.now()) {
     await otpRepo.consumeOtp(otp.id);
-    await logSecurityEvent({ userId: ctx.userId, agencyId, event: "OTP_EXPIRED", channel: "sms", ip: ctx.ip, userAgent: ctx.userAgent });
+    await logSecurityEvent({ userId: ctx.userId, agencyId, event: "OTP_EXPIRED", channel: otp.channel, ip: ctx.ip, userAgent: ctx.userAgent });
     throw new SecurityError("Kodun süresi doldu. Lütfen yeni kod isteyin.", 400, "expired");
   }
 
@@ -142,7 +165,7 @@ export async function verifyPhoneOtp(ctx: SecurityContext, code: string): Promis
   if (!verifyOtpHash(clean, otp.code_salt, otp.code_hash)) {
     const attempts = await otpRepo.incrementAttempts(otp.id);
     const remaining = Math.max(0, otp.max_attempts - attempts);
-    await logSecurityEvent({ userId: ctx.userId, agencyId, event: "OTP_FAILED", channel: "sms", ip: ctx.ip, userAgent: ctx.userAgent, metadata: { remaining } });
+    await logSecurityEvent({ userId: ctx.userId, agencyId, event: "OTP_FAILED", channel: otp.channel, ip: ctx.ip, userAgent: ctx.userAgent, metadata: { remaining } });
     if (remaining <= 0) {
       await otpRepo.consumeOtp(otp.id);
       throw new SecurityError("Çok fazla yanlış deneme. Lütfen yeni kod isteyin.", 429, "too_many_attempts");
@@ -158,7 +181,7 @@ export async function verifyPhoneOtp(ctx: SecurityContext, code: string): Promis
     .update({ verified_phone: true, phone_verified_at: new Date().toISOString() })
     .eq("id", ctx.userId);
   await recordVerification(ctx.userId, otp.phone);
-  await logSecurityEvent({ userId: ctx.userId, agencyId, event: "PHONE_VERIFIED", channel: "sms", ip: ctx.ip, userAgent: ctx.userAgent });
+  await logSecurityEvent({ userId: ctx.userId, agencyId, event: "PHONE_VERIFIED", channel: otp.channel, ip: ctx.ip, userAgent: ctx.userAgent });
 
   return { verified: true };
 }

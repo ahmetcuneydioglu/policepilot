@@ -28,6 +28,7 @@ export default function VerifyPhoneScreen() {
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [devCode, setDevCode] = useState('');
+  const [channel, setChannel] = useState<'sms' | 'whatsapp' | 'call' | ''>('');
   const inputRef = useRef<TextInput>(null);
 
   // ─── Kod gönder ───
@@ -36,7 +37,8 @@ export default function VerifyPhoneScreen() {
     try {
       const res = await sendPhoneOtp();
       if (res.meta?.phoneMasked) setMasked(res.meta.phoneMasked);
-      setDevCode(res.meta?.devCode ?? ''); // yalnız Mock SMS'te dolu
+      setChannel(res.meta?.channel ?? '');
+      setDevCode(res.meta?.devCode ?? ''); // yalnız Mock'ta dolu
       setCountdown(RESEND_SECONDS);
       setCode('');
       setTimeout(() => inputRef.current?.focus(), 300);
@@ -87,12 +89,14 @@ export default function VerifyPhoneScreen() {
           <View style={styles.iconCircle}><Text style={styles.iconText}>🔐</Text></View>
           <Text style={styles.title}>Telefon Doğrulama</Text>
           <Text style={styles.subtitle}>
-            {masked ? `${masked} numarasına gönderdiğimiz` : 'Telefonunuza gönderdiğimiz'} 6 haneli kodu girin.
+            {masked ? `${masked} numaranıza` : 'Telefonunuza'}{' '}
+            {channel === 'whatsapp' ? 'WhatsApp ile ' : channel === 'sms' ? 'SMS ile ' : ''}
+            gönderdiğimiz 6 haneli kodu girin.
           </Text>
 
           {devCode ? (
             <TouchableOpacity style={styles.devBanner} onPress={() => onChange(devCode)} activeOpacity={0.7}>
-              <Text style={styles.devBannerText}>🧪 Test modu (Mock SMS) — kod: <Text style={styles.devBannerCode}>{devCode}</Text></Text>
+              <Text style={styles.devBannerText}>🧪 Test modu (Mock) — kod: <Text style={styles.devBannerCode}>{devCode}</Text></Text>
               <Text style={styles.devBannerHint}>Otomatik doldurmak için dokun</Text>
             </TouchableOpacity>
           ) : null}

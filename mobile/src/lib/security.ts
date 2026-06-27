@@ -5,10 +5,12 @@
 
 import { apiPost } from './api';
 
+export type OtpChannel = 'sms' | 'whatsapp' | 'call';
+
 export type SendOtpResponse = {
   ok: boolean;
   sent: boolean;
-  meta?: { phoneMasked?: string; cooldownMs?: number; expiresInMs?: number; devCode?: string };
+  meta?: { phoneMasked?: string; cooldownMs?: number; expiresInMs?: number; channel?: OtpChannel; devCode?: string };
 };
 
 export type VerifyOtpResponse = { ok: boolean; verified: boolean };
