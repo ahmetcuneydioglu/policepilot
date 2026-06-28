@@ -17,7 +17,8 @@ import {
   Alert, Image,
 } from 'react-native';
 import { Colors, Spacing, Radius } from '@/lib/theme';
-import { getSignedUrl, deleteDocument, fileIcon, formatFileSize } from '@/lib/storage';
+import { deleteDocument, fileIcon, formatFileSize } from '@/lib/storage';
+import { apiPost } from '@/lib/api';
 import type { DocumentRecord } from '@/lib/types';
 
 // Defensive imports
@@ -60,7 +61,9 @@ function DocRow({
   async function openFile() {
     setOpening(true);
     try {
-      const signedUrl = await getSignedUrl(doc.file_path);
+      // İmza SUNUCUDA (service-role + doğru bucket). Belge web'den (policy-documents)
+      // ya da mobilden (documents) yüklenmiş olabilir; sunucu doc.bucket'ı okur, RLS'e takılmaz.
+      const { url: signedUrl } = await apiPost<{ url?: string }>('/api/documents/sign', { id: doc.id });
       if (!signedUrl) {
         Alert.alert('Hata', 'Dosya bağlantısı alınamadı.');
         return;
@@ -86,7 +89,14 @@ function DocRow({
   }
 
   async function handleShare() {
-    const signedUrl = await getSignedUrl(doc.file_path);
+    let signedUrl: string | undefined;
+    try {
+      const res = await apiPost<{ url?: string }>('/api/documents/sign', { id: doc.id });
+      signedUrl = res.url;
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message ?? 'Bağlantı alınamadı.');
+      return;
+    }
     if (!signedUrl) { Alert.alert('Hata', 'Bağlantı alınamadı.'); return; }
 
     const FileSystem = getFileSystem();
