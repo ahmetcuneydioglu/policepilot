@@ -4,10 +4,12 @@
  * İlk tescil tarihinden, kullanım tarzına göre BİR SONRAKİ muayene tarihini
  * (bugünden ≥) üretir. Poliçeden çıkarılan tescil tarihiyle Faz 2 otomatik hesap.
  *
- * Kurallar (TÜVTÜRK):
- *   • Otomobil / hususi (varsayılan): ilk muayene tescil + 3 yıl, sonra her 2 yıl.
- *   • Ticari (kamyon/otobüs/minibüs/taksi/dolmuş/kiralık…): yıllık (tescil + 1, sonra +1).
- * Belirsizse otomobil kuralı uygulanır; acente müşteri detayından düzeltebilir.
+ * Kurallar (TÜVTÜRK — resmî):
+ *   • Hususi (binek) otomobil + motosiklet: 2 yılda bir. Sıfır araç ilk 3 yıl muaf
+ *     → ilk muayene tescil + 3 yıl, sonra her 2 yıl. (varsayılan)
+ *   • Ticari (kamyon/kamyonet/taksi/otobüs/minibüs…): yıllık. Sıfır araç ilk 1 yıl muaf
+ *     → ilk muayene tescil + 1 yıl, sonra her yıl.
+ * Belirsizse hususi (otomobil) kuralı uygulanır; acente müşteri detayından düzeltebilir.
  */
 
 function validIsoDate(value: string): boolean {

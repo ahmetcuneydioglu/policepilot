@@ -26,6 +26,21 @@ function yearFrom(v: unknown): number | null {
   return y >= 1950 && y <= now + 1 ? y : null;
 }
 
+/**
+ * Model yılından tescil tahmini. Gün/ay bilinmediği için müşteri id'sinden
+ * DETERMİNİSTİK bir gün-yayılımı uygular: hep 1 Ocak'a düşüp kümelenmek yerine
+ * (188/553 gün gibi) yıl içine dağılır; bazı araçlar bu yıla doğru düzelir.
+ * Sonuç yine TAHMİNİ'dir (muayene_tahmini=true) — kesin tarih müşteriden alınır.
+ */
+function estimateRegDate(year: number, seedId: string): string {
+  let h = 0;
+  for (let i = 0; i < seedId.length; i++) h = (h * 31 + seedId.charCodeAt(i)) >>> 0;
+  const dayOfYear = (h % 365) + 1; // 1..365
+  const d = new Date(Date.UTC(year, 0, 1));
+  d.setUTCDate(d.getUTCDate() + dayOfYear - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const caller = await resolveCaller(request);
@@ -44,7 +59,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await (admin.from("customers") as any)
       .select("id, vehicle_plate, extra_data, muayene_bitis")
       .eq("agency_id", agencyId)
-      .is("muayene_bitis", null);
+      .or("muayene_bitis.is.null,muayene_tahmini.is.true"); // boş VEYA tahmini → (yeniden) hesapla
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     let updated = 0;
@@ -55,14 +70,14 @@ export async function POST(request: NextRequest) {
       const hasVehicle = Boolean(c.vehicle_plate || extra.vehicle_plate);
       if (!year || !hasVehicle) { skipped++; continue; }
 
-      const muayene = computeMuayeneBitis(`${year}-01-01`, extra.vehicle_usage ?? null);
+      const muayene = computeMuayeneBitis(estimateRegDate(year, c.id), extra.vehicle_usage ?? null);
       if (!muayene) { skipped++; continue; }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: upErr } = await (admin.from("customers") as any)
         .update({ muayene_bitis: muayene, muayene_tahmini: true })
         .eq("id", c.id)
-        .is("muayene_bitis", null); // yarış güvenli — bu arada elle girildiyse ezme
+        .or("muayene_bitis.is.null,muayene_tahmini.is.true"); // null veya tahmini → güncelle; teyitliyi ASLA ezme
       if (upErr) { skipped++; continue; }
       updated++;
     }
