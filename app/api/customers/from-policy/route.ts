@@ -299,13 +299,14 @@ export async function POST(request: NextRequest) {
     if (existingCustomerId) {
       customer = { id: existingCustomerId };
       customerMatched = true;
-      // Muayene hesaplandıysa ve müşteride boşsa doldur (elle gireni ezme)
+      // Muayene hesaplandıysa: boşsa VEYA tahminiyse doldur/teyitle (elle gireni ezme).
+      // OCR tescili gerçek olduğu için muayene_tahmini=false (teyitli).
       if (muayeneBitis) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (admin.from("customers") as any)
-          .update({ muayene_bitis: muayeneBitis })
+          .update({ muayene_bitis: muayeneBitis, muayene_tahmini: false })
           .eq("id", existingCustomerId)
-          .is("muayene_bitis", null);
+          .or("muayene_bitis.is.null,muayene_tahmini.is.true");
       }
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -321,6 +322,7 @@ export async function POST(request: NextRequest) {
           vehicle_plate: vehiclePlate,
           policy_end_date: policyEndDate,
           muayene_bitis: muayeneBitis,
+          muayene_tahmini: false,
           extra_data: extraData,
           created_by: caller.userId,
         })

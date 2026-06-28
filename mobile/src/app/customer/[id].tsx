@@ -82,7 +82,7 @@ export default function CustomerDetailScreen() {
       return Alert.alert('Geçersiz tarih', 'Tarihi YYYY-AA-GG biçiminde girin (ör. 2026-12-31).');
     }
     setSavingMuayene(true);
-    await (supabase.from('customers') as any).update({ muayene_bitis: v || null }).eq('id', id);
+    await (supabase.from('customers') as any).update({ muayene_bitis: v || null, muayene_tahmini: false }).eq('id', id);
     setSavingMuayene(false);
     await load();
   }
@@ -253,6 +253,9 @@ export default function CustomerDetailScreen() {
           <TouchableOpacity style={[styles.noteSave, savingMuayene && { opacity: 0.6 }]} onPress={saveMuayene} disabled={savingMuayene}>
             {savingMuayene ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.noteSaveText}>Muayene Tarihini Kaydet</Text>}
           </TouchableOpacity>
+          {c.muayene_tahmini && !!c.muayene_bitis && (
+            <Text style={styles.tahminiNote}>⚠️ Bu tarih model yılından tahmin edildi. Müşteriyle görüşüp kesin tarihi girin (kaydedince işaret kalkar).</Text>
+          )}
         </Section>
 
         {/* Evraklar */}
@@ -405,6 +408,7 @@ const styles = StyleSheet.create({
   noteInput: { ...Type.body, color: Colors.heading, minHeight: 64, textAlignVertical: 'top', padding: 0 },
   muayeneHint: { ...Type.caption, color: Colors.secondary, marginBottom: 6 },
   muayeneInput: { ...Type.body, color: Colors.heading, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10 },
+  tahminiNote: { fontSize: 12, color: '#B45309', backgroundColor: '#FEF9C3', borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8, lineHeight: 17 },
   noteSave: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center', marginTop: Spacing.sm },
   noteSaveText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 

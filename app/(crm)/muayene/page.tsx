@@ -12,10 +12,10 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
-import { withScopeFilter } from "@/lib/tenant";
+import { withScopeFilter, isManagerial } from "@/lib/tenant";
 import {
   Car, Search, CalendarClock, CalendarDays, CalendarRange,
-  AlertTriangle, RefreshCw, ChevronRight, Phone,
+  AlertTriangle, RefreshCw, ChevronRight, Phone, Wand2, Info,
 } from "lucide-react";
 
 type InspCustomer = {
@@ -24,6 +24,7 @@ type InspCustomer = {
   phone: string | null;
   vehicle_plate: string | null;
   muayene_bitis: string;
+  muayene_tahmini: boolean;
 };
 
 type FilterKey = "Tümü" | "Bugün" | "Bu Hafta" | "30 Gün" | "Geciken";
@@ -73,6 +74,10 @@ export default function MuayenePage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter]   = useState<FilterKey>("Tümü");
   const [search, setSearch]   = useState("");
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState("");
+
+  const canBackfill = role !== "super_admin" && isManagerial(profile?.agency_role);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,7 +86,7 @@ export default function MuayenePage() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase.from("customers") as any)
-      .select("id, name, phone, vehicle_plate, muayene_bitis, agency_id, created_by")
+      .select("id, name, phone, vehicle_plate, muayene_bitis, muayene_tahmini, agency_id, created_by")
       .not("muayene_bitis", "is", null)
       .gte("muayene_bitis", from)
       .lte("muayene_bitis", to)
@@ -96,6 +101,24 @@ export default function MuayenePage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
+
+  async function runBackfill() {
+    setBackfilling(true);
+    setBackfillMsg("");
+    try {
+      const res = await fetch("/api/muayene/backfill", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      });
+      const json = await res.json();
+      if (!res.ok) { setBackfillMsg(json.error ?? "İşlem başarısız."); return; }
+      setBackfillMsg(`${json.updated} aracın muayenesi tahmini olarak dolduruldu (model yılından). Kesin tarihler için müşterilerle teyitleşin.`);
+      await load();
+    } catch {
+      setBackfillMsg("Sunucuya ulaşılamadı. Tekrar deneyin.");
+    } finally {
+      setBackfilling(false);
+    }
+  }
 
   const overdue  = rows.filter(c => daysLeft(c.muayene_bitis) < 0);
   const today    = rows.filter(c => daysLeft(c.muayene_bitis) === 0);
@@ -142,7 +165,25 @@ export default function MuayenePage() {
             Muayene bitiş tarihlerini takip edin, müşterilerinize zamanında hatırlatın.
           </p>
         </div>
+
+        {canBackfill && (
+          <button
+            onClick={runBackfill}
+            disabled={backfilling}
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/80 backdrop-blur-sm border border-teal-200 text-teal-700 text-sm font-semibold hover:bg-teal-50 transition-all shadow-sm disabled:opacity-50"
+            title="Eski araç müşterilerinde model yılından muayeneyi tahmini doldurur (mevcut/teyitli tarihleri ezmez)"
+          >
+            <Wand2 className="w-4 h-4" />
+            {backfilling ? "Dolduruluyor…" : "Eski araçlardan tahmini doldur"}
+          </button>
+        )}
       </div>
+
+      {backfillMsg && (
+        <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl bg-teal-50 border border-teal-200 text-sm text-teal-800">
+          <Info className="w-4 h-4 mt-0.5 flex-shrink-0" /> {backfillMsg}
+        </div>
+      )}
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -248,6 +289,11 @@ export default function MuayenePage() {
                     </div>
                     <div className="col-span-2">
                       <p className="text-xs font-semibold text-slate-600">{fmtDate(c.muayene_bitis)}</p>
+                      {c.muayene_tahmini && (
+                        <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[9px] font-bold ring-1 ring-amber-200" title="Model yılından tahmin — kesin tarih için müşteriyle teyitleşin">
+                          ~ tahmini
+                        </span>
+                      )}
                     </div>
                     <div className="col-span-2 flex items-center justify-end gap-1.5 flex-wrap">
                       {phone ? (

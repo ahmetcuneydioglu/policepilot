@@ -245,6 +245,11 @@ export default function OverviewTab({
           {savedM && <span className="text-xs font-semibold text-emerald-600">✓ Kaydedildi</span>}
           {muayene && <span className="text-[11px] text-slate-400 ml-auto">Muayene: <b className="text-slate-700">{fmtDate(muayene)}</b></span>}
         </div>
+        {customer.muayene_tahmini && !savedM && (
+          <p className="mt-2.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+            ⚠️ Bu tarih model yılından <b>tahmin</b> edildi. Müşteriyle görüşüp kesin muayene tarihini girin (kaydedince tahmini işareti kalkar).
+          </p>
+        )}
       </div>
 
       {/* ══ Bilgiler + Hızlı Aksiyonlar ══ */}

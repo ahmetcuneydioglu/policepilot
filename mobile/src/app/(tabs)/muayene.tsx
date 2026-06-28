@@ -143,6 +143,9 @@ export default function MuayeneScreen() {
                       <Text style={styles.meta} numberOfLines={1}>
                         {item.vehiclePlate ? `${item.vehiclePlate} · ` : ''}Muayene: {fmtDate(item.muayene_bitis)}
                       </Text>
+                      {item.muayeneTahmini && (
+                        <Text style={styles.tahmini} numberOfLines={1}>~ tahmini · müşteriyle teyit edin</Text>
+                      )}
                     </View>
                     <View style={[styles.badge, { backgroundColor: u.bg }]}>
                       <View style={[styles.badgeDot, { backgroundColor: u.dot }]} />
@@ -200,6 +203,7 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 15, fontWeight: '800' },
   name: { ...Type.subhead },
   meta: { ...Type.caption, marginTop: 2 },
+  tahmini: { fontSize: 10, color: '#B45309', fontWeight: '700', marginTop: 2 },
   badge: { flexDirection: 'row', alignItems: 'center', borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 5, marginLeft: 8 },
   badgeDot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
   badgeText: { fontSize: 11, fontWeight: '700' },

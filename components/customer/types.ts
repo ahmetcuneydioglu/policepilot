@@ -13,6 +13,7 @@ export type CustomerDetail = {
   insurance_type: string;
   note: string | null;
   muayene_bitis: string | null;
+  muayene_tahmini: boolean;
   created_at: string;
   extra_data: Record<string, string> | null;
 };

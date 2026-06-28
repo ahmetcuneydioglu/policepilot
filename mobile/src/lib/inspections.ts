@@ -16,6 +16,7 @@ export type InspectionItem = {
   customerPhone: string;
   vehiclePlate: string | null;
   muayene_bitis: string;
+  muayeneTahmini: boolean;
   daysLeft: number;
 };
 
@@ -30,7 +31,7 @@ export async function fetchUpcomingInspections(agencyId: string | null): Promise
   const lower = new Date(Date.now() - 60 * DAY).toISOString().slice(0, 10);
 
   let q = (supabase.from('customers') as any)
-    .select('id,name,phone,vehicle_plate,muayene_bitis')
+    .select('id,name,phone,vehicle_plate,muayene_bitis,muayene_tahmini')
     .not('muayene_bitis', 'is', null)
     .gte('muayene_bitis', lower)
     .lte('muayene_bitis', upper)
@@ -44,6 +45,7 @@ export async function fetchUpcomingInspections(agencyId: string | null): Promise
     customerPhone: c.phone ?? '',
     vehiclePlate: c.vehicle_plate ?? null,
     muayene_bitis: c.muayene_bitis,
+    muayeneTahmini: !!c.muayene_tahmini,
     daysLeft: daysUntil(c.muayene_bitis, todayStr),
   }));
 }

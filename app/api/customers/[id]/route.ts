@@ -229,6 +229,7 @@ export async function PATCH(
         return NextResponse.json({ error: "muayene_bitis YYYY-AA-GG biçiminde olmalı." }, { status: 400 });
       }
       update.muayene_bitis = v || null;
+      update.muayene_tahmini = false; // elle girilen/temizlenen = teyitli
     }
 
     if (Object.keys(update).length === 0) {
