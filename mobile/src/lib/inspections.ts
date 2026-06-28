@@ -20,21 +20,20 @@ export type InspectionItem = {
   daysLeft: number;
 };
 
-export type InspectionWindow = 7 | 15 | 30 | 60 | 'overdue';
+export type InspectionWindow = 30 | 60 | 90 | 'all' | 'overdue';
 
 const DAY = 86_400_000;
 
 /** Muayenesi [bugün-60, bugün+90] aralığındaki müşteriler (geçmiş dahil). */
 export async function fetchUpcomingInspections(agencyId: string | null): Promise<InspectionItem[]> {
   const todayStr = new Date().toISOString().slice(0, 10);
-  const upper = new Date(Date.now() + 90 * DAY).toISOString().slice(0, 10);
-  const lower = new Date(Date.now() - 60 * DAY).toISOString().slice(0, 10);
+  // Muayene tarihleri 2 yıla kadar ileride olabilir → ÜST SINIR YOK (tüm takip).
+  const lower = new Date(Date.now() - 365 * DAY).toISOString().slice(0, 10);
 
   let q = (supabase.from('customers') as any)
     .select('id,name,phone,vehicle_plate,muayene_bitis,muayene_tahmini')
     .not('muayene_bitis', 'is', null)
     .gte('muayene_bitis', lower)
-    .lte('muayene_bitis', upper)
     .order('muayene_bitis', { ascending: true });
   if (agencyId) q = q.eq('agency_id', agencyId);
 
@@ -50,9 +49,10 @@ export async function fetchUpcomingInspections(agencyId: string | null): Promise
   }));
 }
 
-/** Segment'e göre filtre: 7/15/30/60 → [0,N] gün; 'overdue' → geçmiş. */
+/** Segment'e göre filtre: 30/60/90 → [0,N] gün; 'all' → tümü; 'overdue' → geçmiş. */
 export function filterByWindow(items: InspectionItem[], w: InspectionWindow): InspectionItem[] {
   if (w === 'overdue') return items.filter((i) => i.daysLeft < 0);
+  if (w === 'all') return items;
   return items.filter((i) => i.daysLeft >= 0 && i.daysLeft <= w);
 }
 

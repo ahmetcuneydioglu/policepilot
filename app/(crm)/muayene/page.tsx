@@ -81,15 +81,15 @@ export default function MuayenePage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const from = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
-    const to   = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10);
+    // Muayene tarihleri 2 yıla kadar ileride olabilir (her 2 yılda bir döngü) →
+    // ÜST SINIR YOK; tüm takip listelenir. Alt sınır 1 yıl (eski gecikmişleri gizle).
+    const from = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase.from("customers") as any)
       .select("id, name, phone, vehicle_plate, muayene_bitis, muayene_tahmini, agency_id, created_by")
       .not("muayene_bitis", "is", null)
       .gte("muayene_bitis", from)
-      .lte("muayene_bitis", to)
       .order("muayene_bitis", { ascending: true });
     q = withScopeFilter(q, role, agencyId, profile?.id, profile?.agency_role);
 

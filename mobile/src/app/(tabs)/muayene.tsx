@@ -14,10 +14,10 @@ import {
 } from '@/lib/inspections';
 
 const SEGMENTS: { key: InspectionWindow; label: string }[] = [
-  { key: 7, label: '7 Gün' },
-  { key: 15, label: '15 Gün' },
+  { key: 'all', label: 'Tümü' },
   { key: 30, label: '30 Gün' },
   { key: 60, label: '60 Gün' },
+  { key: 90, label: '90 Gün' },
   { key: 'overdue', label: 'Geçmiş' },
 ];
 
@@ -36,7 +36,7 @@ export default function MuayeneScreen() {
   const [items, setItems] = useState<InspectionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [segment, setSegment] = useState<InspectionWindow>(30);
+  const [segment, setSegment] = useState<InspectionWindow>('all');
 
   const load = useCallback(async () => {
     const data = await fetchUpcomingInspections(agencyId);
@@ -53,7 +53,6 @@ export default function MuayeneScreen() {
   }, [load]);
 
   const visible = useMemo(() => filterByWindow(items, segment), [items, segment]);
-  const upcoming60 = useMemo(() => filterByWindow(items, 60).length, [items]);
   const counts = useMemo(() => {
     const m: Record<string, number> = {};
     for (const s of SEGMENTS) m[String(s.key)] = filterByWindow(items, s.key).length;
@@ -81,8 +80,8 @@ export default function MuayeneScreen() {
         subtitle="Muayene takvimi & hatırlatma"
         right={
           <View style={[styles.primPill, heroGlass]}>
-            <Text style={styles.primLabel}>YAKLAŞAN</Text>
-            <Text style={styles.primValue}>{upcoming60}</Text>
+            <Text style={styles.primLabel}>TAKİPTE</Text>
+            <Text style={styles.primValue}>{items.length}</Text>
           </View>
         }
       >
