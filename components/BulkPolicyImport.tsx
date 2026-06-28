@@ -26,6 +26,7 @@ type RowData = {
   name: string; phone: string; tc_identity_no: string; tax_no: string;
   address: string; plate: string; license_serial: string;
   brand_model: string; vehicle_year: string; engine_no: string; chassis_no: string;
+  first_registration_date: string; vehicle_usage: string;
   vehicle_value: string; city: string; district: string; building_age: string;
   area_m2: string; building_type: string; housing_type: string;
   birth_date: string; gender: string; destination_country: string;
@@ -48,6 +49,7 @@ type Row = {
 const EMPTY_DATA: RowData = {
   name: "", phone: "", tc_identity_no: "", tax_no: "", address: "", plate: "",
   license_serial: "", brand_model: "", vehicle_year: "", engine_no: "", chassis_no: "",
+  first_registration_date: "", vehicle_usage: "",
   vehicle_value: "", city: "", district: "", building_age: "", area_m2: "",
   building_type: "", housing_type: "", birth_date: "", gender: "", destination_country: "",
   policy_type: "", policy_no: "", insurance_company: "", premium: "", start_date: "", end_date: "",
@@ -70,6 +72,8 @@ function ocrToRow(fields: Record<string, { value: string | null }>): RowData {
     vehicle_year:      v("vehicle_year"),
     engine_no:         v("engine_no"),
     chassis_no:        v("chassis_no"),
+    first_registration_date: v("first_registration_date"),
+    vehicle_usage:     v("vehicle_usage"),
     vehicle_value:     v("vehicle_value"),
     city:              v("city"),
     district:          v("district"),
@@ -221,6 +225,8 @@ export default function BulkPolicyImport({
         fd.append("vehicle_year", d.vehicle_year);
         fd.append("engine_no", d.engine_no);
         fd.append("chassis_no", d.chassis_no);
+        fd.append("first_registration_date", d.first_registration_date);
+        fd.append("vehicle_usage", d.vehicle_usage);
         fd.append("vehicle_value", d.vehicle_value.replace(",", "."));
         fd.append("city", d.city);
         fd.append("district", d.district);

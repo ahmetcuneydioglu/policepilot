@@ -33,6 +33,8 @@ export class MockOcrProvider implements OcrProvider {
       vehicle_year: field("2006", 0.89),
       engine_no: field("G4EE6359743", 0.85),
       chassis_no: field("KMHBU51DP6U513670", 0.86),
+      first_registration_date: field("2006-06-15", 0.84),
+      vehicle_usage: field("Hususi", 0.9),
       policy_type: field("Trafik", 0.96),
       policy_no: field("74798326", 0.93),
       insurance_company: field("Ethica Sigorta", 0.94),

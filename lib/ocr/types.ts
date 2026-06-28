@@ -33,6 +33,8 @@ export const POLICY_OCR_FIELD_KEYS = [
   "vehicle_year",
   "engine_no",
   "chassis_no",
+  "first_registration_date",  // İlk tescil tarihi — muayene otomatik hesabı için
+  "vehicle_usage",            // Kullanım tarzı (Hususi|Ticari…) — muayene periyodu
   "policy_type",
   "policy_no",
   "insurance_company",

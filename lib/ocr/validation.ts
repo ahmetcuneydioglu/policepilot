@@ -67,6 +67,7 @@ function validateSingle(key: PolicyOcrFieldKey, value: string | null): string | 
     case "start_date":
     case "end_date":
     case "birth_date":
+    case "first_registration_date":
       return validDate(v) ? null : "Geçerli tarih olmalı";
     case "premium":
       return Number.isFinite(Number(v.replace(",", "."))) ? null : "Prim sayısal olmalı";

@@ -23,7 +23,8 @@ export type Asset = { uri: string; fileName: string; mimeType: string };
 export type PolicyRow = {
   name: string; phone: string; tc_identity_no: string; tax_no: string; address: string;
   plate: string; license_serial: string; brand_model: string; vehicle_year: string;
-  engine_no: string; chassis_no: string; vehicle_value: string; city: string; district: string;
+  engine_no: string; chassis_no: string; first_registration_date: string; vehicle_usage: string;
+  vehicle_value: string; city: string; district: string;
   building_age: string; area_m2: string; building_type: string; housing_type: string;
   birth_date: string; gender: string; destination_country: string;
   policy_type: string; policy_no: string; insurance_company: string; premium: string;
@@ -34,6 +35,7 @@ export function emptyRow(): PolicyRow {
   return {
     name: '', phone: '', tc_identity_no: '', tax_no: '', address: '', plate: '',
     license_serial: '', brand_model: '', vehicle_year: '', engine_no: '', chassis_no: '',
+    first_registration_date: '', vehicle_usage: '',
     vehicle_value: '', city: '', district: '', building_age: '', area_m2: '',
     building_type: '', housing_type: '', birth_date: '', gender: '', destination_country: '',
     policy_type: '', policy_no: '', insurance_company: '', premium: '', start_date: '', end_date: '',
@@ -49,7 +51,9 @@ export function ocrToRow(fields: OcrFields): PolicyRow {
     name: v('customer_name'), phone: v('phone'), tc_identity_no: v('tc_identity_no'), tax_no: v('tax_no'),
     address: v('address'), plate: v('plate').toUpperCase(), license_serial: v('license_serial'),
     brand_model: [brand, model].filter(Boolean).join(' '), vehicle_year: v('vehicle_year'),
-    engine_no: v('engine_no'), chassis_no: v('chassis_no'), vehicle_value: v('vehicle_value'),
+    engine_no: v('engine_no'), chassis_no: v('chassis_no'),
+    first_registration_date: v('first_registration_date'), vehicle_usage: v('vehicle_usage'),
+    vehicle_value: v('vehicle_value'),
     city: v('city'), district: v('district'), building_age: v('building_age'), area_m2: v('area_m2'),
     building_type: v('building_type'), housing_type: v('housing_type'), birth_date: v('birth_date'),
     gender: v('gender'), destination_country: v('destination_country'),
@@ -98,6 +102,8 @@ export async function submitFromPolicy(
   fd.append('vehicle_year', d.vehicle_year);
   fd.append('engine_no', d.engine_no);
   fd.append('chassis_no', d.chassis_no);
+  fd.append('first_registration_date', d.first_registration_date);
+  fd.append('vehicle_usage', d.vehicle_usage);
   fd.append('vehicle_value', d.vehicle_value.replace(',', '.'));
   fd.append('city', d.city);
   fd.append('district', d.district);

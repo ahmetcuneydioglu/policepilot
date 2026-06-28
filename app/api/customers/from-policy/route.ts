@@ -11,6 +11,7 @@ import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canAddCustomer, canAddPolicy, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
 import { KNOWN_POLICY_TYPES } from "@/lib/ocr/validation";
+import { computeMuayeneBitis } from "@/lib/muayene";
 import { logActivity } from "@/lib/activity";
 import { resolveCaller, requirePermission } from "../../whatsapp/_lib/auth";
 
@@ -252,6 +253,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validationErrors.join(" "), code: "validation_error" }, { status: 400 });
     }
 
+    // ── Muayene otomatik hesabı (Faz 2): ilk tescil + kullanım tarzı → muayene_bitis ──
+    const firstReg = optionalText(form, "first_registration_date");
+    const vehicleUsage = optionalText(form, "vehicle_usage");
+    const muayeneBitis = computeMuayeneBitis(firstReg, vehicleUsage);
+
     const extraData = {
       tc_identity_no: tcIdentityNo,
       tax_no: taxNo,
@@ -262,6 +268,8 @@ export async function POST(request: NextRequest) {
       vehicle_year: optionalText(form, "vehicle_year"),
       engine_no: optionalText(form, "engine_no"),
       chassis_no: optionalText(form, "chassis_no"),
+      first_registration_date: firstReg,
+      vehicle_usage: vehicleUsage,
       // Ürüne özel alanlar (poliçe türüne göre yalnız ilgili olanlar dolu gelir)
       vehicle_value: optionalText(form, "vehicle_value"),
       city: optionalText(form, "city"),
@@ -291,6 +299,14 @@ export async function POST(request: NextRequest) {
     if (existingCustomerId) {
       customer = { id: existingCustomerId };
       customerMatched = true;
+      // Muayene hesaplandıysa ve müşteride boşsa doldur (elle gireni ezme)
+      if (muayeneBitis) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (admin.from("customers") as any)
+          .update({ muayene_bitis: muayeneBitis })
+          .eq("id", existingCustomerId)
+          .is("muayene_bitis", null);
+      }
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: created, error: customerErr } = await (admin.from("customers") as any)
@@ -304,6 +320,7 @@ export async function POST(request: NextRequest) {
           identity_no: identityNo,
           vehicle_plate: vehiclePlate,
           policy_end_date: policyEndDate,
+          muayene_bitis: muayeneBitis,
           extra_data: extraData,
           created_by: caller.userId,
         })
