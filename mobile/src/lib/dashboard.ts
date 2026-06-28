@@ -16,6 +16,8 @@ export type OperationMetrics = {
   tahminiPrim: number;         // yenileme penceresindeki prim toplamı
   buAyPrim: number;            // bu ay oluşturulan poliçe primi
   buAyKomisyon: number;        // bu ay oluşturulan poliçe komisyonu
+  gecenAyPrim: number;         // geçen ay primi (bu-aya-göre trend için)
+  gecenAyKomisyon: number;     // geçen ay komisyonu
   aktifPolice: number;
   donusum: number;             // % (Kazanıldı / (Kazanıldı+Kaybedildi))
   yeniTalep: number;           // "Yeni Lead" aşamasındaki talepler
@@ -40,6 +42,8 @@ export async function fetchOperationMetrics(
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
   const monthStart = `${todayStr.slice(0, 7)}-01`;
+  const lastMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+    .toISOString().slice(0, 10);
 
   // ── Poliçeler (tek çekim → tüm poliçe metrikleri JS'te) ────────────────────
   let polQ = (supabase.from('policies') as any).select(
@@ -62,6 +66,8 @@ export async function fetchOperationMetrics(
   let tahminiPrim = 0;
   let buAyPrim = 0;
   let buAyKomisyon = 0;
+  let gecenAyPrim = 0;
+  let gecenAyKomisyon = 0;
   let bugunKesilen = 0;
 
   for (const p of pols) {
@@ -83,6 +89,9 @@ export async function fetchOperationMetrics(
     if (createdDay >= monthStart) {
       buAyPrim += premium;
       buAyKomisyon += commission;
+    } else if (createdDay >= lastMonthStart) {
+      gecenAyPrim += premium;
+      gecenAyKomisyon += commission;
     }
     if (createdDay === todayStr) bugunKesilen++;
   }
@@ -107,6 +116,8 @@ export async function fetchOperationMetrics(
     tahminiPrim,
     buAyPrim,
     buAyKomisyon,
+    gecenAyPrim,
+    gecenAyKomisyon,
     aktifPolice,
     donusum,
     yeniTalep,
