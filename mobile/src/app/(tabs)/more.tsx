@@ -28,6 +28,7 @@ export default function MoreScreen() {
       title: 'OPERASYON',
       rows: [
         { emoji: '🎯', label: 'Fırsatlar', href: '/(tabs)/requests' },
+        { emoji: '🚗', label: 'Araç Muayeneleri', href: '/(tabs)/muayene' },
         { emoji: '✅', label: 'Görevler', href: '/gorevler' },
         { emoji: '✨', label: 'SigortaOS AI', href: '/(tabs)/ai' },
         { emoji: '📄', label: 'Poliçeler', href: '/(tabs)/policies' },

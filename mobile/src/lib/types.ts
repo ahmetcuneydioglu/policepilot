@@ -8,6 +8,7 @@ export type Customer = {
   identity_no: string | null;
   vehicle_plate: string | null;
   policy_end_date: string | null;
+  muayene_bitis: string | null;
   extra_data: Record<string, string> | null;
   agency_id: string | null;
   created_at: string;

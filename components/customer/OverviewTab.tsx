@@ -6,11 +6,12 @@
  * istatistikler, bilgiler, hızlı aksiyonlar ve çapraz satış fırsatları.
  */
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   Zap, FileText, Phone, TrendingUp, Wallet, ShieldCheck, CalendarClock,
   Sparkles, MessageCircle, StickyNote, FolderUp, RefreshCw, LayoutGrid,
-  ChevronRight, Clock,
+  ChevronRight, Clock, Car, Save,
 } from "lucide-react";
 import type { CustomerBundle } from "./types";
 import { fmtMoney, fmtDate, waPhone } from "./types";
@@ -49,6 +50,25 @@ export default function OverviewTab({
   const grade = GRADE_CLS[insights.score.grade] ?? GRADE_CLS["Yeni"];
   const na    = insights.next_action;
   const naStyle = NEXT_ACTION_STYLE[na.type] ?? NEXT_ACTION_STYLE.idle;
+
+  // Araç muayene — self-contained düzenleme (PATCH /api/customers/[id])
+  const [muayene, setMuayene] = useState(customer.muayene_bitis ?? "");
+  const [savingM, setSavingM] = useState(false);
+  const [savedM, setSavedM]   = useState(false);
+
+  async function saveMuayene() {
+    setSavingM(true); setSavedM(false);
+    try {
+      const res = await fetch(`/api/customers/${customer.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ muayene_bitis: muayene || null }),
+      });
+      if (res.ok) setSavedM(true);
+    } finally {
+      setSavingM(false);
+    }
+  }
 
   const infoRows: [string, string][] = [
     ["Ad Soyad",            customer.name],
@@ -195,6 +215,36 @@ export default function OverviewTab({
             <p className={`text-xl font-bold mt-1.5 leading-none ${c.val}`}>{c.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* ══ Araç Muayene ══ */}
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-sm">
+            <Car className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-900">Araç Muayene</p>
+            <p className="text-[11px] text-slate-400">TÜVTÜRK muayene bitiş tarihi — hatırlatma için kullanılır</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <input
+            type="date"
+            value={muayene}
+            onChange={(e) => { setMuayene(e.target.value); setSavedM(false); }}
+            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400"
+          />
+          <button
+            onClick={saveMuayene}
+            disabled={savingM}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors disabled:opacity-50 shadow-sm"
+          >
+            <Save className="w-3.5 h-3.5" /> {savingM ? "Kaydediliyor…" : "Kaydet"}
+          </button>
+          {savedM && <span className="text-xs font-semibold text-emerald-600">✓ Kaydedildi</span>}
+          {muayene && <span className="text-[11px] text-slate-400 ml-auto">Muayene: <b className="text-slate-700">{fmtDate(muayene)}</b></span>}
+        </div>
       </div>
 
       {/* ══ Bilgiler + Hızlı Aksiyonlar ══ */}

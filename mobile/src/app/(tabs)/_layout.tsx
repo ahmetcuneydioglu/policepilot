@@ -73,6 +73,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="requests" options={{ href: null }} />
       <Tabs.Screen name="ai" options={{ href: null }} />
       <Tabs.Screen name="policies" options={{ href: null }} />
+      <Tabs.Screen name="muayene" options={{ href: null }} />
       <Tabs.Screen name="admin" options={{ href: null }} />
     </Tabs>
   );

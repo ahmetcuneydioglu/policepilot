@@ -42,6 +42,8 @@ export default function CustomerDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [note, setNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [muayeneDate, setMuayeneDate] = useState('');
+  const [savingMuayene, setSavingMuayene] = useState(false);
   const [waMsgs, setWaMsgs] = useState<WaMsg[]>([]);
 
   const load = useCallback(async () => {
@@ -50,6 +52,7 @@ export default function CustomerDetailScreen() {
     setBundle(b);
     setTimeline(buildTimeline(b));
     setNote(b.customer?.note ?? '');
+    setMuayeneDate(b.customer?.muayene_bitis ?? '');
     setLoading(false);
     // WhatsApp geçmişi — arka planda (manager-uyumlu; yetkisizde boş döner)
     const last10 = (b.customer?.phone ?? '').replace(/\D/g, '').slice(-10);
@@ -70,6 +73,18 @@ export default function CustomerDetailScreen() {
     setSavingNote(true);
     await (supabase.from('customers') as any).update({ note }).eq('id', id);
     setSavingNote(false);
+  }
+
+  async function saveMuayene() {
+    if (!id) return;
+    const v = muayeneDate.trim();
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      return Alert.alert('Geçersiz tarih', 'Tarihi YYYY-AA-GG biçiminde girin (ör. 2026-12-31).');
+    }
+    setSavingMuayene(true);
+    await (supabase.from('customers') as any).update({ muayene_bitis: v || null }).eq('id', id);
+    setSavingMuayene(false);
+    await load();
   }
 
   function remove() {
@@ -162,6 +177,7 @@ export default function CustomerDetailScreen() {
           {!!c.identity_no && <InfoRow label="TC / VKN" value={c.identity_no} />}
           {!!c.email && <InfoRow label="E-posta" value={c.email} />}
           {!!c.policy_end_date && <InfoRow label="Poliçe Bitiş" value={fmtDate(c.policy_end_date)} />}
+          {!!c.muayene_bitis && <InfoRow label="Araç Muayene" value={fmtDate(c.muayene_bitis)} />}
           <InfoRow label="Kayıt" value={fmtDate(c.created_at)} />
           {extra.map(([k, v]) => <InfoRow key={k} label={humanize(k)} value={String(v)} />)}
         </View>
@@ -219,6 +235,23 @@ export default function CustomerDetailScreen() {
           />
           <TouchableOpacity style={[styles.noteSave, savingNote && { opacity: 0.6 }]} onPress={saveNote} disabled={savingNote}>
             {savingNote ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.noteSaveText}>Notu Kaydet</Text>}
+          </TouchableOpacity>
+        </Section>
+
+        {/* Araç Muayene */}
+        <Section label="ARAÇ MUAYENE">
+          <Text style={styles.muayeneHint}>Muayene bitiş tarihi (YYYY-AA-GG)</Text>
+          <TextInput
+            style={styles.muayeneInput}
+            value={muayeneDate}
+            onChangeText={setMuayeneDate}
+            placeholder="2026-12-31"
+            placeholderTextColor={Colors.placeholder}
+            keyboardType="numbers-and-punctuation"
+            autoCapitalize="none"
+          />
+          <TouchableOpacity style={[styles.noteSave, savingMuayene && { opacity: 0.6 }]} onPress={saveMuayene} disabled={savingMuayene}>
+            {savingMuayene ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.noteSaveText}>Muayene Tarihini Kaydet</Text>}
           </TouchableOpacity>
         </Section>
 
@@ -370,6 +403,8 @@ const styles = StyleSheet.create({
   miniBadgeText: { fontSize: 11, fontWeight: '700' },
 
   noteInput: { ...Type.body, color: Colors.heading, minHeight: 64, textAlignVertical: 'top', padding: 0 },
+  muayeneHint: { ...Type.caption, color: Colors.secondary, marginBottom: 6 },
+  muayeneInput: { ...Type.body, color: Colors.heading, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10 },
   noteSave: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center', marginTop: Spacing.sm },
   noteSaveText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 

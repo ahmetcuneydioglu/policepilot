@@ -223,6 +223,13 @@ export async function PATCH(
     const body = await request.json();
     const update: Record<string, unknown> = {};
     if (typeof body.note === "string") update.note = body.note.trim() || null;
+    if (body.muayene_bitis !== undefined) {
+      const v = typeof body.muayene_bitis === "string" ? body.muayene_bitis.trim() : "";
+      if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        return NextResponse.json({ error: "muayene_bitis YYYY-AA-GG biçiminde olmalı." }, { status: 400 });
+      }
+      update.muayene_bitis = v || null;
+    }
 
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: "Güncellenecek alan yok." }, { status: 400 });

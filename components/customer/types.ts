@@ -12,6 +12,7 @@ export type CustomerDetail = {
   identity_no: string | null;
   insurance_type: string;
   note: string | null;
+  muayene_bitis: string | null;
   created_at: string;
   extra_data: Record<string, string> | null;
 };
