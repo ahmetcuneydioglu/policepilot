@@ -149,7 +149,7 @@ function RootLayoutInner() {
   useEffect(() => {
     if (loading) return;
     const seg0 = segments[0];
-    if (!session) { if (seg0 !== 'login') router.replace('/login'); return; }
+    if (!session) { if (seg0 !== 'login' && seg0 !== 'register') router.replace('/login'); return; }
     if (verifiedPhone === null) return;                       // profil yüklenene kadar bekle
     if (verifiedPhone === false) {                            // telefon doğrulanmamış → kapı
       if (seg0 !== 'verify-phone') router.replace('/verify-phone');
@@ -171,6 +171,7 @@ function RootLayoutInner() {
       <NotificationSetup session={session} role={role} agencyId={agencyId} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" />
+        <Stack.Screen name="register" />
         <Stack.Screen name="verify-phone" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="new-request"             options={{ presentation: 'modal' }} />

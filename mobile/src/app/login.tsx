@@ -11,10 +11,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius } from '@/lib/theme';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,7 +54,7 @@ export default function LoginScreen() {
         >
           <View style={styles.logoArea}>
             <View style={styles.logoCircle}>
-              <Text style={styles.logoText}>PP</Text>
+              <Text style={styles.logoText}>S</Text>
             </View>
             <Text style={styles.appName}>SigortaOS</Text>
             <Text style={styles.tagline}>Sigorta Acentesi Yönetim Sistemi</Text>
@@ -105,6 +107,10 @@ export default function LoginScreen() {
               ) : (
                 <Text style={styles.buttonText}>Giriş Yap</Text>
               )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.registerLink} onPress={() => router.push('/register')} activeOpacity={0.7}>
+              <Text style={styles.registerLinkText}>Hesabın yok mu? <Text style={styles.registerLinkBold}>Kaydol</Text></Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -210,6 +216,19 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '700',
+  },
+  registerLink: {
+    marginTop: Spacing.md,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  registerLinkText: {
+    fontSize: 13,
+    color: Colors.secondary,
+  },
+  registerLinkBold: {
+    color: Colors.primary,
     fontWeight: '700',
   },
 });
