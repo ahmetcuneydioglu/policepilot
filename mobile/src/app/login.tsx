@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -53,10 +54,12 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.logoArea}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoText}>S</Text>
-            </View>
-            <Text style={styles.appName}>SigortaOS</Text>
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.logoImg}
+              resizeMode="contain"
+            />
+            <Text style={styles.appName}>Sigorta<Text style={styles.appNameAccent}>OS</Text></Text>
             <Text style={styles.tagline}>Sigorta Acentesi Yönetim Sistemi</Text>
           </View>
 
@@ -133,25 +136,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.xl,
   },
-  logoCircle: {
-    width: 72,
-    height: 72,
+  logoImg: {
+    width: 76,
+    height: 76,
     borderRadius: 20,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: Spacing.md,
-  },
-  logoText: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '700',
   },
   appName: {
     fontSize: 28,
     fontWeight: '700',
     color: Colors.heading,
     letterSpacing: -0.5,
+  },
+  appNameAccent: {
+    color: Colors.primary,
   },
   tagline: {
     fontSize: 14,

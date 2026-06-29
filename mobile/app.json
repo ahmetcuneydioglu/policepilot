@@ -8,16 +8,14 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.canahmettt.policepilot",
       "appleTeamId": "Q73BEF938W"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#101A3C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "monochromeImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.canahmettt.policepilot"
@@ -39,10 +37,12 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0E1836",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 150,
           "android": {
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "imageWidth": 150
           }
         }
       ],

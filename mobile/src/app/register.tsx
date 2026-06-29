@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -143,8 +143,8 @@ export default function RegisterScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.logoArea}>
-            <View style={styles.logoCircle}><Text style={styles.logoText}>S</Text></View>
-            <Text style={styles.appName}>SigortaOS</Text>
+            <Image source={require('../../assets/images/logo.png')} style={styles.logoImg} resizeMode="contain" />
+            <Text style={styles.appName}>Sigorta<Text style={styles.appNameAccent}>OS</Text></Text>
             <Text style={styles.tagline}>Ücretsiz başlayın — dakikalar içinde</Text>
           </View>
 
@@ -224,9 +224,9 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, justifyContent: 'center', padding: Spacing.lg },
 
   logoArea: { alignItems: 'center', marginBottom: Spacing.lg },
-  logoCircle: { width: 64, height: 64, borderRadius: 18, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: Spacing.sm },
-  logoText: { color: '#fff', fontSize: 30, fontWeight: '800' },
+  logoImg: { width: 68, height: 68, borderRadius: 18, marginBottom: Spacing.sm },
   appName: { fontSize: 26, fontWeight: '800', color: Colors.heading, letterSpacing: -0.5 },
+  appNameAccent: { color: Colors.primary },
   tagline: { fontSize: 14, color: Colors.secondary, marginTop: 4 },
 
   card: { backgroundColor: Colors.card, borderRadius: Radius.xl, padding: Spacing.lg, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 4 },
