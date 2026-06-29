@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.canahmettt.policepilot",
-      "appleTeamId": "3U4QPG9Q82"
+      "appleTeamId": "3U4QPG9Q82",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
