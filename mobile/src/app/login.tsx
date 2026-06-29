@@ -10,6 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -116,6 +117,14 @@ export default function LoginScreen() {
               <Text style={styles.registerLinkText}>Hesabın yok mu? <Text style={styles.registerLinkBold}>Kaydol</Text></Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.legalLink}
+            onPress={() => Linking.openURL('https://www.sigortaos.com/gizlilik')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.legalText}>Gizlilik Politikası</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -228,5 +237,15 @@ const styles = StyleSheet.create({
   registerLinkBold: {
     color: Colors.primary,
     fontWeight: '700',
+  },
+  legalLink: {
+    marginTop: Spacing.lg,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  legalText: {
+    fontSize: 12,
+    color: Colors.secondary,
+    textDecorationLine: 'underline',
   },
 });

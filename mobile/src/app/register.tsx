@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Image,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Image, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -209,6 +209,14 @@ export default function RegisterScreen() {
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Acentemi Oluştur</Text>}
             </TouchableOpacity>
 
+            <Text style={styles.legalNote}>
+              {'Hesap oluşturarak '}
+              <Text style={styles.legalLinkInline} onPress={() => Linking.openURL('https://www.sigortaos.com/gizlilik')}>
+                Gizlilik Politikası
+              </Text>
+              {"'nı kabul etmiş olursunuz."}
+            </Text>
+
             <TouchableOpacity style={styles.footerLink} onPress={() => router.replace('/login')}>
               <Text style={styles.footerLinkText}>Hesabın var mı? <Text style={styles.footerLinkBold}>Giriş Yap</Text></Text>
             </TouchableOpacity>
@@ -259,6 +267,8 @@ const styles = StyleSheet.create({
   footerLink: { marginTop: Spacing.md, alignItems: 'center', paddingVertical: 8 },
   footerLinkText: { fontSize: 13, color: Colors.secondary },
   footerLinkBold: { color: Colors.primary, fontWeight: '700' },
+  legalNote: { marginTop: Spacing.md, textAlign: 'center', fontSize: 12, color: Colors.secondary, lineHeight: 18, paddingHorizontal: 8 },
+  legalLinkInline: { color: Colors.primary, fontWeight: '600', textDecorationLine: 'underline' },
 
   // Başarı
   successWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },

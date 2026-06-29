@@ -193,7 +193,10 @@ function LoginForm() {
 
         {/* Footer */}
         <p className="text-center text-[11px] text-slate-600 mt-6">
-          © 2026 SigortaOS · Yetkisiz erişim yasaktır.
+          © 2026 SigortaOS ·{" "}
+          <Link href="/gizlilik" className="hover:text-slate-400 transition-colors">
+            Gizlilik Politikası
+          </Link>
         </p>
       </div>
     </div>

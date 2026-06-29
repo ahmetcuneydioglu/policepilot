@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // Routes that never require authentication
 // /davet: davet/şifre-belirleme — kullanıcı henüz oturumsuz gelir (token URL hash'inde),
 //         proxy engellerse hash kaybolur ve davet akışı kırılır.
-const PUBLIC_PATHS = new Set(["/", "/login", "/register", "/davet"]);
+const PUBLIC_PATHS = new Set(["/", "/login", "/register", "/davet", "/gizlilik"]);
 const PUBLIC_PREFIXES = ["/teklif-al", "/a/", "/_next", "/api", "/favicon"];
 
 export async function proxy(request: NextRequest) {

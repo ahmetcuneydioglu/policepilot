@@ -583,6 +583,14 @@ export default function RegisterPage() {
                   </button>
                 </form>
 
+                <p className="mt-4 text-center text-[11px] text-gray-400">
+                  {"Hesap oluşturarak "}
+                  <Link href="/gizlilik" className="text-blue-600 hover:underline">
+                    Gizlilik Politikası
+                  </Link>
+                  {"'nı kabul etmiş olursunuz."}
+                </p>
+
                 {/* Footer links */}
                 <div className="mt-6 pt-5 border-t border-gray-100 flex items-center justify-between">
                   <p className="text-xs text-gray-400">
