@@ -26,6 +26,7 @@ import DocumentSection from '@/components/DocumentSection';
 import { checkLimit } from '@/lib/limits';
 import type { LimitResult } from '@/lib/limits';
 import LimitModal from '@/components/LimitModal';
+import BulkPolicyImportMobile from '@/components/BulkPolicyImportMobile';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -732,6 +733,7 @@ export default function PoliciesScreen() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Policy | null>(null);
   const [addVisible, setAddVisible] = useState(false);
+  const [ocrOpen, setOcrOpen] = useState(false);
 
   const fetchPolicies = useCallback(async () => {
     let q = (supabase.from('policies') as any)
@@ -809,9 +811,14 @@ export default function PoliciesScreen() {
           <Text style={styles.title}>Poliçeler</Text>
           <Text style={styles.subtitle}>{loading ? 'Yükleniyor...' : `${policies.length} poliçe`}</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setAddVisible(true)}>
-          <Text style={styles.addBtnText}>+ Poliçe</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.ocrBtn} onPress={() => setOcrOpen(true)} activeOpacity={0.8}>
+            <Text style={styles.ocrBtnText}>📷 Tara</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setAddVisible(true)} activeOpacity={0.8}>
+            <Text style={styles.addBtnText}>+ Poliçe</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Alert banners */}
@@ -914,6 +921,15 @@ export default function PoliciesScreen() {
         onAdded={fetchPolicies}
         agencyId={agencyId}
       />
+
+      {/* OCR ile tekli/toplu poliçe içe aktarma */}
+      {ocrOpen && (
+        <BulkPolicyImportMobile
+          agencyId={agencyId}
+          onClose={() => setOcrOpen(false)}
+          onDone={fetchPolicies}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -932,6 +948,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 26, fontWeight: '800', color: Colors.heading, letterSpacing: -0.5 },
   subtitle: { fontSize: 13, color: Colors.secondary, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   addBtn: {
     backgroundColor: Colors.primary,
     paddingHorizontal: 16,
@@ -939,6 +956,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  ocrBtn: { backgroundColor: Colors.primaryLight, paddingHorizontal: 12, paddingVertical: 10, borderRadius: Radius.md },
+  ocrBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
 
   bannerCritical: {
     flexDirection: 'row',
