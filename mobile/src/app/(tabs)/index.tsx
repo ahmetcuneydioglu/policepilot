@@ -17,6 +17,7 @@ import { fetchUpcomingRenewals, filterByWindow, buildRenewalWhatsappUrl, Renewal
 import { fetchTasks, Task } from '@/lib/tasks';
 import { apiGet } from '@/lib/api';
 import { formatShortTRY, greetingTR, formatLongDateTR } from '@/lib/format';
+import { FEATURES } from '@/lib/features';
 
 const EMPTY: OperationMetrics = {
   yenilemeSayisi: 0, bekleyenTeklif: 0, bugunKesilen: 0, potansiyelKomisyon: 0,
@@ -160,7 +161,9 @@ export default function HomeScreen() {
 
   // ── #4 Hızlı aksiyonlar ─────────────────────────────────────────────────────
   const quickActions: { emoji: string; bg: string; label: string; href: Href }[] = [
-    { emoji: '⚡', bg: '#EFF6FF', label: 'Teklif Al', href: '/(tabs)/teklif' },
+    FEATURES.quoteCenter
+      ? { emoji: '⚡', bg: '#EFF6FF', label: 'Teklif Al', href: '/(tabs)/teklif' as Href }
+      : { emoji: '🚗', bg: '#EFF6FF', label: 'Muayene',  href: '/(tabs)/muayene' as Href },
     { emoji: '👤', bg: '#F0FDF4', label: 'Müşteri',  href: '/(tabs)/customers' },
     { emoji: '📄', bg: '#FEF3C7', label: 'Poliçe',   href: '/(tabs)/policies' },
     { emoji: '💬', bg: '#DCFCE7', label: 'WhatsApp', href: '/whatsapp' },

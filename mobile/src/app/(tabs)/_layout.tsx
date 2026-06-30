@@ -1,8 +1,12 @@
+import { useState } from 'react';
 import { Tabs } from 'expo-router';
 import { View, Text, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Shadow } from '@/lib/theme';
+import { useProfile } from '@/lib/useProfile';
+import { FEATURES } from '@/lib/features';
+import BulkPolicyImportMobile from '@/components/BulkPolicyImportMobile';
 
 function TabBarIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
@@ -10,23 +14,26 @@ function TabBarIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   );
 }
 
-// Ortada yükseltilmiş "Teklif Al" aksiyon butonu (uygulamanın 1 numaralı işi)
-function TeklifTabButton({ onPress, accessibilityState }: { onPress?: (e?: any) => void; accessibilityState?: { selected?: boolean } }) {
+// Ortada yükseltilmiş aksiyon butonu (v1.0: Tara/OCR · quoteCenter açıksa Teklif)
+function CenterTabButton({ onPress, accessibilityState, label, icon }: { onPress?: (e?: any) => void; accessibilityState?: { selected?: boolean }; label: string; icon: string }) {
   const focused = accessibilityState?.selected;
   return (
     <View style={styles.teklifSlot} pointerEvents="box-none">
-      <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.teklifTouch} accessibilityRole="button" accessibilityLabel="Teklif Al">
+      <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.teklifTouch} accessibilityRole="button" accessibilityLabel={label}>
         <LinearGradient colors={[Colors.primary, '#1E3A8A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.teklifCircle}>
-          <Text style={styles.teklifIcon}>⚡</Text>
+          <Text style={styles.teklifIcon}>{icon}</Text>
         </LinearGradient>
-        <Text style={[styles.teklifLabel, focused && { color: Colors.primary }]}>Teklif</Text>
+        <Text style={[styles.teklifLabel, focused && { color: Colors.primary }]}>{label}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 export default function TabsLayout() {
+  const { agencyId } = useProfile();
+  const [scanOpen, setScanOpen] = useState(false);
   return (
+    <>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -58,7 +65,17 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="teklif"
-        options={{ title: 'Teklif', tabBarButton: (props) => <TeklifTabButton {...props} /> }}
+        options={{
+          title: FEATURES.quoteCenter ? 'Teklif' : 'Tara',
+          tabBarButton: (props) => (
+            <CenterTabButton
+              {...props}
+              label={FEATURES.quoteCenter ? 'Teklif' : 'Tara'}
+              icon={FEATURES.quoteCenter ? '⚡' : '📷'}
+              onPress={FEATURES.quoteCenter ? props.onPress : () => setScanOpen(true)}
+            />
+          ),
+        }}
       />
       <Tabs.Screen
         name="customers"
@@ -76,6 +93,14 @@ export default function TabsLayout() {
       <Tabs.Screen name="muayene" options={{ href: null }} />
       <Tabs.Screen name="admin" options={{ href: null }} />
     </Tabs>
+    {!FEATURES.quoteCenter && scanOpen && agencyId && (
+      <BulkPolicyImportMobile
+        agencyId={agencyId}
+        onClose={() => setScanOpen(false)}
+        onDone={() => {}}
+      />
+    )}
+    </>
   );
 }
 

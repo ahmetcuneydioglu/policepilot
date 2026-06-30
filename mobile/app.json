@@ -10,6 +10,7 @@
     "ios": {
       "bundleIdentifier": "com.canahmettt.policepilot",
       "appleTeamId": "3U4QPG9Q82",
+      "buildNumber": "2",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

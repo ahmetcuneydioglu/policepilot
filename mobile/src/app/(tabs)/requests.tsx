@@ -20,6 +20,7 @@ import type { LimitResult } from '@/lib/limits';
 import LimitModal from '@/components/LimitModal';
 import DocumentSection from '@/components/DocumentSection';
 import { STAGE_KEYS, stageOf, nextStages, OPPORTUNITY_TYPES } from '@/lib/opportunities';
+import { FEATURES } from '@/lib/features';
 
 function initials(name: string) {
   return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
@@ -423,9 +424,11 @@ export default function RequestsScreen() {
         subtitle={`${filtered.length} kayıt`}
         right={
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={[styles.heroBtn, heroGlass]} onPress={() => router.push('/teklif')} activeOpacity={0.8}>
-              <Text style={styles.heroBtnText}>⚡ Teklif</Text>
-            </TouchableOpacity>
+            {FEATURES.quoteCenter && (
+              <TouchableOpacity style={[styles.heroBtn, heroGlass]} onPress={() => router.push('/teklif')} activeOpacity={0.8}>
+                <Text style={styles.heroBtnText}>⚡ Teklif</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.heroBtnLight} onPress={() => router.push('/new-request')} activeOpacity={0.8}>
               <Text style={styles.heroBtnLightText}>+ Ekle</Text>
             </TouchableOpacity>
