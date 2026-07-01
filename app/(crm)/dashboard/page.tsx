@@ -12,6 +12,7 @@ import NotifPermissionButton from "@/components/NotifPermissionButton";
 import { useAuth } from "@/lib/AuthContext";
 import { withScopeFilter, withRequestScope, isManagerial, needsOnboarding } from "@/lib/tenant";
 import TeamSummaryWidget from "@/components/team/TeamSummaryWidget";
+import OnboardingChecklist from "@/components/OnboardingChecklist";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity,
@@ -431,6 +432,9 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* ══ KURULUM CHECKLIST (yeni acente aktivasyonu) ═══════════════════ */}
+      {role === "agency_user" && <OnboardingChecklist />}
 
       {/* ══ ACENTE TEKLİF LİNKİ (agency_user only) ════════════════════════ */}
       {role === "agency_user" && agencySlug && (
