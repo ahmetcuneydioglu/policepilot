@@ -30,6 +30,15 @@ export default function CustomersPage() {
   // owner/manager → "Ekleyen" sütunu/filtresi
   const managerial = isManagerial(profile?.agency_role);
 
+  // ⌘K / global "+ Yeni": /customers?new=1 → ekleme modalını aç
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("new") === "1") {
+      setShowAdd(true);
+      window.history.replaceState({}, "", "/customers");
+    }
+  }, []);
+
   // arama debounce + filtre/arama değişince ilk sayfaya dön
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.replace(/[%,()]/g, " ").trim()), 300);

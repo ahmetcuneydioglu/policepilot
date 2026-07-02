@@ -1033,6 +1033,16 @@ export default function PoliciesPage() {
   const [firsatId, setFirsatId] = useState<string | null>(null);
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
+    // ⌘K / global "+ Yeni": ?new=1 → ekleme modalı, ?q= → arama önden dolu
+    if (sp.get("new") === "1") {
+      setAddOpen(true);
+      window.history.replaceState({}, "", "/policies");
+    }
+    const qParam = sp.get("q");
+    if (qParam) {
+      setSearch(qParam);
+      window.history.replaceState({}, "", "/policies");
+    }
     const firsat = sp.get("firsat"), customer = sp.get("customer"), type = sp.get("type");
     if (!firsat || !customer) return;
     (async () => {

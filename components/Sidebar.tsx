@@ -112,6 +112,14 @@ export default function Sidebar() {
   const subLabel    = profile?.full_name && user?.email ? user.email : roleLabel;
 
   const closeMobile = () => setMobileOpen(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const openPalette = () => { closeMobile(); window.dispatchEvent(new Event("sigortaos:palette")); };
+
+  // Grup etiketi (collapsed'da ince ayraç)
+  const Group = ({ label }: { label: string }) =>
+    collapsed
+      ? <div className="mx-1 my-2 h-px bg-white/5" />
+      : <p className="px-3 pt-3 pb-1 text-[9px] font-bold text-slate-600 uppercase tracking-widest">{label}</p>;
 
   const quoteCenterActive = pathname === "/quote-center" || pathname.startsWith("/quote-center/")
     || pathname.startsWith("/policies/issue/");
@@ -186,6 +194,40 @@ export default function Sidebar() {
         </button>
       </div>
 
+      {/* Ara (⌘K) + Yeni — global hız katmanı */}
+      <div className={`flex-shrink-0 ${collapsed ? "px-2" : "px-3"} mb-2 ${collapsed ? "space-y-1.5" : "flex gap-1.5"}`}>
+        <button onClick={openPalette}
+          className={`${collapsed ? "w-full justify-center" : "flex-1 justify-start"} flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-all text-xs`}
+          title="Ara / Komut (⌘K)">
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          {!collapsed && <><span className="flex-1 text-left">Ara…</span><kbd className="text-[9px] font-bold bg-white/10 rounded px-1 py-0.5">⌘K</kbd></>}
+        </button>
+        <div className="relative">
+          <button onClick={() => setNewOpen((o) => !o)}
+            className={`${collapsed ? "w-full" : ""} flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition-all text-xs font-bold shadow-lg shadow-blue-900/40`}
+            title="Yeni oluştur">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+          </button>
+          {newOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setNewOpen(false)} />
+              <div className="absolute left-0 top-full mt-1.5 z-50 w-44 bg-slate-800 border border-white/10 rounded-xl shadow-2xl py-1.5">
+                {[
+                  { href: "/customers?new=1", label: "Yeni Müşteri" },
+                  { href: "/firsatlar?new=1", label: "Yeni Satış Fırsatı" },
+                  { href: "/policies?new=1", label: "Yeni Poliçe" },
+                ].map((it) => (
+                  <Link key={it.href} href={it.href} onClick={() => { setNewOpen(false); closeMobile(); }}
+                    className="block px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors">
+                    {it.label}
+                  </Link>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Teklif Merkezi — special spotlight item */}
       <div className={`flex-shrink-0 ${collapsed ? "px-2" : "px-3"} mb-1`}>
         {quoteCenterBtn}
@@ -195,15 +237,24 @@ export default function Sidebar() {
       {/* Main nav */}
       <nav className={`flex-1 ${collapsed ? "px-2" : "px-3"} space-y-0.5 overflow-y-auto py-1`}>
         <NavLink href="/dashboard"    label="Dashboard"        icon={Icon.dashboard}  isActive={pathname === "/dashboard"} collapsed={collapsed} onClick={closeMobile} />
-        <NavLink href="/customers"    label="Müşteriler"       icon={Icon.customers}  isActive={pathname.startsWith("/customers")} collapsed={collapsed} onClick={closeMobile} />
+
+        <Group label="Satış" />
         <NavLink href="/firsatlar"    label="Satış Fırsatları" icon={Icon.opportunities} isActive={pathname.startsWith("/firsatlar")} collapsed={collapsed} badge={requestsBadge} onClick={closeMobile} />
+        <NavLink href="/customers"    label="Müşteriler"       icon={Icon.customers}  isActive={pathname.startsWith("/customers")} collapsed={collapsed} onClick={closeMobile} />
+
+        <Group label="Operasyon" />
         <NavLink href="/policies"     label="Poliçeler"        icon={Icon.policies}   isActive={pathname.startsWith("/policies") && !pathname.startsWith("/policies/issue")} collapsed={collapsed} onClick={closeMobile} />
         <NavLink href="/renewals"     label="Yenilemeler"      icon={Icon.renewals}   isActive={pathname.startsWith("/renewals")} collapsed={collapsed} onClick={closeMobile} />
         <NavLink href="/muayene"      label="Araç Muayeneleri" icon={Icon.muayene}    isActive={pathname.startsWith("/muayene")} collapsed={collapsed} onClick={closeMobile} />
-        <NavLink href="/ai-assistant" label="AI Asistan"       icon={Icon.ai}         isActive={pathname.startsWith("/ai-assistant")} collapsed={collapsed} onClick={closeMobile} />
         {isManagerial(profile?.agency_role) && (
           <NavLink href="/whatsapp-queue" label="WhatsApp Kuyruğu" icon={Icon.whatsapp} isActive={pathname.startsWith("/whatsapp-queue")} collapsed={collapsed} onClick={closeMobile} />
         )}
+
+        <Group label="Yönetim" />
+        {isManagerial(profile?.agency_role) && (
+          <NavLink href="/team" label="Ekip & Performans" icon={Icon.team} isActive={pathname.startsWith("/team")} collapsed={collapsed} onClick={closeMobile} />
+        )}
+        <NavLink href="/ai-assistant" label="AI Asistan"       icon={Icon.ai}         isActive={pathname.startsWith("/ai-assistant")} collapsed={collapsed} onClick={closeMobile} />
 
 
         {role === "super_admin" && (

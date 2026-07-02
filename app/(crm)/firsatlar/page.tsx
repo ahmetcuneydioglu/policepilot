@@ -63,6 +63,15 @@ export default function OpportunitiesPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // ⌘K / global "+ Yeni": ?new=1 → modal, ?open=<id> → drawer
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("new") === "1") setShowAdd(true);
+    const openParam = sp.get("open");
+    if (openParam) setOpenId(openParam);
+    if (sp.get("new") || openParam) window.history.replaceState({}, "", "/firsatlar");
+  }, []);
+
   // Müşteri listesi (fırsat oluşturma modalı için)
   useEffect(() => {
     if (role !== "super_admin" && !agencyId) return;
