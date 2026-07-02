@@ -1,34 +1,37 @@
 "use client";
 
+/**
+ * Sidebar — SigortaOS navigasyonu (Insurance Operating System).
+ *
+ * Tasarım ilkeleri (Monday'in UX yaklaşımından uyarlandı, kopya değil):
+ *  • Tek ikon dili: lucide, 18px, 1.75 stroke — optik hizalı.
+ *  • Gruplu bilgi mimarisi: Satış / Operasyon / İletişim / Yönetim (+ Süper Admin).
+ *  • Gruplar açılır-kapanır, tercih localStorage'da kalıcı.
+ *  • Aktif durum: sol accent çizgisi + hafif zemin (yalnız renk değişimi değil).
+ *  • Hover: yumuşak zemin + 150ms geçiş. Badge: mavi, minimal (kırmızı yok).
+ *  • Collapse: yalnız ikon + tooltip. Taşma yok: truncate + min-w-0 her yerde.
+ */
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { isManagerial } from "@/lib/tenant";
 import { useNotifications } from "@/lib/NotificationContext";
+import {
+  LayoutDashboard, Users, Filter, ShieldCheck, RefreshCw, Car,
+  MessageCircle, UserCog, Bot, Settings, Building2, Radar, Gauge,
+  Zap, LogOut, Search, Plus, ChevronsLeft, ChevronsRight, ChevronDown,
+  UserPlus, Target, FilePlus2, ListTodo, Send, Sparkles, Menu, X,
+  type LucideIcon,
+} from "lucide-react";
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
-const Icon = {
-  dashboard:   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
-  customers:   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-  requests:    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-  opportunities:<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" /></svg>,
-  policies:    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>,
-  renewals:    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
-  muayene:     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M5 13l1.5-4.5A2 2 0 018.4 7h7.2a2 2 0 011.9 1.5L19 13m-14 0h14m-14 0v4a1 1 0 001 1h1a1 1 0 001-1v-1h8v1a1 1 0 001 1h1a1 1 0 001-1v-4M7.5 16h.01M16.5 16h.01" /></svg>,
-  ai:          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>,
-  settings:    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-  agencies:    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>,
-  leads:       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth={1.75}/><circle cx="12" cy="12" r="6" strokeWidth={1.75}/><circle cx="12" cy="12" r="2" strokeWidth={1.75}/></svg>,
-  team:        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
-  whatsapp:    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
-  signout:     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
-  quoteCenter: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>,
-  collapseL:   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" /></svg>,
-  expandR:     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>,
-};
+/* ─── Sabitler ──────────────────────────────────────────────────────────────── */
+const ICON = "w-[18px] h-[18px]";           // tek ikon boyutu
+const STROKE = 1.75;                         // tek stroke kalınlığı
+const GROUPS_KEY = "sigortaos_sb_groups";    // kapalı gruplar (localStorage)
 
-// ─── Tooltip (for icon-only collapsed mode) ───────────────────────────────────
+/* ─── Tooltip (collapsed mod) ───────────────────────────────────────────────── */
 function SideTooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="relative group/tip flex items-center justify-center">
@@ -44,334 +47,374 @@ function SideTooltip({ label, children }: { label: string; children: React.React
   );
 }
 
-// ─── NavLink (hoisted outside Sidebar to avoid component-during-render error) ─
-interface NavLinkProps {
+/* ─── NavItem ───────────────────────────────────────────────────────────────── */
+function NavItem({
+  href, label, Icon, isActive, collapsed, badge, dot, onClick,
+}: {
   href: string;
   label: string;
-  icon: React.ReactNode;
+  Icon: LucideIcon;
   isActive: boolean;
   collapsed: boolean;
   badge?: React.ReactNode;
+  dot?: boolean;           // collapsed modda badge yerine küçük nokta
   onClick: () => void;
-}
-
-function NavLink({ href, label, icon, isActive, collapsed, badge, onClick }: NavLinkProps) {
+}) {
   const inner = (
     <Link
       href={href}
       onClick={onClick}
-      className={`
-        flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150
-        ${collapsed ? "justify-center w-10 h-10 mx-auto p-0" : "px-3 py-2.5"}
-        ${isActive
-          ? "bg-white/10 text-white"
-          : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
-        }
-      `}
+      aria-current={isActive ? "page" : undefined}
+      className={`relative flex items-center rounded-lg transition-colors duration-150
+        ${collapsed ? "justify-center w-10 h-10 mx-auto" : "gap-2.5 px-2.5 h-9"}
+        ${isActive ? "bg-white/[0.08] text-white" : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"}`}
     >
-      <span className={`flex-shrink-0 ${isActive ? "text-white" : "text-slate-500"}`}>{icon}</span>
-      {!collapsed && <span className="truncate">{label}</span>}
-      {!collapsed && badge && <span className="ml-auto flex-shrink-0">{badge}</span>}
-      {!collapsed && !badge && isActive && (
-        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+      {/* Sol accent çizgisi (aktif) */}
+      {isActive && (
+        <span className={`absolute left-0 w-[3px] rounded-r-full bg-gradient-to-b from-blue-400 to-indigo-500
+          ${collapsed ? "h-5 top-1/2 -translate-y-1/2" : "h-4 top-1/2 -translate-y-1/2"}`} />
       )}
+      <span className={`relative flex-shrink-0 ${isActive ? "text-blue-300" : ""}`}>
+        <Icon className={ICON} strokeWidth={STROKE} />
+        {collapsed && dot && (
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-400 ring-2 ring-[#0f172a]" />
+        )}
+      </span>
+      {!collapsed && <span className="truncate text-[13px] font-medium min-w-0">{label}</span>}
+      {!collapsed && badge && <span className="ml-auto flex-shrink-0">{badge}</span>}
     </Link>
   );
-  if (collapsed) return <SideTooltip label={label}>{inner}</SideTooltip>;
-  return inner;
+  return collapsed ? <SideTooltip label={label}>{inner}</SideTooltip> : inner;
 }
 
-// ─── Main Sidebar ─────────────────────────────────────────────────────────────
+/* ─── Grup başlığı (açılır-kapanır) ─────────────────────────────────────────── */
+function GroupHeader({
+  label, collapsed, open, onToggle,
+}: { label: string; collapsed: boolean; open: boolean; onToggle: () => void }) {
+  if (collapsed) return <div className="mx-2 my-2.5 h-px bg-white/[0.06]" />;
+  return (
+    <button onClick={onToggle}
+      className="w-full flex items-center justify-between px-2.5 pt-4 pb-1.5 group/gh"
+      aria-expanded={open}>
+      <span className="text-[10px] font-semibold tracking-[0.14em] uppercase text-slate-500 group-hover/gh:text-slate-400 transition-colors">
+        {label}
+      </span>
+      <ChevronDown className={`w-3 h-3 text-slate-600 group-hover/gh:text-slate-400 transition-all duration-200 ${open ? "" : "-rotate-90"}`} strokeWidth={2} />
+    </button>
+  );
+}
+
+/* ─── Ana Sidebar ───────────────────────────────────────────────────────────── */
 export default function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed,  setCollapsed]  = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const [closed, setClosed] = useState<Record<string, boolean>>({});
 
   const { user, profile, role, roleSource, profileError, agencyId, signOut } = useAuth();
   const { unreadCount } = useNotifications();
 
-  // Persist collapse preference (client-side only — localStorage unavailable on SSR)
+  /* Tercihler (yalnız client) */
   useEffect(() => {
-    const saved = localStorage.getItem("pp_sidebar_collapsed");
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (saved === "true") setCollapsed(true);
+    if (localStorage.getItem("pp_sidebar_collapsed") === "true") setCollapsed(true);
+    try {
+      const g = JSON.parse(localStorage.getItem(GROUPS_KEY) ?? "{}");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (g && typeof g === "object") setClosed(g);
+    } catch { /* yok say */ }
   }, []);
 
-  function toggleCollapse() {
-    setCollapsed(prev => {
-      const next = !prev;
-      localStorage.setItem("pp_sidebar_collapsed", String(next));
-      return next;
-    });
-  }
+  const toggleCollapse = () => setCollapsed((p) => {
+    localStorage.setItem("pp_sidebar_collapsed", String(!p));
+    return !p;
+  });
+  const toggleGroup = (key: string) => setClosed((p) => {
+    const next = { ...p, [key]: !p[key] };
+    localStorage.setItem(GROUPS_KEY, JSON.stringify(next));
+    return next;
+  });
 
   const displayName = profile?.full_name || user?.email || "Kullanıcı";
-  const initials    = displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
-  const roleLabel   = role === "super_admin" ? "Süper Admin" : role === "agency_user" ? "Acente" : "—";
-  // Alt satır: ismi olan kullanıcıda e-posta, ismi yoksa rol (displayName zaten e-posta)
-  const subLabel    = profile?.full_name && user?.email ? user.email : roleLabel;
+  const initials = displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+  const roleLabel = role === "super_admin" ? "Süper Admin" : role === "agency_user" ? "Acente" : "—";
+  const subLabel = profile?.full_name && user?.email ? user.email : roleLabel;
 
   const closeMobile = () => setMobileOpen(false);
-  const [newOpen, setNewOpen] = useState(false);
   const openPalette = () => { closeMobile(); window.dispatchEvent(new Event("sigortaos:palette")); };
+  const managerial = isManagerial(profile?.agency_role);
 
-  // Grup etiketi (collapsed'da ince ayraç)
-  const Group = ({ label }: { label: string }) =>
-    collapsed
-      ? <div className="mx-1 my-2 h-px bg-white/5" />
-      : <p className="px-3 pt-3 pb-1 text-[9px] font-bold text-slate-600 uppercase tracking-widest">{label}</p>;
-
-  const quoteCenterActive = pathname === "/quote-center" || pathname.startsWith("/quote-center/")
-    || pathname.startsWith("/policies/issue/");
-
-  // Badge for requests
-  const requestsBadge = unreadCount > 0 ? (
-    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[9px] font-extrabold">
+  /* Badge: bekleyen yeni lead — mavi, minimal (kırmızı değil) */
+  const leadBadge = unreadCount > 0 ? (
+    <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-md bg-blue-500/20 text-blue-300 text-[10px] font-bold tabular-nums">
       {unreadCount > 9 ? "9+" : unreadCount}
     </span>
   ) : undefined;
 
-  // ── Teklif Merkezi special button ─────────────────────────────────────────
-  const quoteCenterBtn = collapsed ? (
-    <SideTooltip label="Teklif Merkezi ⚡">
-      <Link
-        href="/quote-center"
-        onClick={closeMobile}
-        className={`flex items-center justify-center w-10 h-10 mx-auto rounded-xl transition-all duration-150
-          ${quoteCenterActive
-            ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/30"
-            : "bg-violet-600/15 text-violet-400 border border-violet-500/20 hover:bg-violet-600/30 hover:text-white"
-          }`}
-      >
-        {Icon.quoteCenter}
-      </Link>
-    </SideTooltip>
-  ) : (
-    <Link
-      href="/quote-center"
-      onClick={closeMobile}
-      className={`flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold transition-all duration-150 w-full
-        ${quoteCenterActive
-          ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/30"
-          : "bg-gradient-to-r from-violet-600/15 to-indigo-600/10 text-violet-300 border border-violet-500/20 hover:from-violet-600/25 hover:to-indigo-600/20 hover:text-white hover:shadow-md"
-        }`}
-    >
-      <span className={quoteCenterActive ? "text-white" : "text-violet-400"}>{Icon.quoteCenter}</span>
-      <span>Teklif Merkezi</span>
-      <span className="ml-auto text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-violet-500/30 text-violet-200 border border-violet-400/30">
-        ⚡
-      </span>
-    </Link>
-  );
+  const quoteCenterActive = pathname === "/quote-center" || pathname.startsWith("/quote-center/") || pathname.startsWith("/policies/issue/");
 
-  // ── Inner sidebar JSX (not a sub-component, to avoid hooks rules violation) ─
+  /* "+ Yeni" menü öğeleri — her operasyon tek tık */
+  const NEW_ITEMS: { href: string; label: string; Icon: LucideIcon }[] = [
+    { href: "/customers?new=1", label: "Yeni Müşteri", Icon: UserPlus },
+    { href: "/firsatlar?new=1", label: "Yeni Satış Fırsatı", Icon: Target },
+    { href: "/policies?new=1", label: "Yeni Poliçe", Icon: FilePlus2 },
+    { href: "/dashboard?task=1", label: "Yeni Görev", Icon: ListTodo },
+    { href: "/whatsapp-queue", label: "WhatsApp Gönder", Icon: Send },
+    { href: "/ai-assistant", label: "AI Asistan", Icon: Sparkles },
+  ];
+
+  /* Gruplu bilgi mimarisi — yalnız var olan modüller (ölü link yok) */
+  type Item = { href: string; label: string; Icon: LucideIcon; active: boolean; badge?: React.ReactNode; dot?: boolean; show?: boolean };
+  const groups: { key: string; label: string; items: Item[] }[] = [
+    {
+      key: "satis", label: "Satış",
+      items: [
+        { href: "/firsatlar", label: "Satış Fırsatları", Icon: Filter, active: pathname.startsWith("/firsatlar"), badge: leadBadge, dot: unreadCount > 0 },
+        { href: "/customers", label: "Müşteriler", Icon: Users, active: pathname.startsWith("/customers") },
+      ],
+    },
+    {
+      key: "operasyon", label: "Operasyon",
+      items: [
+        { href: "/policies", label: "Poliçeler", Icon: ShieldCheck, active: pathname.startsWith("/policies") && !pathname.startsWith("/policies/issue") },
+        { href: "/renewals", label: "Yenilemeler", Icon: RefreshCw, active: pathname.startsWith("/renewals") },
+        { href: "/muayene", label: "Araç Muayeneleri", Icon: Car, active: pathname.startsWith("/muayene") },
+      ],
+    },
+    {
+      key: "iletisim", label: "İletişim",
+      items: [
+        { href: "/whatsapp-queue", label: "WhatsApp Merkezi", Icon: MessageCircle, active: pathname.startsWith("/whatsapp-queue"), show: managerial },
+      ],
+    },
+    {
+      key: "yonetim", label: "Yönetim",
+      items: [
+        { href: "/team", label: "Ekip & Performans", Icon: UserCog, active: pathname.startsWith("/team"), show: managerial },
+        { href: "/ai-assistant", label: "AI Asistan", Icon: Bot, active: pathname.startsWith("/ai-assistant") },
+        { href: "/settings", label: "Ayarlar", Icon: Settings, active: pathname === "/settings" },
+      ],
+    },
+  ];
+
   const sidebarInner = (
     <div className="flex flex-col h-full overflow-hidden">
 
-      {/* Logo + collapse toggle */}
-      <div className={`flex items-center pt-5 pb-4 flex-shrink-0
-        ${collapsed ? "flex-col gap-3 px-2" : "justify-between px-4"}`}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/30">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
+      {/* ── Marka + collapse ─────────────────────────────────────────────── */}
+      <div className={`flex items-center flex-shrink-0 pt-5 pb-3
+        ${collapsed ? "flex-col gap-3 px-2" : "justify-between pl-4 pr-3"}`}>
+        <Link href="/dashboard" onClick={closeMobile} className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/25">
+            <ShieldCheck className="w-4 h-4 text-white" strokeWidth={2} />
           </div>
           {!collapsed && (
-            <div>
-              <p className="text-white font-bold text-sm leading-none">SigortaOS</p>
-              <p className="text-slate-500 text-[10px] mt-0.5">Sigorta CRM</p>
+            <div className="min-w-0">
+              <p className="text-white font-bold text-[15px] leading-none tracking-tight truncate">
+                Sigorta<span className="text-blue-400">OS</span>
+              </p>
+              <p className="text-slate-500 text-[10px] mt-1 font-medium tracking-wide truncate">Insurance Operating System</p>
             </div>
           )}
-        </div>
-        {/* Desktop collapse toggle */}
-        <button
-          onClick={toggleCollapse}
-          className="hidden lg:flex items-center justify-center w-6 h-6 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-all flex-shrink-0"
-          title={collapsed ? "Genişlet" : "Daralt"}
-        >
-          {collapsed ? Icon.expandR : Icon.collapseL}
+        </Link>
+        <button onClick={toggleCollapse}
+          className="hidden lg:flex items-center justify-center w-6 h-6 rounded-md text-slate-600 hover:text-slate-300 hover:bg-white/[0.06] transition-colors flex-shrink-0"
+          title={collapsed ? "Genişlet" : "Daralt"} aria-label={collapsed ? "Menüyü genişlet" : "Menüyü daralt"}>
+          {collapsed ? <ChevronsRight className="w-3.5 h-3.5" strokeWidth={2} /> : <ChevronsLeft className="w-3.5 h-3.5" strokeWidth={2} />}
         </button>
       </div>
 
-      {/* Ara (⌘K) + Yeni — global hız katmanı */}
-      <div className={`flex-shrink-0 ${collapsed ? "px-2" : "px-3"} mb-2 ${collapsed ? "space-y-1.5" : "flex gap-1.5"}`}>
-        <button onClick={openPalette}
-          className={`${collapsed ? "w-full justify-center" : "flex-1 justify-start"} flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-slate-200 hover:bg-white/10 transition-all text-xs`}
-          title="Ara / Komut (⌘K)">
-          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-          {!collapsed && <><span className="flex-1 text-left">Ara…</span><kbd className="text-[9px] font-bold bg-white/10 rounded px-1 py-0.5">⌘K</kbd></>}
-        </button>
-        <div className="relative">
+      {/* ── + Yeni (birincil aksiyon) ────────────────────────────────────── */}
+      <div className={`flex-shrink-0 ${collapsed ? "px-2" : "px-3"} relative`}>
+        {collapsed ? (
+          <SideTooltip label="Yeni oluştur">
+            <button onClick={() => setNewOpen((o) => !o)}
+              className="flex items-center justify-center w-10 h-10 mx-auto rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/40"
+              aria-label="Yeni oluştur">
+              <Plus className={ICON} strokeWidth={2.25} />
+            </button>
+          </SideTooltip>
+        ) : (
           <button onClick={() => setNewOpen((o) => !o)}
-            className={`${collapsed ? "w-full" : ""} flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition-all text-xs font-bold shadow-lg shadow-blue-900/40`}
-            title="Yeni oluştur">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+            className="w-full flex items-center justify-center gap-1.5 h-9 rounded-lg bg-blue-600 text-white text-[13px] font-semibold hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/40">
+            <Plus className="w-4 h-4" strokeWidth={2.25} /> Yeni
+            <ChevronDown className={`w-3.5 h-3.5 opacity-70 transition-transform duration-150 ${newOpen ? "rotate-180" : ""}`} strokeWidth={2} />
           </button>
-          {newOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setNewOpen(false)} />
-              <div className="absolute left-0 top-full mt-1.5 z-50 w-44 bg-slate-800 border border-white/10 rounded-xl shadow-2xl py-1.5">
-                {[
-                  { href: "/customers?new=1", label: "Yeni Müşteri" },
-                  { href: "/firsatlar?new=1", label: "Yeni Satış Fırsatı" },
-                  { href: "/policies?new=1", label: "Yeni Poliçe" },
-                ].map((it) => (
-                  <Link key={it.href} href={it.href} onClick={() => { setNewOpen(false); closeMobile(); }}
-                    className="block px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors">
-                    {it.label}
-                  </Link>
-                ))}
-              </div>
-            </>
+        )}
+        {newOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setNewOpen(false)} />
+            <div className={`absolute z-50 w-52 bg-slate-800 border border-white/10 rounded-xl shadow-2xl py-1.5
+              ${collapsed ? "left-full ml-2 top-0" : "left-3 right-3 w-auto top-full mt-1.5"}`}>
+              {NEW_ITEMS.map((it) => (
+                <Link key={it.href} href={it.href} onClick={() => { setNewOpen(false); closeMobile(); }}
+                  className="flex items-center gap-2.5 px-3 h-9 text-[13px] font-medium text-slate-300 hover:bg-white/[0.06] hover:text-white transition-colors">
+                  <it.Icon className="w-4 h-4 text-slate-500 flex-shrink-0" strokeWidth={STROKE} />
+                  <span className="truncate">{it.label}</span>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Hızlı arama (⌘K) ─────────────────────────────────────────────── */}
+      <div className={`flex-shrink-0 ${collapsed ? "px-2" : "px-3"} mt-2 mb-1`}>
+        {collapsed ? (
+          <SideTooltip label="Ara — müşteri, TC, plaka, poliçe (⌘K)">
+            <button onClick={openPalette}
+              className="flex items-center justify-center w-10 h-10 mx-auto rounded-lg bg-white/[0.04] border border-white/[0.08] text-slate-400 hover:text-slate-200 hover:bg-white/[0.08] transition-colors"
+              aria-label="Ara">
+              <Search className={ICON} strokeWidth={STROKE} />
+            </button>
+          </SideTooltip>
+        ) : (
+          <button onClick={openPalette}
+            className="w-full flex items-center gap-2 h-9 px-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-slate-500 hover:text-slate-300 hover:bg-white/[0.07] transition-colors"
+            title="Müşteri, TC, plaka, telefon, poliçe ara">
+            <Search className="w-4 h-4 flex-shrink-0" strokeWidth={STROKE} />
+            <span className="flex-1 text-left text-[13px] truncate">Ara…</span>
+            <kbd className="text-[9px] font-bold text-slate-500 bg-white/[0.06] border border-white/[0.08] rounded px-1 py-0.5 flex-shrink-0">⌘K</kbd>
+          </button>
+        )}
+      </div>
+
+      {/* ── Nav ──────────────────────────────────────────────────────────── */}
+      <nav className={`flex-1 ${collapsed ? "px-2" : "px-3"} overflow-y-auto overflow-x-hidden pb-2`}>
+
+        <div className="mt-1.5 space-y-0.5">
+          <NavItem href="/dashboard" label="Dashboard" Icon={LayoutDashboard}
+            isActive={pathname === "/dashboard"} collapsed={collapsed} onClick={closeMobile} />
+          {/* Teklif Merkezi — spotlight (gelecek Teklif Motoru'nun evi) */}
+          {collapsed ? (
+            <SideTooltip label="Teklif Merkezi">
+              <Link href="/quote-center" onClick={closeMobile}
+                className={`flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors duration-150
+                  ${quoteCenterActive ? "bg-violet-600 text-white shadow-lg shadow-violet-900/40" : "bg-violet-600/10 text-violet-400 hover:bg-violet-600/25 hover:text-violet-200"}`}>
+                <Zap className={ICON} strokeWidth={STROKE} />
+              </Link>
+            </SideTooltip>
+          ) : (
+            <Link href="/quote-center" onClick={closeMobile}
+              className={`relative flex items-center gap-2.5 px-2.5 h-9 rounded-lg text-[13px] font-medium transition-colors duration-150
+                ${quoteCenterActive ? "bg-violet-600/20 text-violet-100" : "text-violet-300/90 hover:bg-violet-600/10 hover:text-violet-200"}`}>
+              {quoteCenterActive && <span className="absolute left-0 w-[3px] h-4 top-1/2 -translate-y-1/2 rounded-r-full bg-violet-400" />}
+              <Zap className={`${ICON} flex-shrink-0 text-violet-400`} strokeWidth={STROKE} />
+              <span className="truncate">Teklif Merkezi</span>
+              <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 flex-shrink-0">BETA</span>
+            </Link>
           )}
         </div>
-      </div>
 
-      {/* Teklif Merkezi — special spotlight item */}
-      <div className={`flex-shrink-0 ${collapsed ? "px-2" : "px-3"} mb-1`}>
-        {quoteCenterBtn}
-      </div>
-      <div className={`flex-shrink-0 ${collapsed ? "mx-2" : "mx-3"} h-px bg-white/5 mb-1`} />
-
-      {/* Main nav */}
-      <nav className={`flex-1 ${collapsed ? "px-2" : "px-3"} space-y-0.5 overflow-y-auto py-1`}>
-        <NavLink href="/dashboard"    label="Dashboard"        icon={Icon.dashboard}  isActive={pathname === "/dashboard"} collapsed={collapsed} onClick={closeMobile} />
-
-        <Group label="Satış" />
-        <NavLink href="/firsatlar"    label="Satış Fırsatları" icon={Icon.opportunities} isActive={pathname.startsWith("/firsatlar")} collapsed={collapsed} badge={requestsBadge} onClick={closeMobile} />
-        <NavLink href="/customers"    label="Müşteriler"       icon={Icon.customers}  isActive={pathname.startsWith("/customers")} collapsed={collapsed} onClick={closeMobile} />
-
-        <Group label="Operasyon" />
-        <NavLink href="/policies"     label="Poliçeler"        icon={Icon.policies}   isActive={pathname.startsWith("/policies") && !pathname.startsWith("/policies/issue")} collapsed={collapsed} onClick={closeMobile} />
-        <NavLink href="/renewals"     label="Yenilemeler"      icon={Icon.renewals}   isActive={pathname.startsWith("/renewals")} collapsed={collapsed} onClick={closeMobile} />
-        <NavLink href="/muayene"      label="Araç Muayeneleri" icon={Icon.muayene}    isActive={pathname.startsWith("/muayene")} collapsed={collapsed} onClick={closeMobile} />
-        {isManagerial(profile?.agency_role) && (
-          <NavLink href="/whatsapp-queue" label="WhatsApp Kuyruğu" icon={Icon.whatsapp} isActive={pathname.startsWith("/whatsapp-queue")} collapsed={collapsed} onClick={closeMobile} />
-        )}
-
-        <Group label="Yönetim" />
-        {isManagerial(profile?.agency_role) && (
-          <NavLink href="/team" label="Ekip & Performans" icon={Icon.team} isActive={pathname.startsWith("/team")} collapsed={collapsed} onClick={closeMobile} />
-        )}
-        <NavLink href="/ai-assistant" label="AI Asistan"       icon={Icon.ai}         isActive={pathname.startsWith("/ai-assistant")} collapsed={collapsed} onClick={closeMobile} />
-
-
-        {role === "super_admin" && (
-          <>
-            <div className="pt-3 pb-1">
-              <div className="h-px bg-white/5 mb-2" />
-              {!collapsed && (
-                <p className="px-3 text-[9px] font-bold text-slate-600 uppercase tracking-widest">Yönetim</p>
+        {groups.map((g) => {
+          const items = g.items.filter((it) => it.show !== false);
+          if (items.length === 0) return null;
+          const open = !closed[g.key];
+          return (
+            <div key={g.key}>
+              <GroupHeader label={g.label} collapsed={collapsed} open={open} onToggle={() => toggleGroup(g.key)} />
+              {(open || collapsed) && (
+                <div className="space-y-0.5">
+                  {items.map((it) => (
+                    <NavItem key={it.href} href={it.href} label={it.label} Icon={it.Icon}
+                      isActive={it.active} collapsed={collapsed} badge={it.badge} dot={it.dot} onClick={closeMobile} />
+                  ))}
+                </div>
               )}
             </div>
-            <NavLink href="/admin" label="⚡ Command Center" icon={Icon.dashboard}
-              isActive={false} collapsed={collapsed} onClick={closeMobile} />
-            <div>
-            </div>
-            <NavLink href="/agencies" label="Acenteler" icon={Icon.agencies}
-              isActive={pathname.startsWith("/agencies")} collapsed={collapsed} onClick={closeMobile} />
-            <NavLink href="/leads" label="Satış Leadleri" icon={Icon.leads}
-              isActive={pathname === "/leads"} collapsed={collapsed} onClick={closeMobile}
-              badge={!collapsed ? (
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold
-                  ${pathname === "/leads"
-                    ? "bg-violet-500/20 text-violet-300 border border-violet-500/30"
-                    : "bg-violet-900/30 text-violet-500 border border-violet-800/30"}`}>İÇ</span>
-              ) : undefined}
-            />
-          </>
+          );
+        })}
+
+        {/* Süper Admin */}
+        {role === "super_admin" && (
+          <div>
+            <GroupHeader label="Süper Admin" collapsed={collapsed} open={!closed.admin} onToggle={() => toggleGroup("admin")} />
+            {(!closed.admin || collapsed) && (
+              <div className="space-y-0.5">
+                <NavItem href="/admin" label="Command Center" Icon={Gauge}
+                  isActive={pathname.startsWith("/admin")} collapsed={collapsed} onClick={closeMobile} />
+                <NavItem href="/agencies" label="Acenteler" Icon={Building2}
+                  isActive={pathname.startsWith("/agencies")} collapsed={collapsed} onClick={closeMobile} />
+                <NavItem href="/leads" label="Satış Leadleri" Icon={Radar}
+                  isActive={pathname === "/leads"} collapsed={collapsed} onClick={closeMobile}
+                  badge={<span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400">İÇ</span>} />
+              </div>
+            )}
+          </div>
         )}
       </nav>
 
-      {/* Bottom */}
-      <div className={`${collapsed ? "px-2" : "px-3"} pb-4 space-y-0.5 flex-shrink-0`}>
-        <div className="h-px bg-white/5 mb-2" />
-        <NavLink href="/settings" label="Ayarlar" icon={Icon.settings}
-          isActive={pathname === "/settings"} collapsed={collapsed} onClick={closeMobile} />
-
-        {/* Role debug */}
-        {!collapsed && (
-          <div className="px-3 py-1.5">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[9px] text-slate-600 uppercase tracking-widest">Role</span>
-              {role ? (
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                  role === "super_admin"
-                    ? "bg-violet-500/20 text-violet-300 border border-violet-500/30"
-                    : "bg-slate-500/20 text-slate-400 border border-slate-600/30"
-                }`}>{role}</span>
-              ) : (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">yok</span>
-              )}
-              {roleSource && <span className="text-[8px] text-slate-700 italic">({roleSource === "profile" ? "DB" : "JWT"})</span>}
-            </div>
-            {agencyId && <p className="text-[9px] text-slate-600 truncate mt-0.5">acente: {agencyId.slice(0, 8)}…</p>}
-            {profileError && <p className="text-[9px] text-red-400 leading-tight break-all mt-0.5">⚠ {profileError}</p>}
+      {/* ── Alt: kullanıcı kartı ─────────────────────────────────────────── */}
+      <div className={`${collapsed ? "px-2" : "px-3"} pb-3 pt-2 flex-shrink-0 border-t border-white/[0.06]`}>
+        {/* Dev-only tanılama */}
+        {process.env.NODE_ENV === "development" && !collapsed && (
+          <div className="px-2.5 py-1 mb-1">
+            <p className="text-[9px] text-slate-600 truncate">
+              {role ?? "rol yok"}{roleSource ? ` · ${roleSource === "profile" ? "DB" : "JWT"}` : ""}{agencyId ? ` · ${agencyId.slice(0, 8)}` : ""}
+            </p>
+            {profileError && <p className="text-[9px] text-red-400/80 truncate">⚠ {profileError}</p>}
           </div>
         )}
-
-        {/* User / sign-out */}
-        <div
+        <button
           onClick={signOut}
-          className={`flex items-center ${collapsed ? "justify-center" : "gap-3 px-3"} py-2 mt-1 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group`}
           title="Çıkış Yap"
+          className={`w-full flex items-center rounded-lg hover:bg-white/[0.04] transition-colors group/user
+            ${collapsed ? "justify-center h-10" : "gap-2.5 px-2 h-11"}`}
         >
           {collapsed ? (
             <SideTooltip label={`Çıkış — ${displayName}`}>
-              <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-white text-[10px] font-bold">
+              <span className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center text-white text-[10px] font-bold ring-1 ring-white/10">
                 {initials}
-              </div>
+              </span>
             </SideTooltip>
           ) : (
             <>
-              <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">{initials}</div>
-              <div className="min-w-0 flex-1">
-                <p className="text-white text-xs font-medium truncate">{displayName}</p>
-                <p className="text-slate-500 text-[10px] truncate">{subLabel}</p>
-              </div>
-              <span className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 transition-colors">{Icon.signout}</span>
+              <span className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ring-1 ring-white/10">
+                {initials}
+              </span>
+              <span className="min-w-0 flex-1 text-left">
+                <span className="block text-slate-200 text-[12px] font-medium truncate leading-tight">{displayName}</span>
+                <span className="block text-slate-500 text-[10px] truncate leading-tight mt-0.5">{subLabel}</span>
+              </span>
+              <LogOut className="w-4 h-4 text-slate-600 group-hover/user:text-slate-300 flex-shrink-0 transition-colors" strokeWidth={STROKE} />
             </>
           )}
-        </div>
+        </button>
       </div>
     </div>
   );
 
   return (
     <>
-      {/* Mobile top bar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-[#0f172a] border-b border-white/5 flex items-center justify-between px-4 py-3">
+      {/* Mobil üst bar */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-[#0f172a] border-b border-white/[0.06] flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
+            <ShieldCheck className="w-4 h-4 text-white" strokeWidth={2} />
           </div>
-          <span className="text-white font-bold text-sm">SigortaOS</span>
+          <span className="text-white font-bold text-sm tracking-tight">Sigorta<span className="text-blue-400">OS</span></span>
         </div>
-        <button onClick={() => setMobileOpen(!mobileOpen)} className="text-slate-400 p-1.5 rounded-lg hover:text-white hover:bg-white/5 transition-colors">
-          {mobileOpen
-            ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-          }
+        <button onClick={() => setMobileOpen(!mobileOpen)}
+          className="text-slate-400 p-1.5 rounded-lg hover:text-white hover:bg-white/[0.06] transition-colors"
+          aria-label={mobileOpen ? "Menüyü kapat" : "Menüyü aç"}>
+          {mobileOpen ? <X className="w-5 h-5" strokeWidth={2} /> : <Menu className="w-5 h-5" strokeWidth={2} />}
         </button>
       </div>
 
-      {/* Mobile overlay */}
+      {/* Mobil overlay */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-20 bg-black/60 backdrop-blur-sm" onClick={closeMobile} />
       )}
 
-      {/* Mobile drawer */}
-      <aside className={`lg:hidden fixed top-0 left-0 h-full w-64 z-20 bg-[#0f172a] transform transition-transform duration-200 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      {/* Mobil drawer */}
+      <aside className={`lg:hidden fixed top-0 left-0 h-full w-[264px] z-20 bg-[#0f172a] transform transition-transform duration-200 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
         {sidebarInner}
       </aside>
 
-      {/* Desktop sidebar */}
+      {/* Masaüstü sidebar */}
       <aside
-        className="hidden lg:flex lg:flex-col flex-shrink-0 bg-[#0f172a] min-h-screen border-r border-white/5 transition-all duration-200 overflow-hidden"
-        style={{ width: collapsed ? 68 : 240 }}
+        className="hidden lg:flex lg:flex-col flex-shrink-0 bg-[#0f172a] min-h-screen border-r border-white/[0.06] transition-[width] duration-200 overflow-hidden"
+        style={{ width: collapsed ? 68 : 248 }}
       >
         {sidebarInner}
       </aside>

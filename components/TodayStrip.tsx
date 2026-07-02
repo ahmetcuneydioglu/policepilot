@@ -105,6 +105,14 @@ export default function TodayStrip() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Sidebar "+ Yeni → Yeni Görev": /dashboard?task=1 → modal aç
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("task") === "1") {
+      setAddOpen(true);
+      window.history.replaceState({}, "", "/dashboard");
+    }
+  }, []);
+
   const completeTask = async (id: string) => {
     setDoneBusy(id);
     const res = await fetch(`/api/tasks/${id}`, {
