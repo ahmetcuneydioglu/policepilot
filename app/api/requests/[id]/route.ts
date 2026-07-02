@@ -111,6 +111,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // ── Atama bildirimi: sorumlu değiştiyse bell'e düşür (realtime) ──────────
+    if (managerial && typeof body.assigned_to === "string" && body.assigned_to &&
+        body.assigned_to !== row.assigned_to && body.assigned_to !== caller.userId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin.from("notifications") as any).insert({
+        agency_id: row.agency_id ?? caller.agencyId,
+        type: "request",
+        title: "Size satış fırsatı atandı",
+        body: `${row.customers?.name ?? "Müşteri"} — fırsatın sorumlusu artık sizsiniz.`,
+        link: `/firsatlar?open=${id}`,
+        ref_id: id,
+      }).then(() => {});
+    }
+
     // ── Activity log (durum geçmişi) — best-effort ───────────────────────────
     if (logs.length > 0) {
       const custName = row.customers?.name ?? "Müşteri";

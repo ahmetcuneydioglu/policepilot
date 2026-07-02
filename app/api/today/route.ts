@@ -63,13 +63,25 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false }).limit(6);
     if (!managerial) leadQ = leadQ.eq("assigned_to", caller.userId);
 
-    const [ren, fol, led] = await Promise.all([renQ, folQ, leadQ]);
+    // ── Görevler: vadesi bugün/geçmiş açık görevler ───────────────────────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let taskQ = (admin.from("tasks") as any)
+      .select("id, title, due_date, customer_id, customers(name)")
+      .eq("agency_id", agencyId).eq("status", "open")
+      .not("due_date", "is", null)
+      .lte("due_date", today)
+      .order("due_date").limit(6);
+    if (!managerial) taskQ = taskQ.eq("assigned_to", caller.userId);
+
+    const [ren, fol, led, tsk] = await Promise.all([renQ, folQ, leadQ, taskQ]);
     const renewals = ren.data ?? [], followups = fol.data ?? [], leads = led.data ?? [];
+    const tasks = tsk.error ? [] : (tsk.data ?? []); // migration öncesi kırılma yok
 
     // ── Sabah Brifingi (kural-tabanlı, gerçek sayılar) ───────────────────────
     const parts: string[] = [];
     if (renewals.length) parts.push(`${renewals.length} poliçe yenileme bekliyor`);
     if (followups.length) parts.push(`${followups.length} fırsatın takip zamanı geldi`);
+    if (tasks.length) parts.push(`${tasks.length} görevin vadesi geldi`);
     if (leads.length) parts.push(`${leads.length} yeni lead yanıt bekliyor`);
     const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Istanbul", hour: "2-digit", hour12: false }).format(new Date()));
     const selam = hour < 12 ? "Günaydın" : hour < 18 ? "İyi günler" : "İyi akşamlar";
@@ -77,9 +89,9 @@ export async function GET(request: NextRequest) {
       ? `${selam}! Bugün ${parts.join(", ")}.`
       : `${selam}! Bugün için bekleyen acil işiniz yok — pipeline'a yeni fırsat eklemek için iyi bir gün. ✨`;
 
-    return NextResponse.json({ renewals, followups, leads, briefing, today });
+    return NextResponse.json({ renewals, followups, leads, tasks, briefing, today });
   } catch (err) {
     console.error("[api/today]", err);
-    return NextResponse.json({ renewals: [], followups: [], leads: [], briefing: "" });
+    return NextResponse.json({ renewals: [], followups: [], leads: [], tasks: [], briefing: "" });
   }
 }

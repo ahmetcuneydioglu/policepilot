@@ -33,6 +33,30 @@ function relTime(iso: string): string {
   return `${Math.floor(hrs / 24)} gün önce`;
 }
 
+/* Tek tık takip görevi — fırsattan göreve köprü (Sprint 4) */
+function TaskFromOpportunity({ detail }: { detail: Detail }) {
+  const [state, setState] = useState<"idle" | "saving" | "done">("idle");
+  const create = async () => {
+    setState("saving");
+    const res = await fetch("/api/tasks", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: `${detail.customers?.name ?? "Müşteri"} — ${detail.request_type} takibi`,
+        customer_id: detail.customer_id,
+        request_id: detail.id,
+        due_date: detail.next_follow_up_date ?? new Date(Date.now() + 864e5).toISOString().slice(0, 10),
+      }),
+    });
+    setState(res.ok ? "done" : "idle");
+  };
+  return (
+    <button onClick={create} disabled={state !== "idle"}
+      className={`w-full py-2 rounded-xl text-xs font-semibold transition-colors ${state === "done" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-60"}`}>
+      {state === "done" ? "✓ Takip görevi oluşturuldu" : state === "saving" ? "Oluşturuluyor…" : "+ Takip görevi oluştur"}
+    </button>
+  );
+}
+
 export default function OpportunityDrawer({
   id, members, managerial, onClose, onChanged, onConvert,
 }: {
@@ -169,6 +193,7 @@ export default function OpportunityDrawer({
                   <input type="date" value={detail.next_follow_up_date ?? ""} onChange={(e) => patch({ next_follow_up_date: e.target.value })} disabled={saving}
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
+                <TaskFromOpportunity detail={detail} />
               </section>
 
               {/* Notlar */}
