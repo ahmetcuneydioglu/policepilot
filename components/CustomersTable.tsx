@@ -144,7 +144,8 @@ export default function CustomersTable({
                       </td>
                     )}
                     <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-2">
+                      {/* Hover'da beliren hızlı aksiyonlar (progressive disclosure) */}
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => { e.stopPropagation(); setWaCustomer(customer); }}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors border border-emerald-100"

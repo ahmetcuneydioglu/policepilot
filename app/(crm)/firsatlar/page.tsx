@@ -16,7 +16,10 @@ import type { Customer, RequestStatus } from "@/lib/database.types";
 import { fmtMoney } from "@/lib/format";
 import AddRequestModal from "@/components/AddRequestModal";
 import OpportunityDrawer from "@/components/opportunities/OpportunityDrawer";
-import { Plus, LayoutList, KanbanSquare, Search, User2, CalendarClock } from "lucide-react";
+import EmptyState from "@/components/ui/EmptyState";
+import { ListSkeleton } from "@/components/ui/Skeleton";
+import { Plus, LayoutList, KanbanSquare, Search, User2, CalendarClock, Undo2, ChevronDown } from "lucide-react";
+import { STAGES as ALL_STAGES } from "@/lib/opportunities";
 
 type Opp = {
   id: string; customer_id: string; request_type: string; status: RequestStatus;
@@ -63,13 +66,29 @@ export default function OpportunitiesPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  // ⌘K / global "+ Yeni": ?new=1 → modal, ?open=<id> → drawer
+  // ⌘K / global "+ Yeni": ?new=1 → modal, ?open=<id> → drawer, ?view= → görünüm
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("new") === "1") setShowAdd(true);
     const openParam = sp.get("open");
     if (openParam) setOpenId(openParam);
-    if (sp.get("new") || openParam) window.history.replaceState({}, "", "/firsatlar");
+    if (sp.get("view") === "kanban") setView("kanban");
+    if (sp.get("new") || openParam) {
+      window.history.replaceState({}, "", sp.get("view") === "kanban" ? "/firsatlar?view=kanban" : "/firsatlar");
+    }
+  }, []);
+
+  // Görünüm tercihi URL'de yaşar (paylaşılabilir + yenilemeye dayanıklı)
+  const switchView = (v: "list" | "kanban") => {
+    setView(v);
+    window.history.replaceState({}, "", v === "kanban" ? "/firsatlar?view=kanban" : "/firsatlar");
+  };
+
+  // ── Undo'lu toast (statü değişimleri) ──────────────────────────────────────
+  const [toast, setToast] = useState<{ msg: string; undo: (() => void) | null } | null>(null);
+  const toastTimer = useCallback((t: typeof toast) => {
+    setToast(t);
+    if (t) setTimeout(() => setToast((cur) => (cur === t ? null : cur)), 6000);
   }, []);
 
   // Müşteri listesi (fırsat oluşturma modalı için)
@@ -108,21 +127,34 @@ export default function OpportunitiesPage() {
     ];
   }, [opps]);
 
-  // Optimistik aşama taşıma (kanban drag + drawer)
-  const moveStage = useCallback(async (id: string, status: RequestStatus) => {
+  // Optimistik aşama taşıma (kanban drag + liste inline + drawer) + Geri Al
+  const patchStage = useCallback(async (id: string, status: RequestStatus) => {
     setOpps((prev) => prev.map((o) => (o.id === id ? { ...o, status, updated_at: new Date().toISOString() } : o)));
     const res = await fetch(`/api/requests/${id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
     });
     if (!res.ok) load(); // hata → sunucu doğrusuna dön
+    return res.ok;
   }, [load]);
+
+  const moveStage = useCallback(async (id: string, status: RequestStatus) => {
+    const prev = opps.find((o) => o.id === id)?.status;
+    if (prev === status) return;
+    const ok = await patchStage(id, status);
+    if (ok && prev) {
+      toastTimer({
+        msg: `Aşama "${status}" olarak güncellendi`,
+        undo: () => { patchStage(id, prev); setToast(null); },
+      });
+    }
+  }, [opps, patchStage, toastTimer]);
 
   const convert = useCallback((d: { id: string; customer_id: string; request_type: string }) => {
     router.push(`/policies?firsat=${d.id}&customer=${d.customer_id}&type=${encodeURIComponent(d.request_type)}`);
   }, [router]);
 
   if (loading) {
-    return <div className="max-w-6xl space-y-4"><div className="h-20 bg-slate-100 rounded-2xl animate-pulse" /><div className="h-64 bg-slate-100 rounded-2xl animate-pulse" /></div>;
+    return <div className="max-w-6xl"><ListSkeleton kpis={7} rows={6} /></div>;
   }
 
   return (
@@ -158,7 +190,7 @@ export default function OpportunitiesPage() {
         </div>
         <div className="inline-flex bg-slate-100 rounded-xl p-1">
           {([{ k: "list", l: "Liste", I: LayoutList }, { k: "kanban", l: "Kanban", I: KanbanSquare }] as const).map((v) => (
-            <button key={v.k} onClick={() => setView(v.k)}
+            <button key={v.k} onClick={() => switchView(v.k)}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${view === v.k ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
               <v.I className="w-4 h-4" /> {v.l}
             </button>
@@ -168,13 +200,15 @@ export default function OpportunitiesPage() {
 
       {/* İçerik */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center py-16 text-center">
-          <KanbanSquare className="w-10 h-10 text-slate-300 mb-3" />
-          <p className="text-sm font-medium text-slate-500">Henüz satış fırsatı yok</p>
-          <p className="text-xs text-slate-400 mt-1">"Yeni Fırsat" ile ilk fırsatınızı oluşturun.</p>
-        </div>
+        search.trim() ? (
+          <EmptyState Icon={Search} title="Aramanızla eşleşen fırsat yok" desc="Farklı bir müşteri adı, tür veya personel deneyin." />
+        ) : (
+          <EmptyState Icon={KanbanSquare} title="Henüz satış fırsatı yok"
+            desc="İlk fırsatınızı oluşturun; lead'den poliçeye tüm süreci buradan yönetin."
+            actionLabel="Yeni Fırsat" onAction={() => setShowAdd(true)} />
+        )
       ) : view === "list" ? (
-        <ListView opps={filtered} onOpen={setOpenId} />
+        <ListView opps={filtered} onOpen={setOpenId} onStage={moveStage} />
       ) : (
         <KanbanView opps={filtered} dragId={dragId} setDragId={setDragId} onDrop={moveStage} onOpen={setOpenId} />
       )}
@@ -187,12 +221,27 @@ export default function OpportunitiesPage() {
         <OpportunityDrawer id={openId} members={members} managerial={managerial}
           onClose={() => setOpenId(null)} onChanged={load} onConvert={convert} />
       )}
+
+      {/* Undo'lu toast */}
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[90] flex items-center gap-3 bg-slate-900 text-white text-sm rounded-2xl shadow-2xl pl-4 pr-2 py-2.5 animate-fade-in-up">
+          <span>{toast.msg}</span>
+          {toast.undo && (
+            <button onClick={toast.undo}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold transition-colors">
+              <Undo2 className="w-3.5 h-3.5" /> Geri Al
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 /* ── Liste görünümü ─────────────────────────────────────────────────────── */
-function ListView({ opps, onOpen }: { opps: Opp[]; onOpen: (id: string) => void }) {
+function ListView({ opps, onOpen, onStage }: { opps: Opp[]; onOpen: (id: string) => void; onStage: (id: string, s: RequestStatus) => void }) {
+  // Inline aşama değiştirme: rozet tıklanınca küçük popover (drawer'sız statü)
+  const [stageOpen, setStageOpen] = useState<string | null>(null);
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -220,7 +269,29 @@ function ListView({ opps, onOpen }: { opps: Opp[]; onOpen: (id: string) => void 
                 </td>
                 <td className="px-4 py-3 text-slate-600">{o.request_type}</td>
                 <td className="px-4 py-3 text-slate-500">{o.assigned_name ?? <span className="text-slate-300">Atanmadı</span>}</td>
-                <td className="px-4 py-3"><span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${stageOf(o.status).badge}`}>{o.status}</span></td>
+                <td className="px-4 py-3 relative" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => setStageOpen(stageOpen === o.id ? null : o.id)}
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full transition-shadow hover:ring-2 hover:ring-slate-200 ${stageOf(o.status).badge}`}
+                    title="Aşamayı değiştir">
+                    {o.status} <ChevronDown className="w-3 h-3 opacity-60" />
+                  </button>
+                  {stageOpen === o.id && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setStageOpen(null)} />
+                      <div className="absolute left-4 top-full mt-1 z-50 w-44 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5">
+                        {ALL_STAGES.map((s) => (
+                          <button key={s.key}
+                            onClick={() => { setStageOpen(null); if (s.key !== o.status) onStage(o.id, s.key); }}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-slate-50 transition-colors ${s.key === o.status ? "font-bold text-slate-900" : "text-slate-600"}`}>
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
+                            {s.key}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-slate-500">{fmtDay(o.next_follow_up_date) ?? <span className="text-slate-300">—</span>}</td>
                 <td className="px-4 py-3 text-right font-semibold text-slate-700">{o.price_offer != null ? fmtMoney(o.price_offer) : <span className="text-slate-300">—</span>}</td>
               </tr>

@@ -1055,6 +1055,15 @@ export default function PoliciesPage() {
     })();
   }, []);
 
+  // Filtre URL'de yaşar (?filter=Aktif — paylaşılabilir, yenilemeye dayanıklı)
+  useEffect(() => {
+    const f = new URLSearchParams(window.location.search).get("filter");
+    if (f && ["Tümü", "Aktif", "Yaklaşan", "Geçmiş", "Pasif"].includes(f)) setFilter(f as FilterKey);
+  }, []);
+  useEffect(() => {
+    window.history.replaceState({}, "", filter === "Tümü" ? "/policies" : `/policies?filter=${encodeURIComponent(filter)}`);
+  }, [filter]);
+
   // Arama debounce — her tuşta server'a gitmesin
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.replace(/[%,()]/g, " ").trim()), 300);
