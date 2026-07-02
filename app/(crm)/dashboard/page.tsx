@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { withScopeFilter, withRequestScope, isManagerial, needsOnboarding } from "@/lib/tenant";
 import TeamSummaryWidget from "@/components/team/TeamSummaryWidget";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
+import TodayStrip from "@/components/TodayStrip";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity,
@@ -435,6 +436,9 @@ export default function DashboardPage() {
 
       {/* ══ KURULUM CHECKLIST (yeni acente aktivasyonu) ═══════════════════ */}
       {role === "agency_user" && <OnboardingChecklist />}
+
+      {/* ══ BUGÜN ŞERİDİ (Sabah Brifingi + aksiyon kovaları) ══════════════ */}
+      {role === "agency_user" && <TodayStrip />}
 
       {/* ══ ACENTE TEKLİF LİNKİ (agency_user only) ════════════════════════ */}
       {role === "agency_user" && agencySlug && (

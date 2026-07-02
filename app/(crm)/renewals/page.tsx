@@ -15,7 +15,7 @@ import { withScopeFilter } from "@/lib/tenant";
 import {
   RefreshCw, Search, CalendarClock, CalendarDays,
   CalendarRange, AlertTriangle, Mail, Zap, Award,
-  TrendingUp, ChevronRight, Trash2, FolderOpen,
+  TrendingUp, ChevronRight, Trash2, FolderOpen, Target,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -130,6 +130,23 @@ export default function RenewalsPage() {
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState<FilterKey>("Tümü");
   const [search,   setSearch]   = useState("");
+
+  // Yenileme → tek tık Satış Fırsatı (Sprint 2: kayıp önleme köprüsü)
+  const [oppBusy, setOppBusy] = useState<string | null>(null);
+  async function toOpportunity(p: RenewalPolicy) {
+    if (oppBusy) return;
+    setOppBusy(p.id);
+    try {
+      const res = await fetch("/api/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customer_id: p.customer_id, request_type: p.policy_type }),
+      });
+      const j = await res.json();
+      if (res.ok && j.requestId) router.push(`/firsatlar?open=${j.requestId}`);
+      else setOppBusy(null);
+    } catch { setOppBusy(null); }
+  }
 
   // İptal onay modalı
   const [cancelTarget, setCancelTarget] = useState<RenewalPolicy | null>(null);
@@ -511,6 +528,16 @@ export default function RenewalsPage() {
                       >
                         <Mail className="w-3 h-3" /> Mail
                       </a>
+
+                      {/* Yenileme → Satış Fırsatı (takip hattına al) */}
+                      <button
+                        onClick={() => toOpportunity(p)}
+                        disabled={oppBusy === p.id}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 text-[11px] font-bold hover:bg-indigo-100 transition-colors ring-1 ring-indigo-200 disabled:opacity-60"
+                        title="Bu yenilemeyi satış fırsatı olarak takip hattına al"
+                      >
+                        <Target className="w-3 h-3" /> {oppBusy === p.id ? "Açılıyor…" : "Fırsatlaştır"}
+                      </button>
 
                       {/* Durum bazlı aksiyon: pending → Teklif Çalış · quoted → Teklifi Aç + İptal */}
                       {p.renewal_status === "quoted" && runs[p.id] ? (
