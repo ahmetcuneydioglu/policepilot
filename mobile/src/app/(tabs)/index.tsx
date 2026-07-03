@@ -18,6 +18,7 @@ import { fetchTasks, Task } from '@/lib/tasks';
 import { apiGet } from '@/lib/api';
 import { formatShortTRY, greetingTR, formatLongDateTR } from '@/lib/format';
 import { FEATURES } from '@/lib/features';
+import { useCachedQuery } from '@/lib/query';
 
 const EMPTY: OperationMetrics = {
   yenilemeSayisi: 0, bekleyenTeklif: 0, bugunKesilen: 0, potansiyelKomisyon: 0,
@@ -49,12 +50,10 @@ export default function HomeScreen() {
   const { unreadCount } = useNotificationStore();
   const { profile, agencyId } = useProfile();
 
-  const [data, setData] = useState<Home | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [email, setEmail] = useState('');
 
-  const load = useCallback(async () => {
+  // Offline-cache'li dashboard verisi (lib/query): açılışta son bilinen anında, arkada taze.
+  const fetchHome = useCallback(async (): Promise<Home> => {
     const [m, renewals, tasks] = await Promise.all([
       fetchOperationMetrics(agencyId),
       fetchUpcomingRenewals(agencyId),
@@ -67,7 +66,7 @@ export default function HomeScreen() {
     } catch { /* yetki yoksa 0 */ }
 
     const w30Items = filterByWindow(renewals, 30);
-    setData({
+    return {
       m, renewals, tasks, waPending,
       cal: {
         w3: filterByWindow(renewals, 3).length,
@@ -76,16 +75,14 @@ export default function HomeScreen() {
         w30: w30Items.length,
         tahminiPrim: w30Items.reduce((s, i) => s + Number(i.premium ?? 0), 0),
       },
-    });
-    setLoading(false);
+    };
   }, [agencyId]);
 
-  useEffect(() => {
-    load();
-    supabase.auth.getUser().then(({ data: { user } }) => setEmail(user?.email ?? ''));
-  }, [load]);
+  const { data = null, loading, refreshing, onRefresh } = useCachedQuery(['dashboard', agencyId], fetchHome);
 
-  const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setEmail(user?.email ?? ''));
+  }, []);
 
   function signOut() {
     Alert.alert('Çıkış Yap', 'Hesabınızdan çıkmak istediğinize emin misiniz?', [

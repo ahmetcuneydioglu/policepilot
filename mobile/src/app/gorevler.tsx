@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, Type, Shadow, renewalUrgency } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import ActionBtn from '@/components/ActionBtn';
+import { useCachedQuery } from '@/lib/query';
 import {
   fetchTasks, groupTasks, buildTaskCallUrl, buildTaskWhatsappUrl,
   Task, TaskKind, TaskUrgency,
@@ -43,23 +44,10 @@ export default function GorevlerScreen() {
   const router = useRouter();
   const { agencyId } = useProfile();
 
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = useCallback(async () => {
-    const data = await fetchTasks(agencyId);
-    setTasks(data);
-    setLoading(false);
-  }, [agencyId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
+  const { data, loading, refreshing, onRefresh } = useCachedQuery(
+    ['tasks', agencyId], () => fetchTasks(agencyId)
+  );
+  const tasks = data ?? [];
 
   const sections = useMemo(() => groupTasks(tasks), [tasks]);
 

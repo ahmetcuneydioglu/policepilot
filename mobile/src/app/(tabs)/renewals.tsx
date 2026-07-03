@@ -17,6 +17,7 @@ import { startQuoteRun } from '@/lib/quoteCenter';
 import { FEATURES } from '@/lib/features';
 import ActionBtn from '@/components/ActionBtn';
 import SwipeRow from '@/components/SwipeRow';
+import { useCachedQuery } from '@/lib/query';
 
 const SEGMENTS: { key: RenewalWindow; label: string }[] = [
   { key: 3, label: '3 Gün' },
@@ -35,25 +36,14 @@ export default function RenewalsScreen() {
   const { agencyId } = useProfile();
   const tabBarHeight = useBottomTabBarHeight();
 
-  const [items, setItems] = useState<RenewalItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [segment, setSegment] = useState<RenewalWindow>(30);
   const [quotingId, setQuotingId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const data = await fetchUpcomingRenewals(agencyId);
-    setItems(data);
-    setLoading(false);
-  }, [agencyId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
+  // Offline-cache'li veri: disk'ten anında gelir, arkada tazelenir (lib/query).
+  const { data, loading, refreshing, onRefresh } = useCachedQuery(
+    ['renewals', agencyId], () => fetchUpcomingRenewals(agencyId)
+  );
+  const items = data ?? [];
 
   const visible = useMemo(() => filterByWindow(items, segment), [items, segment]);
   const tahminiPrim = useMemo(

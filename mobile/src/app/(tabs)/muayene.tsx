@@ -10,6 +10,7 @@ import DarkHero, { heroGlass } from '@/components/DarkHero';
 import { useProfile } from '@/lib/useProfile';
 import ActionBtn from '@/components/ActionBtn';
 import SwipeRow from '@/components/SwipeRow';
+import { useCachedQuery } from '@/lib/query';
 import {
   fetchUpcomingInspections, filterByWindow, buildCallUrl, buildInspectionWhatsappUrl,
   InspectionItem, InspectionWindow,
@@ -35,24 +36,12 @@ export default function MuayeneScreen() {
   const { agencyId } = useProfile();
   const tabBarHeight = useBottomTabBarHeight();
 
-  const [items, setItems] = useState<InspectionItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [segment, setSegment] = useState<InspectionWindow>('all');
 
-  const load = useCallback(async () => {
-    const data = await fetchUpcomingInspections(agencyId);
-    setItems(data);
-    setLoading(false);
-  }, [agencyId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
+  const { data, loading, refreshing, onRefresh } = useCachedQuery(
+    ['inspections', agencyId], () => fetchUpcomingInspections(agencyId)
+  );
+  const items = data ?? [];
 
   const visible = useMemo(() => filterByWindow(items, segment), [items, segment]);
   const counts = useMemo(() => {

@@ -6,6 +6,7 @@ import { subscribePhoneVerified } from '@/lib/securityState';
 import { FEATURES } from '@/lib/features';
 import { View, Text, TouchableOpacity, ActivityIndicator, AppState, StyleSheet, Image } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { QueryProvider } from '@/lib/query';
 import { Colors } from '@/lib/theme';
 import { isAppLockEnabled, unlockWithBiometrics } from '@/lib/appLock';
 import {
@@ -277,9 +278,11 @@ function RootLayoutInner() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <NotificationProvider>
-        <RootLayoutInner />
-      </NotificationProvider>
+      <QueryProvider>
+        <NotificationProvider>
+          <RootLayoutInner />
+        </NotificationProvider>
+      </QueryProvider>
     </GestureHandlerRootView>
   );
 }
