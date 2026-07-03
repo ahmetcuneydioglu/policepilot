@@ -251,6 +251,16 @@ export default function HomeScreen() {
           <View style={{ paddingVertical: 60, alignItems: 'center' }}><ActivityIndicator size="large" color={Colors.primary} /></View>
         ) : (
           <View style={styles.body}>
+            {/* #4 Hızlı aksiyonlar */}
+            <View style={styles.quickRow}>
+              {quickActions.map((a) => (
+                <TouchableOpacity key={a.label} style={styles.quickItem} onPress={() => router.push(a.href)} activeOpacity={0.7}>
+                  <View style={[styles.quickIcon, { backgroundColor: a.bg }]}><Text style={{ fontSize: 22 }}>{a.emoji}</Text></View>
+                  <Text style={styles.quickLabel}>{a.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             {/* #1.5 BUGÜN — acentenin sabah listesi: bugün aranacak ilk 3 kişi */}
             <View style={styles.todayCard}>
               <View style={styles.todayHead}>
@@ -334,16 +344,6 @@ export default function HomeScreen() {
                   <Text style={styles.potText}>Yenilemelerden potansiyel komisyon: <Text style={styles.potValue}>{formatShortTRY(m.potansiyelKomisyon)}</Text></Text>
                 </TouchableOpacity>
               )}
-            </View>
-
-            {/* #4 Hızlı aksiyonlar */}
-            <View style={styles.quickRow}>
-              {quickActions.map((a) => (
-                <TouchableOpacity key={a.label} style={styles.quickItem} onPress={() => router.push(a.href)} activeOpacity={0.7}>
-                  <View style={[styles.quickIcon, { backgroundColor: a.bg }]}><Text style={{ fontSize: 22 }}>{a.emoji}</Text></View>
-                  <Text style={styles.quickLabel}>{a.label}</Text>
-                </TouchableOpacity>
-              ))}
             </View>
 
             {/* #3 Görev Merkezi */}
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
   potValue: { fontWeight: '800', color: Colors.success },
 
   // #4 Quick actions
-  quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.md },
+  quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.md },
   quickItem: { alignItems: 'center', flex: 1 },
   quickIcon: { width: 52, height: 52, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   quickLabel: { fontSize: 11, color: Colors.text, fontWeight: '600' },
