@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   RefreshControl, Alert, ActivityIndicator, Linking,
@@ -14,11 +14,13 @@ import { useNotificationStore } from '@/lib/NotificationContext';
 import { useProfile } from '@/lib/useProfile';
 import { fetchOperationMetrics, OperationMetrics } from '@/lib/dashboard';
 import { fetchUpcomingRenewals, filterByWindow, buildRenewalWhatsappUrl, RenewalItem } from '@/lib/renewals';
-import { fetchTasks, Task } from '@/lib/tasks';
+import { fetchTasks, buildTaskWhatsappUrl, Task } from '@/lib/tasks';
 import { apiGet } from '@/lib/api';
 import { formatShortTRY, greetingTR, formatLongDateTR } from '@/lib/format';
 import { FEATURES } from '@/lib/features';
 import { useCachedQuery } from '@/lib/query';
+import { tapHaptic } from '@/lib/haptics';
+import Icon from '@/components/Icon';
 
 const EMPTY: OperationMetrics = {
   yenilemeSayisi: 0, bekleyenTeklif: 0, bugunKesilen: 0, potansiyelKomisyon: 0,
@@ -79,6 +81,13 @@ export default function HomeScreen() {
   }, [agencyId]);
 
   const { data = null, loading, refreshing, onRefresh } = useCachedQuery(['dashboard', agencyId], fetchHome);
+
+  // BUGÜN modülü: gecikmiş + bugünkü görevlerden ilk 3 (kişi bazlı, tek dokunuş ara/WA)
+  const todayTasks = useMemo(() => {
+    const ts = (data?.tasks ?? []).filter((t) => t.urgency === 'overdue' || t.urgency === 'today');
+    ts.sort((a, b) => (a.urgency === b.urgency ? 0 : a.urgency === 'overdue' ? -1 : 1));
+    return ts.slice(0, 3);
+  }, [data?.tasks]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setEmail(user?.email ?? ''));
@@ -242,6 +251,58 @@ export default function HomeScreen() {
           <View style={{ paddingVertical: 60, alignItems: 'center' }}><ActivityIndicator size="large" color={Colors.primary} /></View>
         ) : (
           <View style={styles.body}>
+            {/* #1.5 BUGÜN — acentenin sabah listesi: bugün aranacak ilk 3 kişi */}
+            <View style={styles.todayCard}>
+              <View style={styles.todayHead}>
+                <Text style={styles.todayKicker}>BUGÜN ARANACAKLAR</Text>
+                {todayTasks.length > 0 && (
+                  <TouchableOpacity onPress={() => router.push('/gorevler')} activeOpacity={0.7}>
+                    <Text style={styles.todayAll}>Tümü ›</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {todayTasks.length === 0 ? (
+                <Text style={styles.todayEmpty}>Bugün araman gereken kimse yok 🎉</Text>
+              ) : (
+                todayTasks.map((t, i) => (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[styles.todayRow, i < todayTasks.length - 1 && styles.todayRowBorder]}
+                    onPress={() => { tapHaptic(); router.push(`/customer/${t.customerId}`); }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.todayAvatar, t.urgency === 'overdue' && { backgroundColor: Colors.dangerBg }]}>
+                      <Text style={[styles.todayAvatarText, t.urgency === 'overdue' && { color: Colors.danger }]}>
+                        {t.title.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.todayName} numberOfLines={1}>{t.title}</Text>
+                      <Text style={styles.todaySub} numberOfLines={1}>{t.subtitle}</Text>
+                    </View>
+                    {!!t.customerPhone && (
+                      <>
+                        <TouchableOpacity
+                          style={styles.todayBtn}
+                          onPress={() => { tapHaptic(); Linking.openURL(`tel:${t.customerPhone}`); }}
+                          activeOpacity={0.7}
+                        >
+                          <Icon symbol="phone.fill" emoji="📞" size={15} color={Colors.heading} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.todayBtn}
+                          onPress={() => { tapHaptic(); Linking.openURL(buildTaskWhatsappUrl(t)); }}
+                          activeOpacity={0.7}
+                        >
+                          <Icon symbol="message.fill" emoji="💬" size={15} color="#25D366" />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+
             {/* #2 Para kartı */}
             <View style={styles.moneyCard}>
               <View style={styles.moneyHead}>
@@ -369,6 +430,20 @@ const styles = StyleSheet.create({
   sectionLink: { ...Type.caption, color: Colors.primary, fontWeight: '700' },
 
   card: { backgroundColor: Colors.card, borderRadius: Radius.lg, ...Shadow.md, overflow: 'hidden' },
+
+  // #1.5 Bugün
+  todayCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, ...Shadow.md, padding: Spacing.md, marginBottom: Spacing.md },
+  todayHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  todayKicker: { ...Type.label },
+  todayAll: { ...Type.caption, color: Colors.primary, fontWeight: '700' },
+  todayEmpty: { ...Type.body, color: Colors.secondary, paddingVertical: 10 },
+  todayRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  todayRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  todayAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  todayAvatarText: { fontSize: 12, fontWeight: '800', color: Colors.primary },
+  todayName: { ...Type.subhead, fontSize: 14 },
+  todaySub: { ...Type.caption, marginTop: 1 },
+  todayBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
 
   // #2 Money
   moneyCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, ...Shadow.md, padding: Spacing.md },

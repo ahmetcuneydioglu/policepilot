@@ -8,14 +8,15 @@ export function formatTRY(n: number | null | undefined): string {
   return `₺${Math.round(v).toLocaleString('tr-TR')}`;
 }
 
-/** ₺96B / ₺1,2M — kısa gösterim (kartlar için) */
+/** ₺96 bin / ₺1,2 mn — kısa gösterim (kartlar için).
+ *  Not: "B" kısaltması milyar okunuyordu → Türkçe finans kısaltmaları. */
 export function formatShortTRY(n: number | null | undefined): string {
   const v = Number(n ?? 0);
   if (Math.abs(v) >= 1_000_000) {
-    return `₺${(v / 1_000_000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}M`;
+    return `₺${(v / 1_000_000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} mn`;
   }
   if (Math.abs(v) >= 1_000) {
-    return `₺${(v / 1_000).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}B`;
+    return `₺${(v / 1_000).toLocaleString('tr-TR', { maximumFractionDigits: 0 })} bin`;
   }
   return `₺${Math.round(v).toLocaleString('tr-TR')}`;
 }
