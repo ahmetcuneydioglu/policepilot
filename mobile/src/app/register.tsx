@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 20, fontWeight: '700', color: Colors.heading, marginBottom: Spacing.md },
   sectionLabel: { fontSize: 11, fontWeight: '800', color: Colors.secondary, letterSpacing: 0.8, marginBottom: Spacing.sm },
 
-  errorBox: { backgroundColor: '#FEE2E2', borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md },
+  errorBox: { backgroundColor: Colors.dangerBg, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md },
   errorText: { color: Colors.danger, fontSize: 14 },
 
   inputGroup: { marginBottom: Spacing.md },

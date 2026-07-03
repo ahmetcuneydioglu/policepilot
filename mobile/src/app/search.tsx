@@ -172,7 +172,7 @@ export default function SearchScreen() {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.row} onPress={() => openCustomer(item.customer_id)} activeOpacity={0.7}>
-                <View style={[styles.avatar, { backgroundColor: '#FEF3C7' }]}>
+                <View style={[styles.avatar, { backgroundColor: Colors.amberBg }]}>
                   <Icon symbol="doc.text.fill" emoji="📄" size={16} color="#D97706" />
                 </View>
                 <View style={{ flex: 1 }}>

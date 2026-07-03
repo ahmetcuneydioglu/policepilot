@@ -168,23 +168,23 @@ export default function HomeScreen() {
   // ── #4 Hızlı aksiyonlar ─────────────────────────────────────────────────────
   const quickActions: { emoji: string; bg: string; label: string; href: Href }[] = [
     FEATURES.quoteCenter
-      ? { emoji: '⚡', bg: '#EFF6FF', label: 'Teklif Al', href: '/(tabs)/teklif' as Href }
-      : { emoji: '🚗', bg: '#EFF6FF', label: 'Muayene',  href: '/(tabs)/muayene' as Href },
-    { emoji: '👤', bg: '#F0FDF4', label: 'Müşteri',  href: '/(tabs)/customers' },
-    { emoji: '📄', bg: '#FEF3C7', label: 'Poliçe',   href: '/(tabs)/policies' },
-    { emoji: '💬', bg: '#DCFCE7', label: 'WhatsApp', href: '/whatsapp' },
+      ? { emoji: '⚡', bg: Colors.infoBg, label: 'Teklif Al', href: '/(tabs)/teklif' as Href }
+      : { emoji: '🚗', bg: Colors.infoBg, label: 'Muayene',  href: '/(tabs)/muayene' as Href },
+    { emoji: '👤', bg: Colors.successBg, label: 'Müşteri',  href: '/(tabs)/customers' },
+    { emoji: '📄', bg: Colors.amberBg, label: 'Poliçe',   href: '/(tabs)/policies' },
+    { emoji: '💬', bg: Colors.successBg, label: 'WhatsApp', href: '/whatsapp' },
   ];
 
   // ── #3 Görev Merkezi — tekrarsız + mini önizleme ────────────────────────────
   const topRenewal = renewals[0] ?? null;
   const taskRows: { emoji: string; bg: string; title: string; sub: string | null; count: number; badge: string; href: Href }[] = [
-    { emoji: '🔄', bg: '#FEE2E2', title: 'Yenileme Takibi', count: m.yenilemeSayisi, badge: Dark.dotRed,   href: '/(tabs)/renewals',
+    { emoji: '🔄', bg: Colors.dangerBg, title: 'Yenileme Takibi', count: m.yenilemeSayisi, badge: Dark.dotRed,   href: '/(tabs)/renewals',
       sub: topRenewal ? `${topRenewal.customerName} · ${dayLabel(topRenewal.daysLeft)}` : null },
-    { emoji: '📋', bg: '#FEF3C7', title: 'Bekleyen Teklifler', count: m.bekleyenTeklif, badge: Dark.dotAmber, href: '/(tabs)/requests',
+    { emoji: '📋', bg: Colors.amberBg, title: 'Bekleyen Teklifler', count: m.bekleyenTeklif, badge: Dark.dotAmber, href: '/(tabs)/requests',
       sub: pendingTask ? `${pendingTask.title} · ${pendingTask.subtitle.split(' · ')[0]}` : null },
-    { emoji: '💬', bg: '#DCFCE7', title: 'WhatsApp Gönderimleri', count: data?.waPending ?? 0, badge: Dark.dotGreen, href: '/whatsapp',
+    { emoji: '💬', bg: Colors.successBg, title: 'WhatsApp Gönderimleri', count: data?.waPending ?? 0, badge: Dark.dotGreen, href: '/whatsapp',
       sub: (data?.waPending ?? 0) > 0 ? `${data?.waPending} mesaj kuyrukta` : null },
-    { emoji: '✅', bg: '#E0E7FF', title: 'Görevler', count: tasks.length, badge: Colors.primary, href: '/gorevler',
+    { emoji: '✅', bg: Colors.primaryLight, title: 'Görevler', count: tasks.length, badge: Colors.primary, href: '/gorevler',
       sub: tasks[0] ? tasks[0].title : null },
   ];
 

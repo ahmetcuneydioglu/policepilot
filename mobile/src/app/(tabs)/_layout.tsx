@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router';
 import { View, Text, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, Shadow } from '@/lib/theme';
+import { Colors, Shadow, isDarkMode } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import { FEATURES } from '@/lib/features';
 import { pressHaptic } from '@/lib/haptics';
@@ -58,7 +58,7 @@ export default function TabsLayout() {
           height: Platform.OS === 'ios' ? 82 : 64,
         },
         tabBarBackground: () => (
-          <BlurView tint="light" intensity={95} style={[StyleSheet.absoluteFill, styles.tabBlur]} />
+          <BlurView tint={isDarkMode ? 'dark' : 'light'} intensity={95} style={[StyleSheet.absoluteFill, styles.tabBlur]} />
         ),
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
       }}
@@ -119,9 +119,9 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   tabBlur: {
-    backgroundColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: isDarkMode ? 'rgba(11,19,34,0.55)' : 'rgba(255,255,255,0.4)',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.08)',
+    borderTopColor: isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)',
   },
   teklifSlot: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
   teklifTouch: { alignItems: 'center', transform: [{ translateY: -18 }] },

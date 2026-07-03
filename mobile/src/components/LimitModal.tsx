@@ -174,7 +174,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
-  iconWrapRed: { backgroundColor: '#FEE2E2' },
+  iconWrapRed: { backgroundColor: Colors.dangerBg },
   iconWrapOrange: { backgroundColor: '#FEF3C7' },
   iconEmoji: { fontSize: 34 },
 

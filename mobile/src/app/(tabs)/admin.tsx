@@ -416,7 +416,7 @@ const card = StyleSheet.create({
     fontWeight: '700',
   },
   passiveBadge: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: Colors.dangerBg,
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,

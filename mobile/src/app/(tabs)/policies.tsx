@@ -68,10 +68,10 @@ function expiryBadge(endDate: string, status: PolicyStatus): BadgeCfg {
     return { bg: '#F3F4F6', text: '#6B7280', dot: '#9CA3AF', label: 'Pasif' };
   }
   if (isExpired(endDate)) {
-    return { bg: '#FEE2E2', text: '#DC2626', dot: '#DC2626', label: 'Süresi geçmiş' };
+    return { bg: Colors.dangerBg, text: Colors.danger, dot: Colors.danger, label: 'Süresi geçmiş' };
   }
   const days = daysLeft(endDate);
-  if (days <= 5) return { bg: '#FEE2E2', text: '#DC2626', dot: '#DC2626', label: `${days} gün kaldı` };
+  if (days <= 5) return { bg: Colors.dangerBg, text: Colors.danger, dot: Colors.danger, label: `${days} gün kaldı` };
   if (days <= 15) return { bg: '#FEF3C7', text: '#D97706', dot: '#F59E0B', label: `${days} gün kaldı` };
   if (days <= 30) return { bg: '#FEF9C3', text: '#CA8A04', dot: '#EAB308', label: `${days} gün kaldı` };
   return { bg: '#F0FDF4', text: '#16A34A', dot: '#16A34A', label: `${days} gün kaldı` };
@@ -1065,7 +1065,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   avatarDefault: { backgroundColor: Colors.primaryLight },
-  avatarCritical: { backgroundColor: '#FEE2E2' },
+  avatarCritical: { backgroundColor: Colors.dangerBg },
   avatarText: { fontSize: 14, fontWeight: '800' },
   avatarTextDefault: { color: Colors.primary },
   avatarTextCritical: { color: Colors.danger },

@@ -1,4 +1,15 @@
-export const Colors = {
+import { Appearance } from 'react-native';
+
+/**
+ * Tema: çift palet, AÇILIŞTA sistem temasına göre seçilir.
+ * Tüm StyleSheet'ler modül yüklenirken Colors'ı yakaladığından, seçim burada
+ * (ilk import anında) yapılınca bütün uygulama otomatik doğru paleti alır.
+ * Canlı geçiş yok (v1): sistem teması değişirse yeni tema uygulama yeniden
+ * açılınca uygulanır. app.json userInterfaceStyle: 'automatic' olmalı.
+ */
+export const isDarkMode = Appearance.getColorScheme() === 'dark';
+
+const LightColors = {
   primary: '#2563EB',
   primaryDark: '#1D4ED8',
   background: '#F5F7FB',
@@ -20,6 +31,31 @@ export const Colors = {
   successBg: '#F0FDF4',
   infoBg: '#EFF6FF',
 };
+
+// Marka lacivertiyle uyumlu koyu palet (slate-navy)
+const DarkColors: typeof LightColors = {
+  primary: '#3B82F6',
+  primaryDark: '#2563EB',
+  background: '#0B1322',
+  card: '#141F33',
+  surface: '#1C2942',
+  heading: '#F1F5F9',
+  text: '#C7D2E4',
+  secondary: '#8CA0BF',
+  placeholder: '#5D6F8C',
+  success: '#34D17A',
+  warning: '#F5B441',
+  danger: '#F2555A',
+  border: '#243553',
+  primaryLight: '#1B2E55',
+  dangerBg: '#3A1D22',
+  warningBg: '#3A2E17',
+  amberBg: '#39301A',
+  successBg: '#16301F',
+  infoBg: '#1B2E55',
+};
+
+export const Colors = isDarkMode ? DarkColors : LightColors;
 
 export const Spacing = {
   xs: 4,
@@ -108,13 +144,13 @@ export function renewalUrgency(daysLeft: number): {
     return { level: 'critical', bg: Colors.dangerBg,  text: Colors.danger,  dot: Colors.danger,  label: daysLeft === 0 ? 'Bugün bitiyor' : `${daysLeft} gün kaldı` };
   }
   if (daysLeft <= 7) {
-    return { level: 'soon',     bg: Colors.warningBg, text: '#D97706',      dot: '#F59E0B',      label: `${daysLeft} gün kaldı` };
+    return { level: 'soon',     bg: Colors.warningBg, text: isDarkMode ? '#F5B441' : '#D97706', dot: '#F59E0B', label: `${daysLeft} gün kaldı` };
   }
   if (daysLeft <= 15) {
-    return { level: 'upcoming', bg: Colors.amberBg,   text: '#CA8A04',      dot: '#EAB308',      label: `${daysLeft} gün kaldı` };
+    return { level: 'upcoming', bg: Colors.amberBg,   text: isDarkMode ? '#EAB308' : '#CA8A04', dot: '#EAB308', label: `${daysLeft} gün kaldı` };
   }
   if (daysLeft <= 30) {
-    return { level: 'upcoming', bg: Colors.amberBg,   text: '#CA8A04',      dot: '#EAB308',      label: `${daysLeft} gün kaldı` };
+    return { level: 'upcoming', bg: Colors.amberBg,   text: isDarkMode ? '#EAB308' : '#CA8A04', dot: '#EAB308', label: `${daysLeft} gün kaldı` };
   }
   return { level: 'safe', bg: Colors.successBg, text: Colors.success, dot: Colors.success, label: `${daysLeft} gün kaldı` };
 }

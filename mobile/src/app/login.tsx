@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   errorBox: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: Colors.dangerBg,
     borderRadius: Radius.md,
     padding: Spacing.md,
     marginBottom: Spacing.md,

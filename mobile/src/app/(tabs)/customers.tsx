@@ -748,7 +748,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.heading },
   closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.border, justifyContent: 'center', alignItems: 'center' },
   closeBtnText: { fontSize: 14, color: Colors.secondary, fontWeight: '600' },
-  errorBox: { backgroundColor: '#FEE2E2', borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md },
+  errorBox: { backgroundColor: Colors.dangerBg, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md },
   errorText: { color: Colors.danger, fontSize: 14 },
   sectionTitle: {
     fontSize: 11, fontWeight: '700', color: Colors.secondary, textTransform: 'uppercase',
