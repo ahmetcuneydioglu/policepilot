@@ -9,6 +9,7 @@ import { Colors, Spacing, Radius, Type, Shadow, Dark, renewalUrgency } from '@/l
 import DarkHero, { heroGlass } from '@/components/DarkHero';
 import { useProfile } from '@/lib/useProfile';
 import ActionBtn from '@/components/ActionBtn';
+import SwipeRow from '@/components/SwipeRow';
 import {
   fetchUpcomingInspections, filterByWindow, buildCallUrl, buildInspectionWhatsappUrl,
   InspectionItem, InspectionWindow,
@@ -134,6 +135,7 @@ export default function MuayeneScreen() {
           renderItem={({ item }) => {
             const u = renewalUrgency(item.daysLeft);
             return (
+              <SwipeRow onCall={() => call(item)} onWhatsapp={() => whatsapp(item)}>
               <View style={styles.card}>
                 <View style={styles.cardTop}>
                   <View style={[styles.avatar, { backgroundColor: u.bg }]}>
@@ -160,6 +162,7 @@ export default function MuayeneScreen() {
                   <ActionBtn symbol="person.fill" emoji="👤" label="Detay" tint={Colors.primary} onPress={() => detay(item)} />
                 </View>
               </View>
+              </SwipeRow>
             );
           }}
         />

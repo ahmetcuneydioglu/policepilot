@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { subscribePhoneVerified } from '@/lib/securityState';
 import { FEATURES } from '@/lib/features';
 import { View, Text, TouchableOpacity, ActivityIndicator, AppState, StyleSheet, Image } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Colors } from '@/lib/theme';
 import { isAppLockEnabled, unlockWithBiometrics } from '@/lib/appLock';
 import {
@@ -275,8 +276,10 @@ function RootLayoutInner() {
 // ─── Root Layout (Provider wrapper) ───────────────────────────────────────────
 export default function RootLayout() {
   return (
-    <NotificationProvider>
-      <RootLayoutInner />
-    </NotificationProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NotificationProvider>
+        <RootLayoutInner />
+      </NotificationProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -16,6 +16,7 @@ import {
 import { startQuoteRun } from '@/lib/quoteCenter';
 import { FEATURES } from '@/lib/features';
 import ActionBtn from '@/components/ActionBtn';
+import SwipeRow from '@/components/SwipeRow';
 
 const SEGMENTS: { key: RenewalWindow; label: string }[] = [
   { key: 3, label: '3 Gün' },
@@ -151,6 +152,7 @@ export default function RenewalsScreen() {
           renderItem={({ item }) => {
             const u = renewalUrgency(item.daysLeft);
             return (
+              <SwipeRow onCall={() => call(item)} onWhatsapp={() => whatsapp(item)}>
               <View style={styles.card}>
                 <View style={styles.cardTop}>
                   <View style={[styles.avatar, { backgroundColor: u.bg }]}>
@@ -177,6 +179,7 @@ export default function RenewalsScreen() {
                   <ActionBtn symbol="bolt.fill" emoji="⚡" label="Poliçe" tint={Colors.primary} onPress={() => policelestir(item)} />
                 </View>
               </View>
+              </SwipeRow>
             );
           }}
         />
