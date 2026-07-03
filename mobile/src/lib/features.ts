@@ -10,4 +10,13 @@
  */
 export const FEATURES = {
   quoteCenter: false,
+
+  /**
+   * phoneOtpGate: Yeni kayıtlarda telefon OTP doğrulama kapısı (verify-phone).
+   *   v1.0'da KAPALI: SMS sağlayıcı henüz mock (kod gerçekte gönderilmiyor) —
+   *   reviewer/gerçek kullanıcı kayıt olursa asla gelmeyecek kodu bekler (Guideline 2.1).
+   *   Gerçek SMS/WhatsApp OTP sağlayıcısı canlıya alınınca `true` yap; gate,
+   *   _layout.tsx'te otomatik devreye girer (backend + verify-phone ekranı hazır).
+   */
+  phoneOtpGate: false,
 };

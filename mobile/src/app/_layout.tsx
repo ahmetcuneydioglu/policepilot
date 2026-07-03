@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { subscribePhoneVerified } from '@/lib/securityState';
+import { FEATURES } from '@/lib/features';
 import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '@/lib/theme';
 import {
@@ -150,10 +151,12 @@ function RootLayoutInner() {
     if (loading) return;
     const seg0 = segments[0];
     if (!session) { if (seg0 !== 'login' && seg0 !== 'register') router.replace('/login'); return; }
-    if (verifiedPhone === null) return;                       // profil yüklenene kadar bekle
-    if (verifiedPhone === false) {                            // telefon doğrulanmamış → kapı
-      if (seg0 !== 'verify-phone') router.replace('/verify-phone');
-      return;
+    if (FEATURES.phoneOtpGate) {                              // v1.0'da kapalı — bkz. features.ts
+      if (verifiedPhone === null) return;                     // profil yüklenene kadar bekle
+      if (verifiedPhone === false) {                          // telefon doğrulanmamış → kapı
+        if (seg0 !== 'verify-phone') router.replace('/verify-phone');
+        return;
+      }
     }
     if (seg0 === 'login' || seg0 === 'verify-phone') router.replace('/(tabs)');
   }, [session, loading, segments, verifiedPhone]);

@@ -15,7 +15,8 @@ export type SecurityEvent =
   | "NEW_DEVICE"
   | "PASSWORD_CHANGED"
   | "LOGOUT"
-  | "SUSPICIOUS_LOGIN";
+  | "SUSPICIOUS_LOGIN"
+  | "ACCOUNT_DELETED";
 
 /** Doğrulamanın amacı — aynı OTP altyapısı farklı amaçlar için kullanılabilir. */
 export type VerificationPurpose = "phone_verify" | "login_2fa" | "sensitive_action";

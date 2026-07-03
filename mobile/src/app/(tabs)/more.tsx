@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, Href } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { deleteAccount } from '@/lib/security';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Spacing, Radius, Type, Shadow, Dark } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
@@ -21,6 +23,42 @@ export default function MoreScreen() {
       { text: 'İptal', style: 'cancel' },
       { text: 'Çıkış Yap', style: 'destructive', onPress: () => supabase.auth.signOut() },
     ]);
+  }
+
+  const [deleting, setDeleting] = useState(false);
+  function confirmDeleteAccount() {
+    if (deleting) return;
+    // App Store 5.1.1(v): uygulama içi hesap silme. İki aşamalı onay.
+    Alert.alert(
+      'Hesabı Sil',
+      'Hesabınız kalıcı olarak silinecek ve bu işlem geri alınamaz. Devam etmek istiyor musunuz?',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Devam Et',
+          style: 'destructive',
+          onPress: () =>
+            Alert.alert('Emin misiniz?', 'Bu son adım: hesabınız ve oturumunuz kalıcı olarak silinecek.', [
+              { text: 'Vazgeç', style: 'cancel' },
+              {
+                text: 'Hesabımı Kalıcı Sil',
+                style: 'destructive',
+                onPress: async () => {
+                  setDeleting(true);
+                  try {
+                    await deleteAccount();
+                    await supabase.auth.signOut(); // gate login'e atar
+                  } catch (e) {
+                    Alert.alert('Silinemedi', e instanceof Error ? e.message : 'Bir hata oluştu. Tekrar deneyin.');
+                  } finally {
+                    setDeleting(false);
+                  }
+                },
+              },
+            ]),
+        },
+      ]
+    );
   }
 
   const sections: { title: string; rows: Row[] }[] = [
@@ -50,6 +88,7 @@ export default function MoreScreen() {
         { emoji: '⚙️', label: 'Bildirim Ayarları', href: '/settings/notifications' },
         ...(isSuperAdmin ? [{ emoji: '🛠', label: 'Yönetim', href: '/(tabs)/admin' as Href }] : []),
         { emoji: '⏻', label: 'Çıkış Yap', danger: true, onPress: signOut },
+        { emoji: '🗑️', label: deleting ? 'Siliniyor…' : 'Hesabı Sil', danger: true, onPress: confirmDeleteAccount },
       ],
     },
   ];

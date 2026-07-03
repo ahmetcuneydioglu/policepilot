@@ -24,3 +24,8 @@ export async function sendPhoneOtp(): Promise<SendOtpResponse> {
 export async function verifyPhoneOtp(code: string): Promise<VerifyOtpResponse> {
   return apiPost<VerifyOtpResponse>('/api/security/otp/verify', { code });
 }
+
+/** Hesabı kalıcı sil (App Store 5.1.1(v)). Başarıda caller signOut yapmalı. */
+export async function deleteAccount(): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>('/api/security/account/delete', {});
+}
