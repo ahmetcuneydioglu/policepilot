@@ -217,16 +217,17 @@ export default function HomeScreen() {
               <Text style={styles.heroDate}>{formatLongDateTR()}</Text>
               <Text style={styles.heroGreet}>{greetingTR()}, {name} 👋</Text>
             </View>
-            <TouchableOpacity style={styles.heroIcon} onPress={() => router.push('/search')}>
+            <TouchableOpacity style={styles.heroIcon} onPress={() => { tapHaptic(); router.push('/ai-sheet'); }}>
+              <Text style={styles.heroIconEmoji}>✨</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.heroIcon, { marginLeft: 8 }]} onPress={() => router.push('/search')}>
               <Text style={styles.heroIconEmoji}>🔍</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.heroIcon, { marginLeft: 8 }]} onPress={() => router.push('/notifications')}>
               <Text style={styles.heroIconEmoji}>🔔</Text>
               {unreadCount > 0 && <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text></View>}
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.heroIcon, { marginLeft: 8 }]} onPress={signOut}>
-              <Text style={styles.heroIconEmoji}>⏻</Text>
-            </TouchableOpacity>
+            {/* Çıkış "Daha → Çıkış Yap"ta; hero 3 ikonla sade: ✨ AI · 🔍 Ara · 🔔 Bildirim */}
           </View>
 
           {/* #1 Bugünün önceliği */}

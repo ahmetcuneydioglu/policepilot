@@ -258,6 +258,15 @@ function RootLayoutInner() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="new-request"             options={{ presentation: 'modal' }} />
         <Stack.Screen name="search"                  options={{ presentation: 'modal' }} />
+        <Stack.Screen
+          name="ai-sheet"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.72, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+          }}
+        />
         <Stack.Screen name="settings/notifications"  options={{ presentation: 'card' }} />
         <Stack.Screen name="notifications"           options={{ presentation: 'modal' }} />
         <Stack.Screen name="customer/[id]"           options={{ presentation: 'card' }} />
