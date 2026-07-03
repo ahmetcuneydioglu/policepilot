@@ -51,7 +51,14 @@
         }
       ],
       "expo-sharing",
-      "./plugins/withoutPushEntitlement"
+      "./plugins/withoutPushEntitlement",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "SigortaOS, uygulama kilidini Face ID ile açmak için kullanır."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

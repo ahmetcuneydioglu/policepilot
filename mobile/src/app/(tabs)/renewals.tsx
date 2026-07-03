@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Linking, Alert,
+  RefreshControl, ActivityIndicator, Linking, Alert, FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -134,51 +134,51 @@ export default function RenewalsScreen() {
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={visible}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + Spacing.md }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           showsVerticalScrollIndicator={false}
-        >
-          {visible.length === 0 ? (
+          ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyEmoji}>✅</Text>
               <Text style={styles.emptyTitle}>Bu aralıkta yenileme yok</Text>
               <Text style={styles.emptySub}>Başka bir gün penceresi seçebilirsin.</Text>
             </View>
-          ) : (
-            visible.map((item) => {
-              const u = renewalUrgency(item.daysLeft);
-              return (
-                <View key={item.id} style={styles.card}>
-                  <View style={styles.cardTop}>
-                    <View style={[styles.avatar, { backgroundColor: u.bg }]}>
-                      <Text style={[styles.avatarText, { color: u.text }]}>{initials(item.customerName)}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.name} numberOfLines={1}>{item.customerName}</Text>
-                      <Text style={styles.meta} numberOfLines={1}>
-                        {item.policy_type}
-                        {item.insurance_company ? ` · ${item.insurance_company}` : ''}
-                        {item.premium ? ` · ${formatTRY(item.premium)}` : ''}
-                      </Text>
-                    </View>
-                    <View style={[styles.badge, { backgroundColor: u.bg }]}>
-                      <View style={[styles.badgeDot, { backgroundColor: u.dot }]} />
-                      <Text style={[styles.badgeText, { color: u.text }]}>{u.label}</Text>
-                    </View>
+          }
+          renderItem={({ item }) => {
+            const u = renewalUrgency(item.daysLeft);
+            return (
+              <View style={styles.card}>
+                <View style={styles.cardTop}>
+                  <View style={[styles.avatar, { backgroundColor: u.bg }]}>
+                    <Text style={[styles.avatarText, { color: u.text }]}>{initials(item.customerName)}</Text>
                   </View>
-
-                  <View style={styles.actions}>
-                    <ActionBtn emoji="📞" label="Ara" onPress={() => call(item)} />
-                    <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(item)} />
-                    {FEATURES.quoteCenter && <ActionBtn emoji="📋" label="Teklif" loading={quotingId === item.id} onPress={() => teklif(item)} />}
-                    <ActionBtn emoji="⚡" label="Poliçe" tint={Colors.primary} onPress={() => policelestir(item)} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name} numberOfLines={1}>{item.customerName}</Text>
+                    <Text style={styles.meta} numberOfLines={1}>
+                      {item.policy_type}
+                      {item.insurance_company ? ` · ${item.insurance_company}` : ''}
+                      {item.premium ? ` · ${formatTRY(item.premium)}` : ''}
+                    </Text>
+                  </View>
+                  <View style={[styles.badge, { backgroundColor: u.bg }]}>
+                    <View style={[styles.badgeDot, { backgroundColor: u.dot }]} />
+                    <Text style={[styles.badgeText, { color: u.text }]}>{u.label}</Text>
                   </View>
                 </View>
-              );
-            })
-          )}
-        </ScrollView>
+
+                <View style={styles.actions}>
+                  <ActionBtn emoji="📞" label="Ara" onPress={() => call(item)} />
+                  <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(item)} />
+                  {FEATURES.quoteCenter && <ActionBtn emoji="📋" label="Teklif" loading={quotingId === item.id} onPress={() => teklif(item)} />}
+                  <ActionBtn emoji="⚡" label="Poliçe" tint={Colors.primary} onPress={() => policelestir(item)} />
+                </View>
+              </View>
+            );
+          }}
+        />
       )}
     </View>
   );

@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Linking, Alert,
+  RefreshControl, ActivityIndicator, Linking, Alert, SectionList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -101,78 +101,76 @@ export default function GorevlerScreen() {
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       ) : (
-        <ScrollView
+        <SectionList
+          sections={sections.map((sec) => ({ title: sec.section, data: sec.items }))}
+          keyExtractor={(task) => task.id}
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           showsVerticalScrollIndicator={false}
-        >
-          {/* Özet */}
-          {tasks.length > 0 && (
-            <View style={styles.summary}>
-              <View style={styles.summaryItem}>
-                <Text style={[styles.summaryNum, { color: Colors.danger }]}>{summary.overdue}</Text>
-                <Text style={styles.summaryLabel}>Gecikmiş</Text>
+          stickySectionHeadersEnabled={false}
+          ListHeaderComponent={
+            tasks.length > 0 ? (
+              <View style={styles.summary}>
+                <View style={styles.summaryItem}>
+                  <Text style={[styles.summaryNum, { color: Colors.danger }]}>{summary.overdue}</Text>
+                  <Text style={styles.summaryLabel}>Gecikmiş</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={[styles.summaryNum, { color: Colors.primary }]}>{summary.today}</Text>
+                  <Text style={styles.summaryLabel}>Bugün</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={[styles.summaryNum, { color: Colors.heading }]}>{summary.total}</Text>
+                  <Text style={styles.summaryLabel}>Toplam</Text>
+                </View>
               </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={[styles.summaryNum, { color: Colors.primary }]}>{summary.today}</Text>
-                <Text style={styles.summaryLabel}>Bugün</Text>
-              </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={[styles.summaryNum, { color: Colors.heading }]}>{summary.total}</Text>
-                <Text style={styles.summaryLabel}>Toplam</Text>
-              </View>
-            </View>
-          )}
-
-          {sections.length === 0 ? (
+            ) : null
+          }
+          ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyEmoji}>🎉</Text>
               <Text style={styles.emptyTitle}>Bugün için görev yok</Text>
               <Text style={styles.emptySub}>Yenileme, takip ve yeni leadler burada birikecek. Aşağı çekerek yenileyebilirsin.</Text>
             </View>
-          ) : (
-            sections.map((sec) => (
-              <View key={sec.section} style={styles.section}>
-                <View style={styles.sectionHead}>
-                  <Text style={styles.sectionTitle}>{sec.section}</Text>
-                  <View style={styles.sectionCount}>
-                    <Text style={styles.sectionCountText}>{sec.items.length}</Text>
+          }
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <View style={styles.sectionCount}>
+                <Text style={styles.sectionCountText}>{section.data.length}</Text>
+              </View>
+            </View>
+          )}
+          renderItem={({ item: task }) => {
+            const km = KIND_META[task.kind];
+            const b = badgeFor(task);
+            return (
+              <View style={styles.card}>
+                <View style={styles.cardTop}>
+                  <View style={[styles.kindIcon, { backgroundColor: km.bg }]}>
+                    <Text style={styles.kindEmoji}>{km.emoji}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name} numberOfLines={1}>{task.title}</Text>
+                    <Text style={styles.meta} numberOfLines={1}>{task.subtitle}</Text>
+                  </View>
+                  <View style={[styles.badge, { backgroundColor: b.bg }]}>
+                    <View style={[styles.badgeDot, { backgroundColor: b.dot }]} />
+                    <Text style={[styles.badgeText, { color: b.text }]} numberOfLines={1}>{b.label}</Text>
                   </View>
                 </View>
 
-                {sec.items.map((task) => {
-                  const km = KIND_META[task.kind];
-                  const b = badgeFor(task);
-                  return (
-                    <View key={task.id} style={styles.card}>
-                      <View style={styles.cardTop}>
-                        <View style={[styles.kindIcon, { backgroundColor: km.bg }]}>
-                          <Text style={styles.kindEmoji}>{km.emoji}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.name} numberOfLines={1}>{task.title}</Text>
-                          <Text style={styles.meta} numberOfLines={1}>{task.subtitle}</Text>
-                        </View>
-                        <View style={[styles.badge, { backgroundColor: b.bg }]}>
-                          <View style={[styles.badgeDot, { backgroundColor: b.dot }]} />
-                          <Text style={[styles.badgeText, { color: b.text }]} numberOfLines={1}>{b.label}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.actions}>
-                        <ActionBtn emoji="📞" label="Ara" onPress={() => call(task)} />
-                        <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(task)} />
-                        <ActionBtn emoji="→" label="Detay" tint={Colors.primary} onPress={() => detail(task)} />
-                      </View>
-                    </View>
-                  );
-                })}
+                <View style={styles.actions}>
+                  <ActionBtn emoji="📞" label="Ara" onPress={() => call(task)} />
+                  <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(task)} />
+                  <ActionBtn emoji="→" label="Detay" tint={Colors.primary} onPress={() => detail(task)} />
+                </View>
               </View>
-            ))
-          )}
-        </ScrollView>
+            );
+          }}
+        />
       )}
     </SafeAreaView>
   );

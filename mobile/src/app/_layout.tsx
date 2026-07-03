@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { subscribePhoneVerified } from '@/lib/securityState';
 import { FEATURES } from '@/lib/features';
-import { View, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, AppState, StyleSheet, Image } from 'react-native';
 import { Colors } from '@/lib/theme';
+import { isAppLockEnabled, unlockWithBiometrics } from '@/lib/appLock';
 import {
   configureNotificationHandler,
   setupNotifications,
@@ -128,6 +129,82 @@ function useSessionProfile(session: Session | null) {
   return { role, agencyId, verifiedPhone };
 }
 
+// ─── Uygulama kilidi (Face ID / Touch ID) ──────────────────────────────────────
+// Oturum varken: soğuk açılışta + arka plandan dönüşte kilit ister.
+function AppLockOverlay({ hasSession }: { hasSession: boolean }) {
+  const [locked, setLocked] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const wentBackground = useRef(false);
+
+  async function tryUnlock() {
+    if (busy) return;
+    setBusy(true);
+    const ok = await unlockWithBiometrics();
+    setBusy(false);
+    if (ok) setLocked(false);
+  }
+
+  // Soğuk açılış: kilit açıksa kilitle + hemen Face ID iste
+  useEffect(() => {
+    if (!hasSession) { setLocked(false); return; }
+    let alive = true;
+    isAppLockEnabled().then((on) => {
+      if (alive && on) { setLocked(true); setTimeout(tryUnlock, 350); }
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSession]);
+
+  // Arka plana gidiş → dönüşte yeniden kilitle
+  useEffect(() => {
+    if (!hasSession) return;
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state === 'background') { wentBackground.current = true; return; }
+      if (state === 'active' && wentBackground.current) {
+        wentBackground.current = false;
+        if (await isAppLockEnabled()) { setLocked(true); setTimeout(tryUnlock, 350); }
+      }
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSession]);
+
+  if (!locked) return null;
+  return (
+    <View style={lockStyles.wrap}>
+      <Image source={require('../../assets/images/logo.png')} style={lockStyles.logo} resizeMode="contain" />
+      <Text style={lockStyles.title}>SigortaOS Kilitli</Text>
+      <Text style={lockStyles.sub}>Devam etmek için kimliğini doğrula.</Text>
+      <TouchableOpacity style={lockStyles.btn} onPress={tryUnlock} activeOpacity={0.85} disabled={busy}>
+        {busy ? <ActivityIndicator color="#fff" /> : <Text style={lockStyles.btnText}>🔓 Kilidi Aç</Text>}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const lockStyles = StyleSheet.create({
+  wrap: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#0E1836',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    zIndex: 999,
+  },
+  logo: { width: 76, height: 76, borderRadius: 20, marginBottom: 20 },
+  title: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  sub: { color: '#9FB4DE', fontSize: 14, marginTop: 6, marginBottom: 24 },
+  btn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 12,
+    minWidth: 160,
+    alignItems: 'center',
+  },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+});
+
 // ─── Root Layout içeriği (Provider altında) ────────────────────────────────────
 function RootLayoutInner() {
   const [session, setSession] = useState<Session | null>(null);
@@ -189,6 +266,7 @@ function RootLayoutInner() {
         <Stack.Screen name="quote-center"            options={{ presentation: 'card' }} />
         <Stack.Screen name="quote-run/[id]"          options={{ presentation: 'card' }} />
       </Stack>
+      <AppLockOverlay hasSession={!!session} />
     </>
   );
 }

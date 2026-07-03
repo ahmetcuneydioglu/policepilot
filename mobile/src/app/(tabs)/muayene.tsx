@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Linking, Alert,
+  RefreshControl, ActivityIndicator, Linking, Alert, FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -117,51 +117,51 @@ export default function MuayeneScreen() {
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={visible}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + Spacing.md }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           showsVerticalScrollIndicator={false}
-        >
-          {visible.length === 0 ? (
+          ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyEmoji}>🚗</Text>
               <Text style={styles.emptyTitle}>Bu aralıkta muayene yok</Text>
               <Text style={styles.emptySub}>Müşteri detayından muayene tarihi ekleyebilirsin.</Text>
             </View>
-          ) : (
-            visible.map((item) => {
-              const u = renewalUrgency(item.daysLeft);
-              return (
-                <View key={item.id} style={styles.card}>
-                  <View style={styles.cardTop}>
-                    <View style={[styles.avatar, { backgroundColor: u.bg }]}>
-                      <Text style={[styles.avatarText, { color: u.text }]}>{initials(item.customerName)}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.name} numberOfLines={1}>{item.customerName}</Text>
-                      <Text style={styles.meta} numberOfLines={1}>
-                        {item.vehiclePlate ? `${item.vehiclePlate} · ` : ''}Muayene: {fmtDate(item.muayene_bitis)}
-                      </Text>
-                      {item.muayeneTahmini && (
-                        <Text style={styles.tahmini} numberOfLines={1}>~ tahmini · müşteriyle teyit edin</Text>
-                      )}
-                    </View>
-                    <View style={[styles.badge, { backgroundColor: u.bg }]}>
-                      <View style={[styles.badgeDot, { backgroundColor: u.dot }]} />
-                      <Text style={[styles.badgeText, { color: u.text }]}>{u.label}</Text>
-                    </View>
+          }
+          renderItem={({ item }) => {
+            const u = renewalUrgency(item.daysLeft);
+            return (
+              <View style={styles.card}>
+                <View style={styles.cardTop}>
+                  <View style={[styles.avatar, { backgroundColor: u.bg }]}>
+                    <Text style={[styles.avatarText, { color: u.text }]}>{initials(item.customerName)}</Text>
                   </View>
-
-                  <View style={styles.actions}>
-                    <ActionBtn emoji="📞" label="Ara" onPress={() => call(item)} />
-                    <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(item)} />
-                    <ActionBtn emoji="👤" label="Detay" tint={Colors.primary} onPress={() => detay(item)} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name} numberOfLines={1}>{item.customerName}</Text>
+                    <Text style={styles.meta} numberOfLines={1}>
+                      {item.vehiclePlate ? `${item.vehiclePlate} · ` : ''}Muayene: {fmtDate(item.muayene_bitis)}
+                    </Text>
+                    {item.muayeneTahmini && (
+                      <Text style={styles.tahmini} numberOfLines={1}>~ tahmini · müşteriyle teyit edin</Text>
+                    )}
+                  </View>
+                  <View style={[styles.badge, { backgroundColor: u.bg }]}>
+                    <View style={[styles.badgeDot, { backgroundColor: u.dot }]} />
+                    <Text style={[styles.badgeText, { color: u.text }]}>{u.label}</Text>
                   </View>
                 </View>
-              );
-            })
-          )}
-        </ScrollView>
+
+                <View style={styles.actions}>
+                  <ActionBtn emoji="📞" label="Ara" onPress={() => call(item)} />
+                  <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(item)} />
+                  <ActionBtn emoji="👤" label="Detay" tint={Colors.primary} onPress={() => detay(item)} />
+                </View>
+              </View>
+            );
+          }}
+        />
       )}
     </View>
   );

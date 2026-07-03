@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import { FEATURES } from '@/lib/features';
+import { pressHaptic } from '@/lib/haptics';
 import BulkPolicyImportMobile from '@/components/BulkPolicyImportMobile';
 
 function TabBarIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
@@ -72,7 +73,11 @@ export default function TabsLayout() {
               {...props}
               label={FEATURES.quoteCenter ? 'Teklif' : 'Tara'}
               icon={FEATURES.quoteCenter ? '⚡' : '📷'}
-              onPress={FEATURES.quoteCenter ? props.onPress : () => setScanOpen(true)}
+              onPress={(e?: any) => {
+                pressHaptic();
+                if (FEATURES.quoteCenter) props.onPress?.(e);
+                else setScanOpen(true);
+              }}
             />
           ),
         }}

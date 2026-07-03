@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, Href } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { deleteAccount } from '@/lib/security';
+import { isAppLockEnabled, setAppLockEnabled, biometricsAvailable } from '@/lib/appLock';
+import { successHaptic, warningHaptic } from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Spacing, Radius, Type, Shadow, Dark } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
@@ -23,6 +25,28 @@ export default function MoreScreen() {
       { text: 'İptal', style: 'cancel' },
       { text: 'Çıkış Yap', style: 'destructive', onPress: () => supabase.auth.signOut() },
     ]);
+  }
+
+  // Face ID / Touch ID uygulama kilidi
+  const [lockOn, setLockOn] = useState(false);
+  useEffect(() => { isAppLockEnabled().then(setLockOn); }, []);
+  async function toggleAppLock() {
+    if (!lockOn) {
+      if (!(await biometricsAvailable())) {
+        Alert.alert('Kullanılamıyor', 'Bu cihazda Face ID / Touch ID kurulu değil. Önce cihaz ayarlarından biyometri ekleyin.');
+        return;
+      }
+      await setAppLockEnabled(true);
+      setLockOn(true);
+      successHaptic();
+      Alert.alert('Kilit Açık', 'Uygulama artık açılışta ve arka plandan dönüşte Face ID / Touch ID isteyecek.');
+    } else {
+      warningHaptic();
+      Alert.alert('Kilidi Kapat', 'Uygulama kilidi kapatılsın mı?', [
+        { text: 'Vazgeç', style: 'cancel' },
+        { text: 'Kapat', style: 'destructive', onPress: async () => { await setAppLockEnabled(false); setLockOn(false); } },
+      ]);
+    }
   }
 
   const [deleting, setDeleting] = useState(false);
@@ -86,6 +110,7 @@ export default function MoreScreen() {
       title: 'HESAP',
       rows: [
         { emoji: '⚙️', label: 'Bildirim Ayarları', href: '/settings/notifications' },
+        { emoji: '🔐', label: `Face ID Kilidi · ${lockOn ? 'Açık' : 'Kapalı'}`, onPress: toggleAppLock },
         ...(isSuperAdmin ? [{ emoji: '🛠', label: 'Yönetim', href: '/(tabs)/admin' as Href }] : []),
         { emoji: '⏻', label: 'Çıkış Yap', danger: true, onPress: signOut },
         { emoji: '🗑️', label: deleting ? 'Siliniyor…' : 'Hesabı Sil', danger: true, onPress: confirmDeleteAccount },
