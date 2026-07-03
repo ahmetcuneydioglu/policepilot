@@ -85,7 +85,9 @@ export default function SearchScreen() {
   function openCustomer(id: string) {
     tapHaptic();
     Keyboard.dismiss();
-    router.push(`/customer/${id}`);
+    // Arama bir modal: push arkada kalır → modalı müşteri kartıyla DEĞİŞTİR
+    // (kart açılır, geri basınca modal değil ana ekran gelir).
+    router.replace(`/customer/${id}`);
   }
   function call(phone: string | null) {
     if (!phone) return;
