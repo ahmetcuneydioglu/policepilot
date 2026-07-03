@@ -4,10 +4,11 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { subscribePhoneVerified } from '@/lib/securityState';
 import { FEATURES } from '@/lib/features';
-import { View, Text, TouchableOpacity, ActivityIndicator, AppState, StyleSheet, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, AppState, Appearance, StyleSheet, Image } from 'react-native';
+import { reloadAppAsync } from 'expo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryProvider } from '@/lib/query';
-import { Colors } from '@/lib/theme';
+import { Colors, isDarkMode } from '@/lib/theme';
 import { isAppLockEnabled, unlockWithBiometrics } from '@/lib/appLock';
 import { useQuickActionsSetup } from '@/lib/quickActions';
 import {
@@ -26,6 +27,22 @@ import {
 
 // Handler modül yüklenince kur (defensive — crash yapmaz)
 configureNotificationHandler();
+
+// ─── Canlı tema geçişi ─────────────────────────────────────────────────────────
+// Palet, modül yüklenirken seçilir (theme.ts) — sistem teması app açıkken
+// değişirse JS'i yeniden başlatarak (~1sn) yeni paleti uygularız.
+// iOS arka plan snapshot'ları sahte tetikleme yapar → yalnız uygulama AKTİFKEN
+// ve 400ms sonra hâlâ farklıysa reload edilir.
+function scheduleThemeReloadCheck() {
+  setTimeout(() => {
+    const nowDark = Appearance.getColorScheme() === 'dark';
+    if (nowDark !== isDarkMode && AppState.currentState === 'active') {
+      reloadAppAsync().catch(() => {});
+    }
+  }, 400);
+}
+Appearance.addChangeListener(scheduleThemeReloadCheck);
+AppState.addEventListener('change', (s) => { if (s === 'active') scheduleThemeReloadCheck(); });
 
 // ─── Realtime + push kurulumunu yöneten iç component ──────────────────────────
 // NotificationProvider içinde olduğu için context'e yazabilir.

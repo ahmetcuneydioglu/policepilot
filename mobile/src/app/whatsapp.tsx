@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
-  Switch, ActivityIndicator, Alert, RefreshControl, Modal,
+  Switch, ActivityIndicator, Alert, RefreshControl, Modal, FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -141,97 +141,104 @@ export default function WhatsappCenterScreen() {
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={Colors.primary} /></View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={visible}
+          keyExtractor={(it) => it.id}
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           showsVerticalScrollIndicator={false}
-        >
-          {error && (
-            <View style={styles.errBanner}>
-              <Text style={styles.errText}>{error}</Text>
-              <TouchableOpacity onPress={load}><Text style={styles.errRetry}>Tekrar dene</Text></TouchableOpacity>
-            </View>
-          )}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            <>
+              {error && (
+                <View style={styles.errBanner}>
+                  <Text style={styles.errText}>{error}</Text>
+                  <TouchableOpacity onPress={load}><Text style={styles.errRetry}>Tekrar dene</Text></TouchableOpacity>
+                </View>
+              )}
 
-          {/* Ayarlar */}
-          <Text style={styles.sectionLabel}>AYARLAR</Text>
-          <View style={styles.card}>
-            <View style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>WhatsApp Bildirimleri</Text>
-              <Switch
-                value={settings.whatsapp_enabled}
-                onValueChange={(v) => setSettings((s) => ({ ...s, whatsapp_enabled: v }))}
-                trackColor={{ true: Colors.primary }}
-              />
-            </View>
-            <View style={styles.divider} />
-            <Text style={styles.fieldLabel}>Alıcı Numara (günlük özet)</Text>
-            <TextInput
-              style={styles.input}
-              value={settings.whatsapp_phone}
-              onChangeText={(v) => setSettings((s) => ({ ...s, whatsapp_phone: v }))}
-              placeholder="905XXXXXXXXX" placeholderTextColor={Colors.placeholder} keyboardType="phone-pad"
-            />
-            <View style={[styles.toggleRow, { marginTop: Spacing.sm }]}>
-              <Text style={styles.toggleLabel}>Günlük Operasyon Özeti</Text>
-              <Switch
-                value={settings.daily_summary_enabled}
-                onValueChange={(v) => setSettings((s) => ({ ...s, daily_summary_enabled: v }))}
-                trackColor={{ true: Colors.primary }}
-              />
-            </View>
-            <TouchableOpacity style={[styles.primaryBtn, saving && { opacity: 0.6 }]} onPress={saveSettings} disabled={saving}>
-              {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryBtnText}>Kaydet</Text>}
-            </TouchableOpacity>
-          </View>
-
-          {/* Test */}
-          <TouchableOpacity style={[styles.testBtn, testing && { opacity: 0.6 }]} onPress={sendTest} disabled={testing} activeOpacity={0.85}>
-            {testing ? <ActivityIndicator color="#fff" /> : <Text style={styles.testBtnText}>💬  Test Mesajı Gönder</Text>}
-          </TouchableOpacity>
-
-          {/* Kuyruk / Geçmiş */}
-          <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>MESAJLAR</Text>
-          <View style={styles.segRow}>
-            {SEGMENTS.map((s) => {
-              const active = segment === s.key;
-              return (
-                <TouchableOpacity key={s.key} style={[styles.seg, active && styles.segActive]} onPress={() => setSegment(s.key)} activeOpacity={0.7}>
-                  <Text style={[styles.segText, active && styles.segTextActive]}>{s.label} {counts[s.key] ?? 0}</Text>
+              {/* Ayarlar */}
+              <Text style={styles.sectionLabel}>AYARLAR</Text>
+              <View style={styles.card}>
+                <View style={styles.toggleRow}>
+                  <Text style={styles.toggleLabel}>WhatsApp Bildirimleri</Text>
+                  <Switch
+                    value={settings.whatsapp_enabled}
+                    onValueChange={(v) => setSettings((s) => ({ ...s, whatsapp_enabled: v }))}
+                    trackColor={{ true: Colors.primary }}
+                  />
+                </View>
+                <View style={styles.divider} />
+                <Text style={styles.fieldLabel}>Alıcı Numara (günlük özet)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={settings.whatsapp_phone}
+                  onChangeText={(v) => setSettings((s) => ({ ...s, whatsapp_phone: v }))}
+                  placeholder="905XXXXXXXXX" placeholderTextColor={Colors.placeholder} keyboardType="phone-pad"
+                />
+                <View style={[styles.toggleRow, { marginTop: Spacing.sm }]}>
+                  <Text style={styles.toggleLabel}>Günlük Operasyon Özeti</Text>
+                  <Switch
+                    value={settings.daily_summary_enabled}
+                    onValueChange={(v) => setSettings((s) => ({ ...s, daily_summary_enabled: v }))}
+                    trackColor={{ true: Colors.primary }}
+                  />
+                </View>
+                <TouchableOpacity style={[styles.primaryBtn, saving && { opacity: 0.6 }]} onPress={saveSettings} disabled={saving}>
+                  {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryBtnText}>Kaydet</Text>}
                 </TouchableOpacity>
-              );
-            })}
-          </View>
+              </View>
 
-          {visible.length === 0 ? (
+              {/* Test */}
+              <TouchableOpacity style={[styles.testBtn, testing && { opacity: 0.6 }]} onPress={sendTest} disabled={testing} activeOpacity={0.85}>
+                {testing ? <ActivityIndicator color="#fff" /> : <Text style={styles.testBtnText}>💬  Test Mesajı Gönder</Text>}
+              </TouchableOpacity>
+
+              {/* Kuyruk / Geçmiş */}
+              <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>MESAJLAR</Text>
+              <View style={styles.segRow}>
+                {SEGMENTS.map((s) => {
+                  const active = segment === s.key;
+                  return (
+                    <TouchableOpacity key={s.key} style={[styles.seg, active && styles.segActive]} onPress={() => setSegment(s.key)} activeOpacity={0.7}>
+                      <Text style={[styles.segText, active && styles.segTextActive]}>{s.label} {counts[s.key] ?? 0}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          }
+          ListEmptyComponent={
             <View style={styles.empty}><Text style={styles.emptyEmoji}>📭</Text><Text style={styles.emptyText}>Bu kategoride mesaj yok</Text></View>
-          ) : (
-            visible.map((it) => {
-              const st = statusStyle(it.status);
-              return (
-                <TouchableOpacity key={it.id} style={styles.msgCard} onPress={() => setSelected(it)} activeOpacity={0.7}>
-                  <View style={styles.msgTop}>
-                    <Text style={styles.msgPhone}>{it.phone}</Text>
-                    <View style={[styles.badge, { backgroundColor: st.bg }]}><Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text></View>
-                  </View>
-                  <Text style={styles.msgBody} numberOfLines={2}>{it.message}</Text>
-                  <View style={styles.msgBottom}>
-                    <Text style={styles.msgTag}>{templateLabel(it.template_key)}</Text>
-                    <Text style={styles.msgTime}>{ago(it.created_at)} önce</Text>
-                  </View>
-                  {it.status === 'failed' && !!it.error_message && <Text style={styles.msgErr} numberOfLines={2}>{it.error_message}</Text>}
-                </TouchableOpacity>
-              );
-            })
-          )}
-
-          {/* Yakında: doğum günü / yenileme otomasyonları */}
-          <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>OTOMASYONLAR</Text>
-          <View style={styles.card}>
-            <AutoRow emoji="🔄" label="Yenileme Hatırlatmaları" note="Cron ile çalışıyor" />
-            <AutoRow emoji="🎂" label="Doğum Günü Mesajları" note="Yakında" />
-          </View>
-        </ScrollView>
+          }
+          renderItem={({ item: it }) => {
+            const st = statusStyle(it.status);
+            return (
+              <TouchableOpacity style={styles.msgCard} onPress={() => setSelected(it)} activeOpacity={0.7}>
+                <View style={styles.msgTop}>
+                  <Text style={styles.msgPhone}>{it.phone}</Text>
+                  <View style={[styles.badge, { backgroundColor: st.bg }]}><Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text></View>
+                </View>
+                <Text style={styles.msgBody} numberOfLines={2}>{it.message}</Text>
+                <View style={styles.msgBottom}>
+                  <Text style={styles.msgTag}>{templateLabel(it.template_key)}</Text>
+                  <Text style={styles.msgTime}>{ago(it.created_at)} önce</Text>
+                </View>
+                {it.status === 'failed' && !!it.error_message && <Text style={styles.msgErr} numberOfLines={2}>{it.error_message}</Text>}
+              </TouchableOpacity>
+            );
+          }}
+          ListFooterComponent={
+            <>
+              {/* Yakında: doğum günü / yenileme otomasyonları */}
+              <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>OTOMASYONLAR</Text>
+              <View style={styles.card}>
+                <AutoRow emoji="🔄" label="Yenileme Hatırlatmaları" note="Cron ile çalışıyor" />
+                <AutoRow emoji="🎂" label="Doğum Günü Mesajları" note="Yakında" />
+              </View>
+            </>
+          }
+        />
       )}
 
       {selected && <MessageModal item={selected} onClose={() => setSelected(null)} />}
