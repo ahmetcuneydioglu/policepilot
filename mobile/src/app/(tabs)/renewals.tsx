@@ -15,6 +15,7 @@ import {
 } from '@/lib/renewals';
 import { startQuoteRun } from '@/lib/quoteCenter';
 import { FEATURES } from '@/lib/features';
+import ActionBtn from '@/components/ActionBtn';
 
 const SEGMENTS: { key: RenewalWindow; label: string }[] = [
   { key: 3, label: '3 Gün' },
@@ -170,10 +171,10 @@ export default function RenewalsScreen() {
                 </View>
 
                 <View style={styles.actions}>
-                  <ActionBtn emoji="📞" label="Ara" onPress={() => call(item)} />
-                  <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(item)} />
-                  {FEATURES.quoteCenter && <ActionBtn emoji="📋" label="Teklif" loading={quotingId === item.id} onPress={() => teklif(item)} />}
-                  <ActionBtn emoji="⚡" label="Poliçe" tint={Colors.primary} onPress={() => policelestir(item)} />
+                  <ActionBtn symbol="phone.fill" emoji="📞" label="Ara" onPress={() => call(item)} />
+                  <ActionBtn symbol="message.fill" emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(item)} />
+                  {FEATURES.quoteCenter && <ActionBtn symbol="doc.text.fill" emoji="📋" label="Teklif" loading={quotingId === item.id} onPress={() => teklif(item)} />}
+                  <ActionBtn symbol="bolt.fill" emoji="⚡" label="Poliçe" tint={Colors.primary} onPress={() => policelestir(item)} />
                 </View>
               </View>
             );
@@ -184,14 +185,6 @@ export default function RenewalsScreen() {
   );
 }
 
-function ActionBtn({ emoji, label, onPress, tint, loading }: { emoji: string; label: string; onPress: () => void; tint?: string; loading?: boolean }) {
-  return (
-    <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7} disabled={loading}>
-      {loading ? <ActivityIndicator size="small" color={Colors.primary} /> : <Text style={styles.actionEmoji}>{emoji}</Text>}
-      <Text style={[styles.actionLabel, tint ? { color: tint } : null]} numberOfLines={1}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },

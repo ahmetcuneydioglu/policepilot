@@ -7,22 +7,29 @@ import { Colors, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import { FEATURES } from '@/lib/features';
 import { pressHaptic } from '@/lib/haptics';
+import Icon from '@/components/Icon';
 import BulkPolicyImportMobile from '@/components/BulkPolicyImportMobile';
 
-function TabBarIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
+function TabBarIcon({ symbol, emoji, focused }: { symbol: string; emoji: string; focused: boolean }) {
   return (
-    <Text style={{ fontSize: focused ? 22 : 20, opacity: focused ? 1 : 0.55 }}>{emoji}</Text>
+    <Icon
+      symbol={symbol}
+      emoji={emoji}
+      size={focused ? 23 : 22}
+      color={focused ? Colors.primary : Colors.secondary}
+      weight={focused ? 'semibold' : 'regular'}
+    />
   );
 }
 
 // Ortada yükseltilmiş aksiyon butonu (v1.0: Tara/OCR · quoteCenter açıksa Teklif)
-function CenterTabButton({ onPress, accessibilityState, label, icon }: { onPress?: (e?: any) => void; accessibilityState?: { selected?: boolean }; label: string; icon: string }) {
+function CenterTabButton({ onPress, accessibilityState, label, symbol, emoji }: { onPress?: (e?: any) => void; accessibilityState?: { selected?: boolean }; label: string; symbol: string; emoji: string }) {
   const focused = accessibilityState?.selected;
   return (
     <View style={styles.teklifSlot} pointerEvents="box-none">
       <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.teklifTouch} accessibilityRole="button" accessibilityLabel={label}>
         <LinearGradient colors={[Colors.primary, '#1E3A8A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.teklifCircle}>
-          <Text style={styles.teklifIcon}>{icon}</Text>
+          <Icon symbol={symbol} emoji={emoji} size={24} color="#fff" weight="semibold" />
         </LinearGradient>
         <Text style={[styles.teklifLabel, focused && { color: Colors.primary }]}>{label}</Text>
       </TouchableOpacity>
@@ -58,11 +65,11 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Ana Sayfa', tabBarIcon: ({ focused }) => <TabBarIcon emoji="🏠" focused={focused} /> }}
+        options={{ title: 'Ana Sayfa', tabBarIcon: ({ focused }) => <TabBarIcon symbol={focused ? 'house.fill' : 'house'} emoji="🏠" focused={focused} /> }}
       />
       <Tabs.Screen
         name="renewals"
-        options={{ title: 'Yenilemeler', tabBarIcon: ({ focused }) => <TabBarIcon emoji="🔄" focused={focused} /> }}
+        options={{ title: 'Yenilemeler', tabBarIcon: ({ focused }) => <TabBarIcon symbol="arrow.triangle.2.circlepath" emoji="🔄" focused={focused} /> }}
       />
       <Tabs.Screen
         name="teklif"
@@ -72,7 +79,8 @@ export default function TabsLayout() {
             <CenterTabButton
               {...props}
               label={FEATURES.quoteCenter ? 'Teklif' : 'Tara'}
-              icon={FEATURES.quoteCenter ? '⚡' : '📷'}
+              symbol={FEATURES.quoteCenter ? 'bolt.fill' : 'camera.fill'}
+              emoji={FEATURES.quoteCenter ? '⚡' : '📷'}
               onPress={(e?: any) => {
                 pressHaptic();
                 if (FEATURES.quoteCenter) props.onPress?.(e);
@@ -84,11 +92,11 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="customers"
-        options={{ title: 'Müşteriler', tabBarIcon: ({ focused }) => <TabBarIcon emoji="👥" focused={focused} /> }}
+        options={{ title: 'Müşteriler', tabBarIcon: ({ focused }) => <TabBarIcon symbol={focused ? 'person.2.fill' : 'person.2'} emoji="👥" focused={focused} /> }}
       />
       <Tabs.Screen
         name="more"
-        options={{ title: 'Daha', tabBarIcon: ({ focused }) => <TabBarIcon emoji="☰" focused={focused} /> }}
+        options={{ title: 'Daha', tabBarIcon: ({ focused }) => <TabBarIcon symbol="line.3.horizontal" emoji="☰" focused={focused} /> }}
       />
 
       {/* Tab bar'da gizli ama "Daha" / merkez butondan erişilebilir rotalar */}

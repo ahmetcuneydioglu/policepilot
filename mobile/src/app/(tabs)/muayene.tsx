@@ -8,6 +8,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Colors, Spacing, Radius, Type, Shadow, Dark, renewalUrgency } from '@/lib/theme';
 import DarkHero, { heroGlass } from '@/components/DarkHero';
 import { useProfile } from '@/lib/useProfile';
+import ActionBtn from '@/components/ActionBtn';
 import {
   fetchUpcomingInspections, filterByWindow, buildCallUrl, buildInspectionWhatsappUrl,
   InspectionItem, InspectionWindow,
@@ -154,9 +155,9 @@ export default function MuayeneScreen() {
                 </View>
 
                 <View style={styles.actions}>
-                  <ActionBtn emoji="📞" label="Ara" onPress={() => call(item)} />
-                  <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(item)} />
-                  <ActionBtn emoji="👤" label="Detay" tint={Colors.primary} onPress={() => detay(item)} />
+                  <ActionBtn symbol="phone.fill" emoji="📞" label="Ara" onPress={() => call(item)} />
+                  <ActionBtn symbol="message.fill" emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(item)} />
+                  <ActionBtn symbol="person.fill" emoji="👤" label="Detay" tint={Colors.primary} onPress={() => detay(item)} />
                 </View>
               </View>
             );
@@ -167,14 +168,6 @@ export default function MuayeneScreen() {
   );
 }
 
-function ActionBtn({ emoji, label, onPress, tint }: { emoji: string; label: string; onPress: () => void; tint?: string }) {
-  return (
-    <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7}>
-      <Text style={styles.actionEmoji}>{emoji}</Text>
-      <Text style={[styles.actionLabel, tint ? { color: tint } : null]} numberOfLines={1}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },

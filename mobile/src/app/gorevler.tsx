@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, Type, Shadow, renewalUrgency } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
+import ActionBtn from '@/components/ActionBtn';
 import {
   fetchTasks, groupTasks, buildTaskCallUrl, buildTaskWhatsappUrl,
   Task, TaskKind, TaskUrgency,
@@ -163,9 +164,9 @@ export default function GorevlerScreen() {
                 </View>
 
                 <View style={styles.actions}>
-                  <ActionBtn emoji="📞" label="Ara" onPress={() => call(task)} />
-                  <ActionBtn emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(task)} />
-                  <ActionBtn emoji="→" label="Detay" tint={Colors.primary} onPress={() => detail(task)} />
+                  <ActionBtn symbol="phone.fill" emoji="📞" label="Ara" onPress={() => call(task)} />
+                  <ActionBtn symbol="message.fill" emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(task)} />
+                  <ActionBtn symbol="arrow.right" emoji="→" label="Detay" tint={Colors.primary} onPress={() => detail(task)} />
                 </View>
               </View>
             );
@@ -176,14 +177,6 @@ export default function GorevlerScreen() {
   );
 }
 
-function ActionBtn({ emoji, label, onPress, tint }: { emoji: string; label: string; onPress: () => void; tint?: string }) {
-  return (
-    <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7}>
-      <Text style={styles.actionEmoji}>{emoji}</Text>
-      <Text style={[styles.actionLabel, tint ? { color: tint } : null]} numberOfLines={1}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },

@@ -10,8 +10,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Spacing, Radius, Type, Shadow, Dark } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import DarkHero, { heroGlassStrong } from '@/components/DarkHero';
+import Icon from '@/components/Icon';
 
-type Row = { emoji: string; label: string; href?: Href; soon?: boolean; danger?: boolean; onPress?: () => void };
+type Row = { emoji: string; symbol: string; label: string; href?: Href; soon?: boolean; danger?: boolean; onPress?: () => void };
 
 export default function MoreScreen() {
   const router = useRouter();
@@ -89,31 +90,31 @@ export default function MoreScreen() {
     {
       title: 'OPERASYON',
       rows: [
-        { emoji: '🎯', label: 'Fırsatlar', href: '/(tabs)/requests' },
-        { emoji: '🚗', label: 'Araç Muayeneleri', href: '/(tabs)/muayene' },
-        { emoji: '✅', label: 'Görevler', href: '/gorevler' },
-        { emoji: '✨', label: 'SigortaOS AI', href: '/(tabs)/ai' },
-        { emoji: '📄', label: 'Poliçeler', href: '/(tabs)/policies' },
-        { emoji: '💬', label: 'WhatsApp Merkezi', href: '/whatsapp' },
-        { emoji: '📁', label: 'Evrak Merkezi', href: '/evraklar' },
-        { emoji: '🔔', label: 'Bildirimler', href: '/notifications' },
+        { emoji: '🎯', symbol: 'target', label: 'Fırsatlar', href: '/(tabs)/requests' },
+        { emoji: '🚗', symbol: 'car.fill', label: 'Araç Muayeneleri', href: '/(tabs)/muayene' },
+        { emoji: '✅', symbol: 'checklist', label: 'Görevler', href: '/gorevler' },
+        { emoji: '✨', symbol: 'sparkles', label: 'SigortaOS AI', href: '/(tabs)/ai' },
+        { emoji: '📄', symbol: 'doc.text.fill', label: 'Poliçeler', href: '/(tabs)/policies' },
+        { emoji: '💬', symbol: 'message.fill', label: 'WhatsApp Merkezi', href: '/whatsapp' },
+        { emoji: '📁', symbol: 'folder.fill', label: 'Evrak Merkezi', href: '/evraklar' },
+        { emoji: '🔔', symbol: 'bell.fill', label: 'Bildirimler', href: '/notifications' },
       ],
     },
     ...(isManager ? [{
       title: 'YÖNETİM',
       rows: [
-        { emoji: '🏆', label: 'Performans', href: '/performans' as Href },
-        { emoji: '📊', label: 'Raporlar', href: '/raporlar' as Href },
+        { emoji: '🏆', symbol: 'trophy.fill', label: 'Performans', href: '/performans' as Href },
+        { emoji: '📊', symbol: 'chart.bar.fill', label: 'Raporlar', href: '/raporlar' as Href },
       ] as Row[],
     }] : []),
     {
       title: 'HESAP',
       rows: [
-        { emoji: '⚙️', label: 'Bildirim Ayarları', href: '/settings/notifications' },
-        { emoji: '🔐', label: `Face ID Kilidi · ${lockOn ? 'Açık' : 'Kapalı'}`, onPress: toggleAppLock },
-        ...(isSuperAdmin ? [{ emoji: '🛠', label: 'Yönetim', href: '/(tabs)/admin' as Href }] : []),
-        { emoji: '⏻', label: 'Çıkış Yap', danger: true, onPress: signOut },
-        { emoji: '🗑️', label: deleting ? 'Siliniyor…' : 'Hesabı Sil', danger: true, onPress: confirmDeleteAccount },
+        { emoji: '⚙️', symbol: 'gearshape.fill', label: 'Bildirim Ayarları', href: '/settings/notifications' },
+        { emoji: '🔐', symbol: 'faceid', label: `Face ID Kilidi · ${lockOn ? 'Açık' : 'Kapalı'}`, onPress: toggleAppLock },
+        ...(isSuperAdmin ? [{ emoji: '🛠', symbol: 'wrench.and.screwdriver.fill', label: 'Yönetim', href: '/(tabs)/admin' as Href }] : []),
+        { emoji: '⏻', symbol: 'rectangle.portrait.and.arrow.right', label: 'Çıkış Yap', danger: true, onPress: signOut },
+        { emoji: '🗑️', symbol: 'trash.fill', label: deleting ? 'Siliniyor…' : 'Hesabı Sil', danger: true, onPress: confirmDeleteAccount },
       ],
     },
   ];
@@ -152,7 +153,9 @@ export default function MoreScreen() {
                     if (row.href) router.push(row.href);
                   }}
                 >
-                  <Text style={styles.rowEmoji}>{row.emoji}</Text>
+                  <View style={styles.rowIconBox}>
+                    <Icon symbol={row.symbol} emoji={row.emoji} size={18} color={row.danger ? Colors.danger : Colors.heading} weight="medium" />
+                  </View>
                   <Text style={[styles.rowLabel, row.danger && { color: Colors.danger }]}>{row.label}</Text>
                   {row.soon ? (
                     <View style={styles.soonBadge}><Text style={styles.soonText}>Yakında</Text></View>
@@ -185,7 +188,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: Colors.card, borderRadius: Radius.lg, ...Shadow.sm, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: Spacing.md },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
-  rowEmoji: { fontSize: 18, width: 30 },
+  rowIconBox: { width: 30, alignItems: 'flex-start' },
   rowLabel: { ...Type.body, flex: 1, color: Colors.heading, fontWeight: '600' },
   chevron: { fontSize: 22, color: Colors.placeholder, fontWeight: '300' },
   soonBadge: { backgroundColor: Colors.surface, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4 },

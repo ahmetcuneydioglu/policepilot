@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Linking, Alert, TextInput, RefreshControl,
+  ActivityIndicator, Linking, Alert, TextInput, RefreshControl, Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -27,6 +28,10 @@ function waNumber(phone: string) {
   const c = (phone ?? '').replace(/\D/g, '');
   return c.startsWith('0') ? '90' + c.slice(1) : c;
 }
+/** Yerel saat diliminde YYYY-MM-DD (toISOString UTC kayması yapar). */
+function toLocalISO(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
 }
@@ -44,6 +49,7 @@ export default function CustomerDetailScreen() {
   const [savingNote, setSavingNote] = useState(false);
   const [muayeneDate, setMuayeneDate] = useState('');
   const [savingMuayene, setSavingMuayene] = useState(false);
+  const [showMuayenePicker, setShowMuayenePicker] = useState(false); // Android dialog
   const [waMsgs, setWaMsgs] = useState<WaMsg[]>([]);
 
   const load = useCallback(async () => {
@@ -240,16 +246,32 @@ export default function CustomerDetailScreen() {
 
         {/* Araç Muayene */}
         <Section label="ARAÇ MUAYENE">
-          <Text style={styles.muayeneHint}>Muayene bitiş tarihi (YYYY-AA-GG)</Text>
-          <TextInput
-            style={styles.muayeneInput}
-            value={muayeneDate}
-            onChangeText={setMuayeneDate}
-            placeholder="2026-12-31"
-            placeholderTextColor={Colors.placeholder}
-            keyboardType="numbers-and-punctuation"
-            autoCapitalize="none"
-          />
+          <View style={styles.muayeneRow}>
+            <Text style={styles.muayeneHint}>Muayene bitiş tarihi</Text>
+            {Platform.OS === 'ios' ? (
+              <DateTimePicker
+                value={muayeneDate ? new Date(`${muayeneDate}T12:00:00`) : new Date()}
+                mode="date"
+                display="compact"
+                locale="tr-TR"
+                onChange={(_e, d) => { if (d) setMuayeneDate(toLocalISO(d)); }}
+              />
+            ) : (
+              <>
+                <TouchableOpacity style={styles.muayeneDateBtn} onPress={() => setShowMuayenePicker(true)} activeOpacity={0.7}>
+                  <Text style={styles.muayeneDateBtnText}>{muayeneDate ? fmtDate(muayeneDate) : 'Tarih seç'}</Text>
+                </TouchableOpacity>
+                {showMuayenePicker && (
+                  <DateTimePicker
+                    value={muayeneDate ? new Date(`${muayeneDate}T12:00:00`) : new Date()}
+                    mode="date"
+                    onChange={(_e, d) => { setShowMuayenePicker(false); if (d) setMuayeneDate(toLocalISO(d)); }}
+                  />
+                )}
+              </>
+            )}
+          </View>
+          {!muayeneDate && <Text style={styles.muayeneEmptyHint}>Henüz tarih seçilmedi — takvimden seçip kaydedin.</Text>}
           <TouchableOpacity style={[styles.noteSave, savingMuayene && { opacity: 0.6 }]} onPress={saveMuayene} disabled={savingMuayene}>
             {savingMuayene ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.noteSaveText}>Muayene Tarihini Kaydet</Text>}
           </TouchableOpacity>
@@ -406,8 +428,11 @@ const styles = StyleSheet.create({
   miniBadgeText: { fontSize: 11, fontWeight: '700' },
 
   noteInput: { ...Type.body, color: Colors.heading, minHeight: 64, textAlignVertical: 'top', padding: 0 },
-  muayeneHint: { ...Type.caption, color: Colors.secondary, marginBottom: 6 },
-  muayeneInput: { ...Type.body, color: Colors.heading, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10 },
+  muayeneHint: { ...Type.caption, color: Colors.secondary },
+  muayeneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 36 },
+  muayeneEmptyHint: { ...Type.caption, color: Colors.placeholder, marginTop: 4 },
+  muayeneDateBtn: { borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 8 },
+  muayeneDateBtnText: { ...Type.body, color: Colors.heading },
   tahminiNote: { fontSize: 12, color: '#B45309', backgroundColor: '#FEF9C3', borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8, lineHeight: 17 },
   noteSave: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center', marginTop: Spacing.sm },
   noteSaveText: { color: '#fff', fontWeight: '700', fontSize: 13 },
