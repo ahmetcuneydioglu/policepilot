@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canAddCustomer, canAddRequest, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
+import { notifyAgency } from "@/lib/push/notify";
 
 export async function POST(request: NextRequest) {
   try {
@@ -107,6 +108,13 @@ export async function POST(request: NextRequest) {
         customerId: customer.id,
       });
     }
+
+    // Acente kullanıcılarına push — uygulama kapalıyken de haberdar olsunlar
+    await notifyAgency(agencyId, {
+      title: "Yeni Teklif Talebi",
+      body: `${name.trim()} · ${insurance_type}`,
+      data: { customerId: String(customer.id) },
+    });
 
     return NextResponse.json({ ok: true, customerId: customer.id });
   } catch (err: unknown) {

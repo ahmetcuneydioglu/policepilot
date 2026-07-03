@@ -136,6 +136,26 @@ export async function getExpoPushToken(): Promise<string | null> {
   }
 }
 
+// ─── Native (APNs/FCM) device token — sunucu DOĞRUDAN APNs'e gönderir ────────
+export async function getNativePushToken(): Promise<string | null> {
+  if (!AVAILABLE) { warn('native push token alınamadı'); return null; }
+  try {
+    const Device = require('expo-device');
+    const Notifications = require('expo-notifications');
+    if (!Device.isDevice) return null;
+
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return null;
+
+    const tokenObj = await Notifications.getDevicePushTokenAsync();
+    // iOS: hex APNs token · Android: FCM token
+    return typeof tokenObj?.data === 'string' ? tokenObj.data : null;
+  } catch (err) {
+    console.warn('[Notifications] Native push token alınamadı:', err);
+    return null;
+  }
+}
+
 // ─── Token → Supabase upsert ─────────────────────────────────────────────────
 export async function registerPushToken(
   userId: string,
@@ -248,7 +268,8 @@ export async function setupNotifications(
   const granted = await requestNotificationPermission();
   if (!granted) return { granted: false, token: null, available: true };
 
-  const token = await getExpoPushToken();
+  // Doğrudan APNs mimarisi: native device token kaydedilir (Expo token değil).
+  const token = await getNativePushToken();
   if (token) await registerPushToken(userId, agencyId, token);
 
   return { granted, token, available: true };
