@@ -15,17 +15,25 @@ export default function AiSheetScreen() {
   const router = useRouter();
   return (
     <View style={styles.safe}>
-      <View style={styles.header}>
-        <View style={styles.headerBadge}><Text style={{ fontSize: 15 }}>✨</Text></View>
-        <View style={styles.headerTexts}>
-          <Text style={styles.headerTitle} numberOfLines={1}>SigortaOS AI</Text>
-          <Text style={styles.headerSub} numberOfLines={1}>Verilerinle konuşan asistanın</Text>
-        </View>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Icon symbol="xmark" emoji="✕" size={13} color={Colors.secondary} weight="bold" />
-        </TouchableOpacity>
-      </View>
-      <AiChat bottomInset={Math.max(insets.bottom, Spacing.sm)} keyboardOffset={0} />
+      {/* Başlık AiChat'in İÇİNDE render edilir — formSheet kök kardeşi ezip
+          içeriği üstüne bindiriyordu (input bar'ın doğru durması iç kolonun
+          sağlam olduğunu kanıtlıyor). */}
+      <AiChat
+        bottomInset={Math.max(insets.bottom, Spacing.sm)}
+        keyboardOffset={0}
+        header={
+          <View style={styles.header}>
+            <View style={styles.headerBadge}><Text style={{ fontSize: 15 }}>✨</Text></View>
+            <View style={styles.headerTexts}>
+              <Text style={styles.headerTitle} numberOfLines={1}>SigortaOS AI</Text>
+              <Text style={styles.headerSub} numberOfLines={1}>Verilerinle konuşan asistanın</Text>
+            </View>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} activeOpacity={0.7}>
+              <Icon symbol="xmark" emoji="✕" size={13} color={Colors.secondary} weight="bold" />
+            </TouchableOpacity>
+          </View>
+        }
+      />
     </View>
   );
 }

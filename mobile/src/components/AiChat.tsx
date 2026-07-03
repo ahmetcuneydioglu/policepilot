@@ -23,7 +23,16 @@ const PROMPTS = [
   { emoji: '✍️', text: 'Yaklaşan bir yenileme için WhatsApp mesajı yaz' },
 ];
 
-export default function AiChat({ bottomInset = 0, keyboardOffset = 8 }: { bottomInset?: number; keyboardOffset?: number }) {
+export default function AiChat({
+  bottomInset = 0,
+  keyboardOffset = 8,
+  header,
+}: {
+  bottomInset?: number;
+  keyboardOffset?: number;
+  /** Sheet kullanımında başlık BURADAN verilir — formSheet kök kardeş header'ı ezebiliyor. */
+  header?: React.ReactNode;
+}) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -56,6 +65,7 @@ export default function AiChat({ bottomInset = 0, keyboardOffset = 8 }: { bottom
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardOffset : 0}>
+      {header}
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
