@@ -7,7 +7,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Colors, Spacing, Radius, Type, Shadow, renewalUrgency } from '@/lib/theme';
+import { Colors, Spacing, Radius, Type, Shadow, Dark, renewalUrgency } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import { formatTRY } from '@/lib/format';
 import { daysUntil } from '@/lib/renewals';
@@ -18,6 +18,9 @@ import {
 } from '@/lib/customer';
 import { apiGet } from '@/lib/api';
 import DocumentSection from '@/components/DocumentSection';
+import DarkHero, { heroGlass } from '@/components/DarkHero';
+import Icon from '@/components/Icon';
+import { tapHaptic } from '@/lib/haptics';
 
 type WaMsg = { id: string; phone: string; message: string; status: string; created_at: string };
 
@@ -117,10 +120,10 @@ export default function CustomerDetailScreen() {
   const c = bundle?.customer;
   if (!c) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <Header title="Müşteri" onBack={() => router.back()} />
+      <View style={styles.safe}>
+        <DarkHero title="Müşteri" onBack={() => router.back()} />
         <View style={styles.center}><Text style={styles.muted}>Müşteri bulunamadı.</Text></View>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -142,41 +145,61 @@ export default function CustomerDetailScreen() {
   const extra = c.extra_data ? Object.entries(c.extra_data).filter(([, v]) => v) : [];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <Header title="Müşteri Detayı" onBack={() => router.back()} onDelete={remove} />
+    <View style={styles.safe}>
+      <DarkHero
+        title={c.name}
+        subtitle={c.insurance_type || 'Müşteri'}
+        onBack={() => router.back()}
+        right={
+          <TouchableOpacity style={[styles.heroDelete, heroGlass]} onPress={remove} activeOpacity={0.7}>
+            <Icon symbol="trash.fill" emoji="🗑️" size={15} color="#FCA5A5" />
+          </TouchableOpacity>
+        }
+      >
+        {/* Hızlı aksiyonlar */}
+        {!!c.phone && (
+          <View style={styles.heroActions}>
+            <TouchableOpacity
+              style={[styles.heroActionBtn, heroGlass]}
+              onPress={() => { tapHaptic(); Linking.openURL(`tel:${c.phone}`); }}
+              activeOpacity={0.8}
+            >
+              <Icon symbol="phone.fill" emoji="📞" size={15} color="#fff" />
+              <Text style={styles.heroActionText}>Ara</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.heroActionBtn, styles.heroActionWA]}
+              onPress={() => { tapHaptic(); Linking.openURL(`whatsapp://send?phone=${waNumber(c.phone)}`); }}
+              activeOpacity={0.8}
+            >
+              <Icon symbol="message.fill" emoji="💬" size={15} color="#fff" />
+              <Text style={styles.heroActionText}>WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* İstatistik pill'leri */}
+        <View style={styles.heroStats}>
+          <View style={[styles.heroStat, heroGlass]}>
+            <Text style={styles.heroStatValue}>{activePolicies.length}</Text>
+            <Text style={styles.heroStatLabel}>Aktif Poliçe</Text>
+          </View>
+          <View style={[styles.heroStat, heroGlass]}>
+            <Text style={styles.heroStatValue}>{openReqs.length}</Text>
+            <Text style={styles.heroStatLabel}>Açık Teklif</Text>
+          </View>
+          <View style={[styles.heroStat, heroGlass]}>
+            <Text style={[styles.heroStatValue, renewals.length > 0 && { color: '#FCA5A5' }]}>{renewals.length}</Text>
+            <Text style={styles.heroStatLabel}>Yaklaşan</Text>
+          </View>
+        </View>
+      </DarkHero>
 
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profil */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{initials(c.name)}</Text></View>
-          <Text style={styles.name}>{c.name}</Text>
-          {!!c.insurance_type && <Text style={styles.sub}>{c.insurance_type}</Text>}
-
-          <View style={styles.quickRow}>
-            {!!c.phone && (
-              <TouchableOpacity style={styles.quickBtn} onPress={() => Linking.openURL(`tel:${c.phone}`)} activeOpacity={0.8}>
-                <Text style={styles.quickEmoji}>📞</Text><Text style={styles.quickLabel}>Ara</Text>
-              </TouchableOpacity>
-            )}
-            {!!c.phone && (
-              <TouchableOpacity style={[styles.quickBtn, styles.quickWA]} onPress={() => Linking.openURL(`whatsapp://send?phone=${waNumber(c.phone)}`)} activeOpacity={0.8}>
-                <Text style={styles.quickEmoji}>💬</Text><Text style={[styles.quickLabel, { color: '#fff' }]}>WhatsApp</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* İstatistik */}
-        <View style={styles.statRow}>
-          <Stat value={activePolicies.length} label="Aktif Poliçe" />
-          <Stat value={openReqs.length} label="Açık Teklif" />
-          <Stat value={renewals.length} label="Yaklaşan" accent={renewals.length > 0 ? Colors.danger : Colors.heading} />
-        </View>
-
         {/* Künye */}
         <View style={styles.card}>
           {!!c.phone && <InfoRow label="Telefon" value={c.phone} />}
@@ -340,29 +363,10 @@ export default function CustomerDetailScreen() {
           )}
         </Section>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-function Header({ title, onBack, onDelete }: { title: string; onBack: () => void; onDelete?: () => void }) {
-  return (
-    <View style={styles.header}>
-      <TouchableOpacity onPress={onBack} style={styles.headerBtn}><Text style={styles.headerBack}>‹ Geri</Text></TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
-      {onDelete ? (
-        <TouchableOpacity onPress={onDelete} style={styles.headerBtn}><Text style={styles.headerDelete}>Sil</Text></TouchableOpacity>
-      ) : <View style={styles.headerBtn} />}
-    </View>
-  );
-}
-function Stat({ value, label, accent }: { value: number; label: string; accent?: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={[styles.statValue, accent ? { color: accent } : null]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <View style={{ marginTop: Spacing.lg }}>
@@ -392,27 +396,16 @@ const styles = StyleSheet.create({
   muted: { ...Type.body, color: Colors.secondary },
   content: { padding: Spacing.lg, paddingBottom: Spacing.xl },
 
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: 12, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  headerBtn: { minWidth: 56 },
-  headerBack: { ...Type.subhead, color: Colors.primary },
-  headerTitle: { ...Type.heading, fontSize: 16 },
-  headerDelete: { ...Type.subhead, color: Colors.danger, textAlign: 'right' },
-
-  profileCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.lg, alignItems: 'center', ...Shadow.md },
-  avatar: { width: 64, height: 64, borderRadius: Radius.full, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  avatarText: { fontSize: 22, fontWeight: '800', color: Colors.primary },
-  name: { ...Type.title, fontSize: 20 },
-  sub: { ...Type.caption, marginTop: 2 },
-  quickRow: { flexDirection: 'row', gap: 10, marginTop: Spacing.md, alignSelf: 'stretch' },
-  quickBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.surface, borderRadius: Radius.md, paddingVertical: 11 },
-  quickWA: { backgroundColor: '#22C55E' },
-  quickEmoji: { fontSize: 15 },
-  quickLabel: { ...Type.subhead, fontSize: 14, color: Colors.heading },
-
-  statRow: { flexDirection: 'row', gap: 10, marginTop: Spacing.md },
-  stat: { flex: 1, backgroundColor: Colors.card, borderRadius: Radius.lg, paddingVertical: 14, alignItems: 'center', ...Shadow.sm },
-  statValue: { fontSize: 22, fontWeight: '800', color: Colors.heading },
-  statLabel: { ...Type.caption, fontSize: 11, marginTop: 2 },
+  // Hero (DarkHero içi)
+  heroDelete: { width: 38, height: 38, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  heroActions: { flexDirection: 'row', gap: 10, marginTop: Spacing.md },
+  heroActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: Radius.md, paddingVertical: 11 },
+  heroActionWA: { backgroundColor: '#22C55E' },
+  heroActionText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  heroStats: { flexDirection: 'row', gap: 8, marginTop: Spacing.md },
+  heroStat: { flex: 1, alignItems: 'center', borderRadius: Radius.md, paddingVertical: 10 },
+  heroStatValue: { fontSize: 20, fontWeight: '800', color: '#fff' },
+  heroStatLabel: { fontSize: 10, fontWeight: '700', color: Dark.subOnDark, marginTop: 1 },
 
   sectionLabel: { ...Type.label, marginBottom: Spacing.sm },
   card: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, ...Shadow.sm },
