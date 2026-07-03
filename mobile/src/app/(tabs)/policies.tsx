@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import {
   View,
   Text,
@@ -734,6 +735,10 @@ export default function PoliciesScreen() {
   const [selected, setSelected] = useState<Policy | null>(null);
   const [addVisible, setAddVisible] = useState(false);
   const [ocrOpen, setOcrOpen] = useState(false);
+
+  // App icon Quick Action "Poliçe Tara" → /(tabs)/policies?scan=1 ile gelir
+  const { scan } = useLocalSearchParams<{ scan?: string }>();
+  useEffect(() => { if (scan === '1') setOcrOpen(true); }, [scan]);
 
   const fetchPolicies = useCallback(async () => {
     let q = (supabase.from('policies') as any)

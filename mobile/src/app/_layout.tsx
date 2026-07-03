@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryProvider } from '@/lib/query';
 import { Colors } from '@/lib/theme';
 import { isAppLockEnabled, unlockWithBiometrics } from '@/lib/appLock';
+import { useQuickActionsSetup } from '@/lib/quickActions';
 import {
   configureNotificationHandler,
   setupNotifications,
@@ -214,6 +215,7 @@ function RootLayoutInner() {
   const router   = useRouter();
   const segments = useSegments();
   const { role, agencyId, verifiedPhone } = useSessionProfile(session);
+  useQuickActionsSetup(); // app icon basılı-tut kısayolları (Tara/Ara/Yenilemeler/AI)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

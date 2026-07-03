@@ -57,7 +57,8 @@
         {
           "faceIDPermission": "SigortaOS, uygulama kilidini Face ID ile açmak için kullanır."
         }
-      ]
+      ],
+      "expo-quick-actions"
     ],
     "experiments": {
       "typedRoutes": true,
