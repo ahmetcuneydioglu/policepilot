@@ -211,7 +211,10 @@ export default function HomeScreen() {
               <Text style={styles.heroDate}>{formatLongDateTR()}</Text>
               <Text style={styles.heroGreet}>{greetingTR()}, {name} 👋</Text>
             </View>
-            <TouchableOpacity style={styles.heroIcon} onPress={() => router.push('/notifications')}>
+            <TouchableOpacity style={styles.heroIcon} onPress={() => router.push('/search')}>
+              <Text style={styles.heroIconEmoji}>🔍</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.heroIcon, { marginLeft: 8 }]} onPress={() => router.push('/notifications')}>
               <Text style={styles.heroIconEmoji}>🔔</Text>
               {unreadCount > 0 && <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text></View>}
             </TouchableOpacity>

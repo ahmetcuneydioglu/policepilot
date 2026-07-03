@@ -255,6 +255,7 @@ function RootLayoutInner() {
         <Stack.Screen name="verify-phone" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="new-request"             options={{ presentation: 'modal' }} />
+        <Stack.Screen name="search"                  options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/notifications"  options={{ presentation: 'card' }} />
         <Stack.Screen name="notifications"           options={{ presentation: 'modal' }} />
         <Stack.Screen name="customer/[id]"           options={{ presentation: 'card' }} />
