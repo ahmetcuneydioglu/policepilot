@@ -21,11 +21,11 @@ function LoginForm() {
   // geçersizse "var" sanır, proxy dashboard'dan geri atar → sonsuz döngü (spinner).
   // getUser() sunucuda doğrular; ölü yerel oturum signOut ile temizlenir.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (data?.user && !error) {
+    supabase.auth.getUser().then((res: { data: { user: unknown } | null; error: unknown }) => {
+      if (res?.data?.user && !res.error) {
         router.replace(next);
       } else {
-        if (error) supabase.auth.signOut().catch(() => {}); // ölü local token'ı temizle
+        if (res?.error) supabase.auth.signOut().catch(() => {}); // ölü local token'ı temizle
         setChecking(false);
       }
     }).catch(() => setChecking(false));
