@@ -28,6 +28,9 @@ type UserPerf = {
   agency_role: string | null;
   customers: number;
   quotes_total: number;
+  interactions_total: number;
+  interactions_month: number;
+  visits_total: number;
   quotes_month: number;
   quotes_won: number;
   policies_total: number;
@@ -56,6 +59,7 @@ type AgencyPerformance = {
   team: {
     total_customers: number;
     total_quotes: number;
+    total_interactions: number;
     total_policies: number;
     total_premium: number;
     total_commission: number;
@@ -218,6 +222,7 @@ export default function PerformansScreen() {
               <Text style={styles.sectionSub}>Acentenizin toplam üretimi (tüm ekip)</Text>
               <View style={styles.statGrid}>
                 <StatCard emoji="👥" label="Müşteri" value={String(data.team.total_customers)} />
+                <StatCard emoji="🤝" label="Görüşme" value={String(data.team.total_interactions ?? 0)} />
                 <StatCard emoji="📄" label="Fırsat" value={String(data.team.total_quotes)} />
                 <StatCard emoji="🛡️" label="Poliçe" value={String(data.team.total_policies)} />
                 <StatCard emoji="💰" label="Prim" value={formatShortTRY(data.team.total_premium)} />
@@ -409,6 +414,7 @@ function DetailModal({ user, rank, avgConversion, onClose }: {
   const metrics: { k: string; v: string; sub?: string }[] = [
     { k: 'Müşteri', v: String(user.customers) },
     { k: 'Fırsat', v: String(user.quotes_total), sub: `bu ay ${user.quotes_month}` },
+    { k: 'Görüşme', v: String(user.interactions_total ?? 0), sub: `ziyaret ${user.visits_total ?? 0}` },
     { k: 'Poliçe', v: String(user.policies_total), sub: `bu ay ${user.policies_month}` },
     { k: 'Kazanılan', v: String(user.quotes_won) },
     { k: 'Toplam Prim', v: formatTRY(user.total_premium) },

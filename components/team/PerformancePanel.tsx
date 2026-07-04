@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Users, FileText, ShieldCheck, Wallet, TrendingUp, Activity,
-  AlertTriangle, Crown, X, LogIn, Award,
+  AlertTriangle, Crown, X, LogIn, Award, Handshake,
 } from "lucide-react";
 import { fmtMoney } from "@/lib/format";
 import type { AgencyPerformance, UserPerf } from "@/lib/performance";
@@ -202,6 +202,7 @@ function RankCard({ user, rank, onClick }: { user: UserPerf; rank: number; onCli
       {/* metrikler */}
       <div className="hidden md:flex items-center gap-4 flex-1 text-xs text-slate-500">
         <span>Müşteri <b className="text-slate-800">{user.customers}</b></span>
+        <span>Görüşme <b className="text-slate-800">{user.interactions_total}</b></span>
         <span>Teklif <b className="text-slate-800">{user.quotes_total}</b></span>
         <span>Poliçe <b className="text-slate-800">{user.policies_total}</b></span>
         <span className="ml-auto">Prim <b className="text-slate-800">{fmtMoney(user.total_premium)}</b></span>
@@ -251,8 +252,9 @@ export default function PerformancePanel() {
       {/* ══ 1) EKİP ÖZETİ ══════════════════════════════════════════════════ */}
       <section>
         <SectionHead title="Ekip Özeti" sub="Acentenizin toplam üretimi (tüm ekip)" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatCard Icon={Users}       label="Müşteri"  value={String(team.total_customers)} tint="bg-blue-50 text-blue-600" />
+          <StatCard Icon={Handshake}   label="Görüşme"  value={String(team.total_interactions)} tint="bg-rose-50 text-rose-600" />
           <StatCard Icon={FileText}    label="Fırsat"   value={String(team.total_quotes)}    tint="bg-violet-50 text-violet-600" />
           <StatCard Icon={ShieldCheck} label="Poliçe"   value={String(team.total_policies)}  tint="bg-emerald-50 text-emerald-600" />
           <StatCard Icon={Wallet}      label="Prim"     value={fmtMoney(team.total_premium)} tint="bg-amber-50 text-amber-600" />

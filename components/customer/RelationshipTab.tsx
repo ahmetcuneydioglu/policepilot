@@ -15,7 +15,7 @@ import {
   CUSTOMER_TAGS, channelMeta, outcomeMeta, nextActionMeta, locationMeta, AUTO_SOURCE_META,
 } from "@/lib/interactionTypes";
 import type { CustomerTimelineEvent } from "./types";
-import { Plus, X, HeartHandshake } from "lucide-react";
+import { Plus, X, HeartHandshake, Sparkles, RefreshCw } from "lucide-react";
 
 // Türetilmiş (eski) timeline olay ikonları
 const DERIVED_ICON: Record<string, string> = {
@@ -39,18 +39,39 @@ const OUTCOME_TONE: Record<string, string> = {
 };
 
 export default function RelationshipTab({
-  customerId, customerAgencyId, timeline, tags, onTagsChange,
+  customerId, customerAgencyId, timeline, tags, onTagsChange, summary, summaryAt, onSummary,
 }: {
   customerId: string;
   customerAgencyId: string | null;
   timeline: CustomerTimelineEvent[];
   tags: string[];
   onTagsChange: (tags: string[]) => void;
+  summary: string | null;
+  summaryAt: string | null;
+  onSummary: (summary: string, at: string) => void;
 }) {
   const { profile, agencyId } = useAuth();
   const [items, setItems] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  async function generateSummary() {
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const res = await fetch(`/api/customers/${customerId}/relationship-summary`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Özet üretilemedi.");
+      onSummary(json.summary, json.generated_at);
+      load(); // 🤖 olayı akışa düşer
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : "Özet üretilemedi.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const load = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,6 +119,34 @@ export default function RelationshipTab({
             );
           })}
         </div>
+      </div>
+
+      {/* ── AI İlişki Özeti ── */}
+      <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+            <p className="text-[10px] font-bold text-violet-500 uppercase tracking-widest">AI İlişki Özeti</p>
+          </div>
+          <button onClick={generateSummary} disabled={aiLoading}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-600 text-white text-[11px] font-semibold hover:bg-violet-700 disabled:opacity-60 transition-colors">
+            <RefreshCw className={`w-3 h-3 ${aiLoading ? "animate-spin" : ""}`} />
+            {aiLoading ? "Üretiliyor…" : summary ? "Yenile" : "Özet Oluştur"}
+          </button>
+        </div>
+        {aiError && <p className="text-[11px] font-semibold text-rose-600 mb-2">{aiError}</p>}
+        {summary ? (
+          <>
+            <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{summary}</p>
+            {summaryAt && (
+              <p className="mt-2 text-[10px] text-violet-400">
+                Son güncelleme: {new Date(summaryAt).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-slate-500">Görüşme geçmişinden satış-odaklı bir özet üretir: temas yoğunluğu, ilgilenilen ürün, son durum ve bir sonraki görüşme taktiği.</p>
+        )}
       </div>
 
       {/* ── Akış başlığı + Görüşme Ekle ── */}

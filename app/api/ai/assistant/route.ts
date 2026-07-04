@@ -27,7 +27,7 @@ async function buildContext(agencyId: string): Promise<string> {
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = `${today.slice(0, 7)}-01`;
 
-  const [polRes, reqRes] = await Promise.all([
+  const [polRes, reqRes, intRes] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (admin.from("policies") as any)
       .select("policy_type,premium,commission,end_date,status,created_at,customers(name,phone)")
@@ -36,6 +36,11 @@ async function buildContext(agencyId: string): Promise<string> {
     (admin.from("requests") as any)
       .select("request_type,status,price_offer,customers(name,phone)")
       .eq("agency_id", agencyId),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (admin.from("customer_interactions") as any)
+      .select("occurred_at, channel, product, outcome, note, staff_name, next_action, next_action_date, next_action_done, customers(name)")
+      .eq("agency_id", agencyId).eq("kind", "manual")
+      .order("occurred_at", { ascending: false }).limit(20),
   ]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pols: any[] = polRes.data ?? [];
@@ -59,6 +64,14 @@ async function buildContext(agencyId: string): Promise<string> {
   const lost = reqs.filter((r) => r.status === "Kaybedildi").length;
   const conv = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
 
+  // IRM: son görüşmeler + bekleyen sonraki-aksiyonlar
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ints: any[] = intRes.data ?? [];
+  const talks = ints.slice(0, 15).map((i) =>
+    `- ${(i.occurred_at ?? "").slice(0, 10)} · ${i.customers?.name ?? "?"} · ${i.channel ?? "?"}${i.product ? " · " + i.product : ""}${i.outcome ? " · " + i.outcome : ""}${i.note ? " · " + String(i.note).slice(0, 80) : ""}${i.staff_name ? " (" + i.staff_name + ")" : ""}`);
+  const pendingActions = ints.filter((i) => i.next_action && !i.next_action_done && i.next_action_date && i.next_action_date <= today)
+    .map((i) => `- ${i.customers?.name ?? "?"} · ${i.next_action} · vade ${i.next_action_date}`);
+
   return [
     `Bugün: ${today}`,
     `Özet: ${aktif} aktif poliçe · bu ay prim ${fmtTRY(buAyPrim)} · dönüşüm %${conv} · ${renewals.length} yaklaşan yenileme · ${open.length} açık teklif`,
@@ -68,6 +81,12 @@ async function buildContext(agencyId: string): Promise<string> {
     ``,
     `AÇIK TEKLİFLER:`,
     open.length ? open.join("\n") : "- yok",
+    ``,
+    `SON GÖRÜŞMELER (IRM):`,
+    talks.length ? talks.join("\n") : "- yok",
+    ``,
+    `VADESİ GELEN SONRAKİ-AKSİYONLAR:`,
+    pendingActions.length ? pendingActions.join("\n") : "- yok",
   ].join("\n");
 }
 

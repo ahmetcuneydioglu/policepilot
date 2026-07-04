@@ -14,6 +14,9 @@ export type CustomerDetail = {
   note: string | null;
   muayene_bitis: string | null;
   muayene_tahmini: boolean;
+  tags?: string[] | null;
+  relationship_summary?: string | null;
+  relationship_summary_at?: string | null;
   created_at: string;
   extra_data: Record<string, string> | null;
 };

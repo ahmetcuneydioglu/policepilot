@@ -44,6 +44,9 @@ export type UserPerf = {
   total_premium: number;
   total_commission: number;
   conversion: number;          // kazanılan/toplam teklif (%)
+  interactions_total: number;  // IRM: manuel görüşme sayısı (staff_id)
+  interactions_month: number;
+  visits_total: number;        // yüz yüze görüşme (saha ziyareti)
   opportunities_total: number; // sorumlu olduğu satış fırsatı (requests.assigned_to)
   opportunities_won: number;   // Kazanıldı aşamasındaki fırsat
   opp_conversion: number;      // kazanılan/toplam fırsat (%)
@@ -56,6 +59,8 @@ export type AgencyPerformance = {
   users: UserPerf[];
   leaders: {
     most_active: UserPerf | null;
+    top_interactions: UserPerf | null; // en çok görüşme yapan
+    top_visits: UserPerf | null;       // en çok ziyaret yapan (yüz yüze)
     top_quotes: UserPerf | null;
     top_policies: UserPerf | null;
     top_premium: UserPerf | null;
@@ -64,6 +69,7 @@ export type AgencyPerformance = {
   last7: { date: string; count: number }[];
   team: {
     total_customers: number;
+    total_interactions: number; // IRM: acente geneli manuel görüşme
     total_quotes: number;
     total_policies: number;
     total_premium: number;
@@ -80,13 +86,14 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
   const t = (table: string) => admin.from(table) as any;
   const monthStart = istMonthStartIso();
 
-  const [profRes, custRes, runRes, polRes, actRes, reqRes] = await Promise.all([
+  const [profRes, custRes, runRes, polRes, actRes, reqRes, intRes] = await Promise.all([
     t("profiles").select("id, full_name, agency_role, last_login_at").eq("agency_id", agencyId),
     t("customers").select("created_by").eq("agency_id", agencyId),
     t("quote_runs").select("created_by, status, created_at").eq("agency_id", agencyId),
     t("policies").select("created_by, premium, commission, status, created_at").eq("agency_id", agencyId),
     t("activity_log").select("actor_id, created_at").eq("agency_id", agencyId).gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString()),
     t("requests").select("assigned_to, status").eq("agency_id", agencyId),
+    t("customer_interactions").select("staff_id, channel, occurred_at").eq("agency_id", agencyId).eq("kind", "manual"),
   ]);
 
   const users = new Map<string, UserPerf>();
@@ -99,6 +106,7 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
       customers: 0, quotes_total: 0, quotes_month: 0, quotes_won: 0,
       policies_total: 0, policies_month: 0, total_premium: 0, total_commission: 0,
       conversion: 0, opportunities_total: 0, opportunities_won: 0, opp_conversion: 0,
+      interactions_total: 0, interactions_month: 0, visits_total: 0,
       score: 0, last_activity: null, last_login: p.last_login_at ?? null,
     });
   }
@@ -136,6 +144,14 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
     u.opportunities_total++;
     if (r.status === "Kazanıldı") u.opportunities_won++;
   }
+  // IRM görüşmeleri — görüşen personele (staff_id) atfedilir
+  for (const it of (intRes.data ?? []) as { staff_id: string | null; channel: string | null; occurred_at: string }[]) {
+    const u = ensure(it.staff_id);
+    if (!u) continue;
+    u.interactions_total++;
+    if (it.occurred_at >= monthStart) u.interactions_month++;
+    if (it.channel === "face_to_face") u.visits_total++;
+  }
   for (const u of users.values()) {
     u.conversion = u.quotes_total > 0 ? Math.round((u.quotes_won / u.quotes_total) * 100) : 0;
     u.opp_conversion = u.opportunities_total > 0 ? Math.round((u.opportunities_won / u.opportunities_total) * 100) : 0;
@@ -147,6 +163,8 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
 
   const leaders = {
     most_active:    [...list].filter((u) => u.last_activity).sort((a, b) => (a.last_activity! < b.last_activity! ? 1 : -1))[0] ?? null,
+    top_interactions: topBy("interactions_total"),
+    top_visits:       topBy("visits_total"),
     top_quotes:     topBy("quotes_total"),
     top_policies:   topBy("policies_total"),
     top_premium:    topBy("total_premium"),
@@ -184,6 +202,7 @@ export async function computeAgencyPerformance(admin: any, agencyId: string): Pr
   const withQuotes = list.filter((u) => u.quotes_total >= 2);
   const team = {
     total_customers: (custRes.data ?? []).length,
+    total_interactions: (intRes.data ?? []).length,
     total_quotes: runs.length,
     total_policies: pols.length,
     total_premium: pols.reduce((s, p) => s + (p.premium ?? 0), 0),

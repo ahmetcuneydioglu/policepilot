@@ -207,8 +207,12 @@ export default function CustomerControlCenterPage() {
           customerId={customer.id}
           customerAgencyId={customer.agency_id}
           timeline={data.timeline}
-          tags={(customer as unknown as { tags?: string[] }).tags ?? []}
-          onTagsChange={(tags) => setData(prev => prev ? { ...prev, customer: { ...prev.customer, tags } as typeof prev.customer } : prev)}
+          tags={customer.tags ?? []}
+          onTagsChange={(tags) => setData(prev => prev ? { ...prev, customer: { ...prev.customer, tags } } : prev)}
+          summary={customer.relationship_summary ?? null}
+          summaryAt={customer.relationship_summary_at ?? null}
+          onSummary={(relationship_summary, relationship_summary_at) =>
+            setData(prev => prev ? { ...prev, customer: { ...prev.customer, relationship_summary, relationship_summary_at } } : prev)}
         />
       )}
       {tab === "overview"      && <OverviewTab data={data} onNavigate={(t) => setTab(t as TabKey)} />}

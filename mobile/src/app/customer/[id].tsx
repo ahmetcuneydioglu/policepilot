@@ -16,7 +16,7 @@ import {
   fetchCustomerBundle, buildTimeline, upcomingRenewals,
   CustomerBundle, TimelineEvent,
 } from '@/lib/customer';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 import DocumentSection from '@/components/DocumentSection';
 import DarkHero, { heroGlass } from '@/components/DarkHero';
 import Icon from '@/components/Icon';
@@ -63,6 +63,8 @@ export default function CustomerDetailScreen() {
   const [tags, setTags] = useState<string[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetChannel, setSheetChannel] = useState<string | undefined>(undefined);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // ── Nudge: "Ara"dan dönünce görüşmeyi kaydetmeyi öner ────────────────────────
   const pendingCallAt = useRef<number | null>(null);
@@ -87,6 +89,7 @@ export default function CustomerDetailScreen() {
     setTimeline(buildTimeline(b));
     setInteractions(ints);
     setTags(((b.customer as unknown as { tags?: string[] })?.tags) ?? []);
+    setAiSummary(((b.customer as unknown as { relationship_summary?: string | null })?.relationship_summary) ?? null);
     setNote(b.customer?.note ?? '');
     setMuayeneDate(b.customer?.muayene_bitis ?? '');
     setLoading(false);
@@ -199,6 +202,21 @@ export default function CustomerDetailScreen() {
     const next = tags.includes(key) ? tags.filter((t) => t !== key) : [...tags, key];
     setTags(next); // optimistic
     await updateCustomerTags(c!.id, next);
+  }
+
+  async function generateAiSummary() {
+    if (aiLoading) return;
+    tapHaptic();
+    setAiLoading(true);
+    try {
+      const res = await apiPost<{ summary: string }>(`/api/customers/${c!.id}/relationship-summary`, {});
+      setAiSummary(res.summary);
+      await load(); // 🤖 olayı akışa düşer
+    } catch (e) {
+      Alert.alert('Özet üretilemedi', e instanceof Error ? e.message : 'Bir hata oluştu.');
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   const extra = c.extra_data ? Object.entries(c.extra_data).filter(([, v]) => v) : [];
@@ -390,6 +408,18 @@ export default function CustomerDetailScreen() {
         </View>
 
         {/* Zaman Tüneli */}
+        {/* AI İlişki Özeti */}
+        <Section label="AI İLİŞKİ ÖZETİ">
+          {aiSummary
+            ? <Text style={styles.aiSummaryText}>{aiSummary}</Text>
+            : <Text style={styles.muted}>Görüşme geçmişinden satış-odaklı özet: temas yoğunluğu, ilgilenilen ürün, sonraki görüşme taktiği.</Text>}
+          <TouchableOpacity style={[styles.aiBtn, aiLoading && { opacity: 0.6 }]} onPress={generateAiSummary} disabled={aiLoading}>
+            {aiLoading
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={styles.aiBtnText}>✨ {aiSummary ? 'Özeti Yenile' : 'Özet Oluştur'}</Text>}
+          </TouchableOpacity>
+        </Section>
+
         <Section label="İLİŞKİ AKIŞI">
           {feed.length === 0 ? (
             <Text style={styles.muted}>Henüz ilişki kaydı yok — hero'daki "Görüşme" ile ilk kaydı ekleyin.</Text>
@@ -505,6 +535,9 @@ const styles = StyleSheet.create({
   tagChipOn: { backgroundColor: '#fff', borderColor: '#fff' },
   tagText: { fontSize: 11, fontWeight: '700', color: Dark.subOnDark },
   tagTextOn: { color: Dark.hero },
+  aiSummaryText: { ...Type.body, color: Colors.heading, lineHeight: 21 },
+  aiBtn: { marginTop: Spacing.md, backgroundColor: '#7C3AED', borderRadius: Radius.md, paddingVertical: 12, alignItems: 'center' },
+  aiBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 
   sectionLabel: { ...Type.label, marginBottom: Spacing.sm },
   card: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, ...Shadow.sm },
