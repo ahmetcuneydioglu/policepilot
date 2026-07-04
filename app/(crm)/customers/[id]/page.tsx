@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   ChevronLeft, RefreshCw, LayoutDashboard, FileText, Zap,
   FolderOpen, StickyNote, History, AlertTriangle, Phone, MessageCircle,
+  HeartHandshake,
 } from "lucide-react";
 
 import type { CustomerBundle } from "@/components/customer/types";
@@ -27,11 +28,13 @@ import QuotesTab        from "@/components/customer/QuotesTab";
 import DocumentsTab     from "@/components/customer/DocumentsTab";
 import NotesTab         from "@/components/customer/NotesTab";
 import TimelineTab      from "@/components/customer/TimelineTab";
+import RelationshipTab  from "@/components/customer/RelationshipTab";
 import CommunicationTab from "@/components/customer/CommunicationTab";
 
-type TabKey = "overview" | "policies" | "renewals" | "quotes" | "documents" | "communication" | "notes" | "timeline";
+type TabKey = "relationship" | "overview" | "policies" | "renewals" | "quotes" | "documents" | "communication" | "notes" | "timeline";
 
 const TABS: { key: TabKey; label: string; Icon: typeof LayoutDashboard }[] = [
+  { key: "relationship",  label: "İlişki",         Icon: HeartHandshake },
   { key: "overview",      label: "Genel Bakış",    Icon: LayoutDashboard },
   { key: "policies",      label: "Poliçeler",      Icon: FileText },
   { key: "renewals",      label: "Yenilemeler",    Icon: RefreshCw },
@@ -49,7 +52,7 @@ export default function CustomerControlCenterPage() {
   const [data,    setData]    = useState<CustomerBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState("");
-  const [tab,     setTab]     = useState<TabKey>("overview");
+  const [tab,     setTab]     = useState<TabKey>("relationship");
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -199,6 +202,15 @@ export default function CustomerControlCenterPage() {
       </div>
 
       {/* ── Sekme içeriği ── */}
+      {tab === "relationship"  && (
+        <RelationshipTab
+          customerId={customer.id}
+          customerAgencyId={customer.agency_id}
+          timeline={data.timeline}
+          tags={(customer as unknown as { tags?: string[] }).tags ?? []}
+          onTagsChange={(tags) => setData(prev => prev ? { ...prev, customer: { ...prev.customer, tags } as typeof prev.customer } : prev)}
+        />
+      )}
       {tab === "overview"      && <OverviewTab data={data} onNavigate={(t) => setTab(t as TabKey)} />}
       {tab === "policies"      && <PoliciesTab policies={data.policies} />}
       {tab === "renewals"      && <RenewalsTab policies={data.policies} />}

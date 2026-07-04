@@ -10,6 +10,7 @@ export type Customer = {
   policy_end_date: string | null;
   muayene_bitis: string | null;
   muayene_tahmini?: boolean;
+  tags?: string[] | null;
   extra_data: Record<string, string> | null;
   agency_id: string | null;
   created_at: string;

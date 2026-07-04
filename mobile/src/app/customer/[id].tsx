@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   ActivityIndicator, Linking, Alert, TextInput, RefreshControl, Platform,
@@ -21,6 +21,11 @@ import DocumentSection from '@/components/DocumentSection';
 import DarkHero, { heroGlass } from '@/components/DarkHero';
 import Icon from '@/components/Icon';
 import { tapHaptic } from '@/lib/haptics';
+import AddInteractionSheet from '@/components/AddInteractionSheet';
+import {
+  fetchInteractions, updateCustomerTags, channelMeta, outcomeLabel, locationLabel,
+  nextActionMeta, AUTO_SOURCE_META, CUSTOMER_TAGS, Interaction,
+} from '@/lib/relationship';
 
 type WaMsg = { id: string; phone: string; message: string; status: string; created_at: string };
 
@@ -42,7 +47,7 @@ function fmtDate(iso: string) {
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { userId } = useProfile();
+  const { userId, agencyId: myAgencyId, profile } = useProfile();
 
   const [bundle, setBundle] = useState<CustomerBundle | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -54,12 +59,17 @@ export default function CustomerDetailScreen() {
   const [savingMuayene, setSavingMuayene] = useState(false);
   const [showMuayenePicker, setShowMuayenePicker] = useState(false); // Android dialog
   const [waMsgs, setWaMsgs] = useState<WaMsg[]>([]);
+  const [interactions, setInteractions] = useState<Interaction[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
-    const b = await fetchCustomerBundle(id);
+    const [b, ints] = await Promise.all([fetchCustomerBundle(id), fetchInteractions(id)]);
     setBundle(b);
     setTimeline(buildTimeline(b));
+    setInteractions(ints);
+    setTags(((b.customer as unknown as { tags?: string[] })?.tags) ?? []);
     setNote(b.customer?.note ?? '');
     setMuayeneDate(b.customer?.muayene_bitis ?? '');
     setLoading(false);
@@ -142,6 +152,38 @@ export default function CustomerDetailScreen() {
       return { id: 'fu-' + r.id, icon: '📞', title: `${r.request_type} takip`, sub: `Takip: ${fmtDate(r.next_follow_up_date as string)}`, badge: u };
     }),
   ];
+  // ── IRM: birleşik ilişki akışı (manuel görüşmeler + sistem olayları) ─────────
+  const feed: TimelineEvent[] = [
+    ...interactions.map((it): TimelineEvent => {
+      if (it.kind === 'auto') {
+        const m = AUTO_SOURCE_META[it.auto_source ?? ''] ?? { label: 'Sistem olayı', emoji: '•' };
+        return { id: 'int-' + it.id, icon: m.emoji, title: m.label, subtitle: it.note ?? '', date: it.occurred_at };
+      }
+      const ch = channelMeta(it.channel);
+      const bits = [
+        outcomeLabel(it.outcome),
+        it.location ? '📍 ' + (locationLabel(it.location) ?? '') + (it.location_note ? ' · ' + it.location_note : '') : null,
+        it.note,
+        it.next_action ? '→ ' + (nextActionMeta(it.next_action)?.label ?? '') : null,
+      ].filter(Boolean);
+      return {
+        id: 'int-' + it.id,
+        icon: ch.emoji,
+        title: `${it.staff_name ?? 'Personel'} · ${ch.label}${it.product ? ' · ' + it.product : ''}`,
+        subtitle: bits.join(' · '),
+        date: it.occurred_at,
+      };
+    }),
+    ...timeline,
+  ].sort((a, b) => +new Date(b.date) - +new Date(a.date));
+
+  async function toggleTag(key: string) {
+    tapHaptic();
+    const next = tags.includes(key) ? tags.filter((t) => t !== key) : [...tags, key];
+    setTags(next); // optimistic
+    await updateCustomerTags(c!.id, next);
+  }
+
   const extra = c.extra_data ? Object.entries(c.extra_data).filter(([, v]) => v) : [];
 
   return (
@@ -157,8 +199,8 @@ export default function CustomerDetailScreen() {
         }
       >
         {/* Hızlı aksiyonlar */}
-        {!!c.phone && (
-          <View style={styles.heroActions}>
+        <View style={styles.heroActions}>
+          {!!c.phone && (
             <TouchableOpacity
               style={[styles.heroActionBtn, heroGlass]}
               onPress={() => { tapHaptic(); Linking.openURL(`tel:${c.phone}`); }}
@@ -167,6 +209,8 @@ export default function CustomerDetailScreen() {
               <Icon symbol="phone.fill" emoji="📞" size={15} color="#fff" />
               <Text style={styles.heroActionText}>Ara</Text>
             </TouchableOpacity>
+          )}
+          {!!c.phone && (
             <TouchableOpacity
               style={[styles.heroActionBtn, styles.heroActionWA]}
               onPress={() => { tapHaptic(); Linking.openURL(`whatsapp://send?phone=${waNumber(c.phone)}`); }}
@@ -175,8 +219,16 @@ export default function CustomerDetailScreen() {
               <Icon symbol="message.fill" emoji="💬" size={15} color="#fff" />
               <Text style={styles.heroActionText}>WhatsApp</Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+          <TouchableOpacity
+            style={[styles.heroActionBtn, heroGlass]}
+            onPress={() => { tapHaptic(); setSheetOpen(true); }}
+            activeOpacity={0.8}
+          >
+            <Icon symbol="plus.bubble.fill" emoji="📝" size={15} color="#fff" />
+            <Text style={styles.heroActionText}>Görüşme</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* İstatistik pill'leri */}
         <View style={styles.heroStats}>
@@ -193,6 +245,18 @@ export default function CustomerDetailScreen() {
             <Text style={styles.heroStatLabel}>Yaklaşan</Text>
           </View>
         </View>
+
+        {/* Müşteri analizi etiketleri */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll} contentContainerStyle={styles.tagRow}>
+          {CUSTOMER_TAGS.map((t) => {
+            const on = tags.includes(t.key);
+            return (
+              <TouchableOpacity key={t.key} style={[styles.tagChip, heroGlass, on && styles.tagChipOn]} onPress={() => toggleTag(t.key)} activeOpacity={0.7}>
+                <Text style={[styles.tagText, on && styles.tagTextOn]}>{t.emoji} {t.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </DarkHero>
 
       <ScrollView
@@ -309,15 +373,15 @@ export default function CustomerDetailScreen() {
         </View>
 
         {/* Zaman Tüneli */}
-        <Section label="ZAMAN TÜNELİ">
-          {timeline.length === 0 ? (
-            <Text style={styles.muted}>Henüz hareket yok.</Text>
+        <Section label="İLİŞKİ AKIŞI">
+          {feed.length === 0 ? (
+            <Text style={styles.muted}>Henüz ilişki kaydı yok — hero'daki "Görüşme" ile ilk kaydı ekleyin.</Text>
           ) : (
-            timeline.map((e, i) => (
+            feed.map((e, i) => (
               <View key={e.id} style={styles.tlRow}>
                 <View style={styles.tlLeft}>
                   <View style={styles.tlIcon}><Text style={{ fontSize: 14 }}>{e.icon}</Text></View>
-                  {i < timeline.length - 1 && <View style={styles.tlLine} />}
+                  {i < feed.length - 1 && <View style={styles.tlLine} />}
                 </View>
                 <View style={styles.tlBody}>
                   <Text style={styles.tlTitle}>{e.title}</Text>
@@ -363,6 +427,17 @@ export default function CustomerDetailScreen() {
           )}
         </Section>
       </ScrollView>
+
+      {sheetOpen && (
+        <AddInteractionSheet
+          customerId={c.id}
+          agencyId={c.agency_id ?? myAgencyId ?? ''}
+          staffId={userId}
+          staffName={profile?.full_name ?? null}
+          onClose={() => setSheetOpen(false)}
+          onSaved={() => { setSheetOpen(false); load(); }}
+        />
+      )}
     </View>
   );
 }
@@ -406,6 +481,12 @@ const styles = StyleSheet.create({
   heroStat: { flex: 1, alignItems: 'center', borderRadius: Radius.md, paddingVertical: 10 },
   heroStatValue: { fontSize: 20, fontWeight: '800', color: '#fff' },
   heroStatLabel: { fontSize: 10, fontWeight: '700', color: Dark.subOnDark, marginTop: 1 },
+  tagScroll: { marginTop: Spacing.md, marginHorizontal: -Spacing.lg },
+  tagRow: { paddingHorizontal: Spacing.lg, gap: 6, flexDirection: 'row' },
+  tagChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radius.full },
+  tagChipOn: { backgroundColor: '#fff', borderColor: '#fff' },
+  tagText: { fontSize: 11, fontWeight: '700', color: Dark.subOnDark },
+  tagTextOn: { color: Dark.hero },
 
   sectionLabel: { ...Type.label, marginBottom: Spacing.sm },
   card: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, ...Shadow.sm },
