@@ -2,10 +2,11 @@
  * src/lib/tasks.ts
  * ─────────────────────────────────────────────────────────────────────────────
  * "Görevler" veri katmanı — TÜRETİLMİŞ yapılacaklar listesi (yeni tablo YOK).
- * Üç kaynaktan tek tip Task[] üretir:
+ * Dört kaynaktan tek tip Task[] üretir:
  *   1) Yenileme  → policies (Aktif, bitiş ±30 gün)
  *   2) Takip     → requests (next_follow_up_date ≤ bugün, açık aşama)
  *   3) Yeni Lead → requests (status='Yeni Lead', ilk temas bekleyen)
+ *   4) Görüşme   → customer_interactions (next_action vadesi gelmiş, tamamlanmamış)
  * RLS zaten acente bazlı; agencyId verilirse ek filtre uygulanır.
  *
  * Cihaz aksiyon linkleri (Ara / WhatsApp) renewals.ts yardımcılarından gelir.
@@ -13,8 +14,9 @@
 
 import { supabase } from './supabase';
 import { fetchUpcomingRenewals, daysUntil } from './renewals';
+import { nextActionMeta } from './relationship';
 
-export type TaskKind = 'renewal' | 'followup' | 'lead';
+export type TaskKind = 'renewal' | 'followup' | 'lead' | 'interaction';
 export type TaskUrgency = 'overdue' | 'today' | 'soon' | 'normal';
 
 export type Task = {
@@ -67,9 +69,20 @@ export async function fetchTasks(agencyId: string | null): Promise<Task[]> {
     .order('next_follow_up_date', { ascending: true });
   if (agencyId) reqQ = reqQ.eq('agency_id', agencyId);
 
-  const [renewals, reqRes] = await Promise.all([
+  // ── 4) Görüşme sonrası aksiyonlar: vadesi gelmiş, tamamlanmamış ────────────
+  let intQ = (supabase.from('customer_interactions') as any)
+    .select('id,customer_id,next_action,next_action_date,product,staff_name,customers(name,phone)')
+    .not('next_action', 'is', null)
+    .eq('next_action_done', false)
+    .lte('next_action_date', todayStr)
+    .order('next_action_date', { ascending: true })
+    .limit(100);
+  if (agencyId) intQ = intQ.eq('agency_id', agencyId);
+
+  const [renewals, reqRes, intRes] = await Promise.all([
     fetchUpcomingRenewals(agencyId),
     reqQ,
+    intQ,
   ]);
 
   const tasks: Task[] = [];
@@ -129,6 +142,23 @@ export async function fetchTasks(agencyId: string | null): Promise<Task[]> {
         refId: q.id,
       });
     }
+  }
+
+  // 4) GÖRÜŞME AKSİYONU görevleri (IRM: "sonraki aksiyon" buraya akar)
+  for (const it of (intRes?.data ?? []) as any[]) {
+    const d = it.next_action_date ? daysUntil(it.next_action_date, todayStr) : 0;
+    const action = nextActionMeta(it.next_action)?.label ?? 'Takip';
+    tasks.push({
+      id: `interaction:${it.id}`,
+      kind: 'interaction',
+      title: it.customers?.name ?? 'Müşteri',
+      subtitle: `${action}${it.product ? ' · ' + it.product : ''} · ${daysLabel(d)}${it.staff_name ? ' · ' + it.staff_name : ''}`,
+      urgency: urgencyFromDays(d),
+      daysLeft: d,
+      customerId: it.customer_id,
+      customerPhone: it.customers?.phone ?? '',
+      refId: it.id,
+    });
   }
 
   // Sırala: gecikmiş < bugün < yakın < normal; aynı kademede daysLeft artan.
@@ -195,4 +225,11 @@ export function buildTaskWhatsappUrl(task: Task): string {
     msg = `Merhaba ${task.title}, talebiniz için teşekkürler! Detayları konuşmak isterseniz buradayım. 🙂`;
   }
   return `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
+}
+
+/** Görüşme-aksiyonu görevini tamamla (next_action_done=true). */
+export async function completeInteractionTask(interactionId: string): Promise<void> {
+  await (supabase.from('customer_interactions') as any)
+    .update({ next_action_done: true })
+    .eq('id', interactionId);
 }

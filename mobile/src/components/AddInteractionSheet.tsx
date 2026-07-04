@@ -43,7 +43,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function AddInteractionSheet({
-  customerId, agencyId, staffId, staffName, onClose, onSaved,
+  customerId, agencyId, staffId, staffName, onClose, onSaved, initialChannel,
 }: {
   customerId: string;
   agencyId: string;
@@ -51,8 +51,10 @@ export default function AddInteractionSheet({
   staffName: string | null;
   onClose: () => void;
   onSaved: () => void;
+  /** Nudge akışı: "aramadan döndün → kaydet?" kanal ön-seçili gelir */
+  initialChannel?: string;
 }) {
-  const [channel, setChannel] = useState('phone');
+  const [channel, setChannel] = useState(initialChannel ?? 'phone');
   const [location, setLocation] = useState<string | null>(null);
   const [locationNote, setLocationNote] = useState('');
   const [when, setWhen] = useState(new Date());

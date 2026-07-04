@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Linking, Alert, TextInput, RefreshControl, Platform,
+  ActivityIndicator, Linking, Alert, TextInput, RefreshControl, Platform, AppState,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -62,6 +62,23 @@ export default function CustomerDetailScreen() {
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetChannel, setSheetChannel] = useState<string | undefined>(undefined);
+
+  // ── Nudge: "Ara"dan dönünce görüşmeyi kaydetmeyi öner ────────────────────────
+  const pendingCallAt = useRef<number | null>(null);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st !== 'active' || !pendingCallAt.current) return;
+      const elapsed = Date.now() - pendingCallAt.current;
+      pendingCallAt.current = null;
+      if (elapsed < 8_000) return; // hemen geri döndüyse arama olmamıştır
+      Alert.alert('Görüşme yapıldı mı?', 'Bu aramayı ilişki akışına kaydetmek ister misin?', [
+        { text: 'Şimdi değil', style: 'cancel' },
+        { text: 'Kaydet', onPress: () => { setSheetChannel('phone'); setSheetOpen(true); } },
+      ]);
+    });
+    return () => sub.remove();
+  }, []);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -203,7 +220,7 @@ export default function CustomerDetailScreen() {
           {!!c.phone && (
             <TouchableOpacity
               style={[styles.heroActionBtn, heroGlass]}
-              onPress={() => { tapHaptic(); Linking.openURL(`tel:${c.phone}`); }}
+              onPress={() => { tapHaptic(); pendingCallAt.current = Date.now(); Linking.openURL(`tel:${c.phone}`); }}
               activeOpacity={0.8}
             >
               <Icon symbol="phone.fill" emoji="📞" size={15} color="#fff" />
@@ -222,7 +239,7 @@ export default function CustomerDetailScreen() {
           )}
           <TouchableOpacity
             style={[styles.heroActionBtn, heroGlass]}
-            onPress={() => { tapHaptic(); setSheetOpen(true); }}
+            onPress={() => { tapHaptic(); setSheetChannel(undefined); setSheetOpen(true); }}
             activeOpacity={0.8}
           >
             <Icon symbol="plus.bubble.fill" emoji="📝" size={15} color="#fff" />
@@ -430,6 +447,7 @@ export default function CustomerDetailScreen() {
 
       {sheetOpen && (
         <AddInteractionSheet
+          initialChannel={sheetChannel}
           customerId={c.id}
           agencyId={c.agency_id ?? myAgencyId ?? ''}
           staffId={userId}

@@ -20,13 +20,14 @@ import ActionBtn from '@/components/ActionBtn';
 import { useCachedQuery } from '@/lib/query';
 import {
   fetchTasks, groupTasks, buildTaskCallUrl, buildTaskWhatsappUrl,
-  Task, TaskKind, TaskUrgency,
+  completeInteractionTask, Task, TaskKind, TaskUrgency,
 } from '@/lib/tasks';
 
 const KIND_META: Record<TaskKind, { emoji: string; label: string; tint: string; bg: string }> = {
   renewal:  { emoji: '🔄', label: 'Yenileme', tint: Colors.primary, bg: Colors.primaryLight },
   followup: { emoji: '📞', label: 'Takip',    tint: '#D97706',      bg: Colors.warningBg },
   lead:     { emoji: '✨', label: 'Yeni Lead', tint: Colors.success, bg: Colors.successBg },
+  interaction: { emoji: '🤝', label: 'Görüşme', tint: '#7C3AED', bg: Colors.infoBg },
 };
 
 /** Aciliyet rozeti: gün bilgisi varsa renewalUrgency'den, yoksa kind'e göre. */
@@ -72,6 +73,10 @@ export default function GorevlerScreen() {
   }
   function detail(task: Task) {
     router.push(`/customer/${task.customerId}`);
+  }
+  async function complete(task: Task) {
+    await completeInteractionTask(task.refId);
+    onRefresh();
   }
 
   return (
@@ -154,6 +159,9 @@ export default function GorevlerScreen() {
                 <View style={styles.actions}>
                   <ActionBtn symbol="phone.fill" emoji="📞" label="Ara" onPress={() => call(task)} />
                   <ActionBtn symbol="message.fill" emoji="💬" label="WhatsApp" tint="#25D366" onPress={() => whatsapp(task)} />
+                  {task.kind === 'interaction' && (
+                    <ActionBtn symbol="checkmark" emoji="✓" label="Tamam" tint={Colors.success} onPress={() => complete(task)} />
+                  )}
                   <ActionBtn symbol="arrow.right" emoji="→" label="Detay" tint={Colors.primary} onPress={() => detail(task)} />
                 </View>
               </View>
