@@ -181,7 +181,8 @@ export async function uploadDocument(params: UploadDocumentParams): Promise<Uplo
     file_size: fileSize ?? null,
     bucket: BUCKET,
     uploaded_by: uploadedBy,
-    doc_type: docType ?? null,
+    // documents.doc_type NOT NULL (Evrak Merkezi migration'ı) — açık null constraint patlatır
+    doc_type: docType ?? 'Diğer',
   };
 
   const { data, error: dbError } = await (supabase.from('documents') as any)
