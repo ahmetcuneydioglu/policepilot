@@ -9,6 +9,8 @@
  *   otomatik geri gelir. Kod silinmedi; yalnızca girişler bayrağa bağlı.
  */
 export const FEATURES = {
+  // Aktive edilirken UI adı "Teklif Merkezi" → "Fiyat Çalışması" olacak
+  // (ürün ilkesi: acente teklif ALMAZ; şirketlerden fiyat toplar, müşteriye teklif HAZIRLAR).
   quoteCenter: false,
 
   /**

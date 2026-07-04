@@ -186,7 +186,7 @@ export default function CustomerDetailScreen() {
           </View>
           <View style={[styles.heroStat, heroGlass]}>
             <Text style={styles.heroStatValue}>{openReqs.length}</Text>
-            <Text style={styles.heroStatLabel}>Açık Teklif</Text>
+            <Text style={styles.heroStatLabel}>Açık Fırsat</Text>
           </View>
           <View style={[styles.heroStat, heroGlass]}>
             <Text style={[styles.heroStatValue, renewals.length > 0 && { color: '#FCA5A5' }]}>{renewals.length}</Text>
@@ -236,7 +236,7 @@ export default function CustomerDetailScreen() {
 
         {/* Bekleyen Teklifler */}
         {openReqs.length > 0 && (
-          <Section label="BEKLEYEN TEKLİFLER">
+          <Section label="AÇIK FIRSATLAR">
             {openReqs.map((r) => {
               const s = stageOf(r.status);
               return (

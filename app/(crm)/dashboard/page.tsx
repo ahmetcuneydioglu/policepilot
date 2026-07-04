@@ -14,6 +14,7 @@ import { withScopeFilter, withRequestScope, isManagerial, needsOnboarding } from
 import TeamSummaryWidget from "@/components/team/TeamSummaryWidget";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
 import TodayStrip from "@/components/TodayStrip";
+import QRCode from "react-qr-code";
 import {
   Users, FileText, Clock, MessageSquare, Zap,
   TrendingUp, CheckCircle2, Activity,
@@ -423,15 +424,8 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <Link
-            href="/teklif-al"
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Teklif Al
-          </Link>
-        </div>
+        {/* "Teklif Al" butonu bilinçli kaldırıldı: acente teklif ALMAZ —
+            müşteri formu aşağıdaki "Çevrimiçi Talep Formunuz" kartından paylaşılır. */}
       </div>
 
       {/* ══ KURULUM CHECKLIST (yeni acente aktivasyonu) ═══════════════════ */}
@@ -450,13 +444,21 @@ export default function DashboardPage() {
               </svg>
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-0.5">Teklif Formu Linkiniz</p>
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-0.5">Çevrimiçi Talep Formunuz</p>
               <p className="text-sm font-mono text-blue-900 truncate">
                 {typeof window !== "undefined" ? window.location.origin : ""}/a/{agencySlug}/teklif-al
               </p>
+              <p className="text-[11px] text-blue-600/80 mt-0.5">
+                Müşterileriniz bu formdan size talep gönderir — linki paylaşın, QR&apos;ı vitrine asın.
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {/* QR — vitrin/kartvizit için; kanonik domain (deterministik, SSR uyumlu) */}
+            <div className="p-1.5 bg-white rounded-lg border border-blue-200">
+              <QRCode value={`https://www.sigortaos.com/a/${agencySlug}/teklif-al`} size={56} />
+            </div>
+            <div className="flex items-center gap-2">
             <button
               onClick={() => {
                 const url = `${window.location.origin}/a/${agencySlug}/teklif-al`;
@@ -484,6 +486,7 @@ export default function DashboardPage() {
               </svg>
               Önizle
             </a>
+            </div>
           </div>
         </div>
       )}

@@ -218,7 +218,7 @@ export default function PerformansScreen() {
               <Text style={styles.sectionSub}>Acentenizin toplam üretimi (tüm ekip)</Text>
               <View style={styles.statGrid}>
                 <StatCard emoji="👥" label="Müşteri" value={String(data.team.total_customers)} />
-                <StatCard emoji="📄" label="Teklif" value={String(data.team.total_quotes)} />
+                <StatCard emoji="📄" label="Fırsat" value={String(data.team.total_quotes)} />
                 <StatCard emoji="🛡️" label="Poliçe" value={String(data.team.total_policies)} />
                 <StatCard emoji="💰" label="Prim" value={formatShortTRY(data.team.total_premium)} />
                 <StatCard emoji="📈" label="Dönüşüm" value={`%${data.team.conversion}`} />
@@ -408,7 +408,7 @@ function DetailModal({ user, rank, avgConversion, onClose }: {
 
   const metrics: { k: string; v: string; sub?: string }[] = [
     { k: 'Müşteri', v: String(user.customers) },
-    { k: 'Teklif', v: String(user.quotes_total), sub: `bu ay ${user.quotes_month}` },
+    { k: 'Fırsat', v: String(user.quotes_total), sub: `bu ay ${user.quotes_month}` },
     { k: 'Poliçe', v: String(user.policies_total), sub: `bu ay ${user.policies_month}` },
     { k: 'Kazanılan', v: String(user.quotes_won) },
     { k: 'Toplam Prim', v: formatTRY(user.total_premium) },

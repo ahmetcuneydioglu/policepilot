@@ -445,7 +445,7 @@ function ProductStep({ onSelect }: { onSelect: (p: ProductDef) => void }) {
               <Text style={s1.prodLabel}>{p.label}</Text>
               <Text style={s1.prodDesc} numberOfLines={2}>{p.description}</Text>
               <View style={s1.prodBtn}>
-                <Text style={s1.prodBtnText}>Teklif Al →</Text>
+                <Text style={s1.prodBtnText}>Seç →</Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -737,7 +737,7 @@ function FormStep({
           {saving ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={s2.submitBtnText}>Talebi Kaydet →</Text>
+            <Text style={s2.submitBtnText}>Fırsatı Kaydet →</Text>
           )}
         </TouchableOpacity>
 
@@ -790,10 +790,10 @@ function SuccessScreen({ product, onDone }: { product: ProductDef; onDone: () =>
         <Text style={suc.title}>Talep Oluşturuldu!</Text>
         <Text style={suc.subtitle}>
           <Text style={{ fontWeight: '700', color: Colors.primary }}>{product.label}</Text>
-          {' '}talebi başarıyla kaydedildi. Talepler ekranında görüntüleyebilirsiniz.
+          {' '}fırsatı başarıyla kaydedildi. Fırsatlar ekranında görüntüleyebilirsiniz.
         </Text>
         <TouchableOpacity style={suc.btn} onPress={onDone}>
-          <Text style={suc.btnText}>Talepler Ekranına Git</Text>
+          <Text style={suc.btnText}>Fırsatlar Ekranına Git</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -840,7 +840,7 @@ export default function NewRequestScreen() {
 
   const headerTitle =
     step === 'product' ? 'Sigorta Türü Seç' :
-    step === 'form'    ? (selectedProduct?.label ?? 'Teklif Formu') :
+    step === 'form'    ? (selectedProduct?.label ?? 'Yeni Fırsat') :
     'Talep Oluşturuldu';
 
   return (

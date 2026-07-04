@@ -136,7 +136,7 @@ export default function HomeScreen() {
     if (m.bekleyenTeklif > 0) {
       return {
         emoji: '📋', tint: Dark.dotAmber,
-        label: `${m.bekleyenTeklif} bekleyen teklif`,
+        label: `${m.bekleyenTeklif} bekleyen fırsat`,
         sub: pendingTask ? `${pendingTask.title} · ${pendingTask.subtitle.split(' · ')[0]}` : 'Satış hattında takip bekliyor',
         onPress: () => router.push('/(tabs)/requests'),
         action: { label: 'Aç', onPress: () => router.push('/(tabs)/requests') },
@@ -180,7 +180,7 @@ export default function HomeScreen() {
   const taskRows: { emoji: string; bg: string; title: string; sub: string | null; count: number; badge: string; href: Href }[] = [
     { emoji: '🔄', bg: Colors.dangerBg, title: 'Yenileme Takibi', count: m.yenilemeSayisi, badge: Dark.dotRed,   href: '/(tabs)/renewals',
       sub: topRenewal ? `${topRenewal.customerName} · ${dayLabel(topRenewal.daysLeft)}` : null },
-    { emoji: '📋', bg: Colors.amberBg, title: 'Bekleyen Teklifler', count: m.bekleyenTeklif, badge: Dark.dotAmber, href: '/(tabs)/requests',
+    { emoji: '📋', bg: Colors.amberBg, title: 'Bekleyen Fırsatlar', count: m.bekleyenTeklif, badge: Dark.dotAmber, href: '/(tabs)/requests',
       sub: pendingTask ? `${pendingTask.title} · ${pendingTask.subtitle.split(' · ')[0]}` : null },
     { emoji: '💬', bg: Colors.successBg, title: 'WhatsApp Gönderimleri', count: data?.waPending ?? 0, badge: Dark.dotGreen, href: '/whatsapp',
       sub: (data?.waPending ?? 0) > 0 ? `${data?.waPending} mesaj kuyrukta` : null },

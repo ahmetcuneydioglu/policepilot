@@ -18,6 +18,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { isManagerial } from "@/lib/tenant";
 import { useNotifications } from "@/lib/NotificationContext";
+import { FEATURES } from "@/lib/features";
 import {
   LayoutDashboard, Users, Filter, ShieldCheck, RefreshCw, Car,
   MessageCircle, UserCog, Bot, Settings, Building2, Radar, Gauge,
@@ -285,8 +286,9 @@ export default function Sidebar() {
         <div className="mt-1.5 space-y-0.5">
           <NavItem href="/dashboard" label="Dashboard" Icon={LayoutDashboard}
             isActive={pathname === "/dashboard"} collapsed={collapsed} onClick={closeMobile} />
-          {/* Teklif Merkezi — spotlight (gelecek Teklif Motoru'nun evi) */}
-          {collapsed ? (
+          {/* Teklif Merkezi — spotlight. FEATURES.quoteCenter=false: demo veri +
+              gerçek API yok → gizli. Aktive edilirken adı "Fiyat Çalışması" olacak. */}
+          {FEATURES.quoteCenter && (collapsed ? (
             <SideTooltip label="Teklif Merkezi">
               <Link href="/quote-center" onClick={closeMobile}
                 className={`flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors duration-150
@@ -303,7 +305,7 @@ export default function Sidebar() {
               <span className="truncate">Teklif Merkezi</span>
               <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 flex-shrink-0">BETA</span>
             </Link>
-          )}
+          ))}
         </div>
 
         {groups.map((g) => {

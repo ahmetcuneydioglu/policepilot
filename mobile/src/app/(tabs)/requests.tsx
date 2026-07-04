@@ -303,7 +303,7 @@ function AddRequestModal({ agencyId, onClose, onSaved }: { agencyId: string | nu
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Yeni Teklif</Text>
+              <Text style={styles.modalTitle}>Yeni Fırsat</Text>
               <TouchableOpacity onPress={() => { reset(); onClose(); }} style={styles.closeBtn}><Text style={styles.closeBtnText}>✕</Text></TouchableOpacity>
             </View>
 
@@ -345,7 +345,7 @@ function AddRequestModal({ agencyId, onClose, onSaved }: { agencyId: string | nu
             </View>
 
             <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving} activeOpacity={0.8}>
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Teklif Oluştur</Text>}
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Fırsat Oluştur</Text>}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -486,7 +486,7 @@ export default function RequestsScreen() {
           ListEmptyComponent={
             <View style={styles.centered}>
               <Text style={styles.emptyEmoji}>📋</Text>
-              <Text style={styles.emptyText}>{search || filterStatus !== 'Tümü' ? 'Sonuç bulunamadı' : 'Henüz teklif yok'}</Text>
+              <Text style={styles.emptyText}>{search || filterStatus !== 'Tümü' ? 'Sonuç bulunamadı' : 'Henüz fırsat yok'}</Text>
               {!search && filterStatus === 'Tümü' && (
                 <TouchableOpacity style={[styles.addBtn, { marginTop: Spacing.md }]} onPress={() => setAddVisible(true)}>
                   <Text style={styles.addBtnText}>İlk teklifi oluştur</Text>

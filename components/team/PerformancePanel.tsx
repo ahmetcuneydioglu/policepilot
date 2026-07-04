@@ -253,7 +253,7 @@ export default function PerformancePanel() {
         <SectionHead title="Ekip Özeti" sub="Acentenizin toplam üretimi (tüm ekip)" />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard Icon={Users}       label="Müşteri"  value={String(team.total_customers)} tint="bg-blue-50 text-blue-600" />
-          <StatCard Icon={FileText}    label="Teklif"   value={String(team.total_quotes)}    tint="bg-violet-50 text-violet-600" />
+          <StatCard Icon={FileText}    label="Fırsat"   value={String(team.total_quotes)}    tint="bg-violet-50 text-violet-600" />
           <StatCard Icon={ShieldCheck} label="Poliçe"   value={String(team.total_policies)}  tint="bg-emerald-50 text-emerald-600" />
           <StatCard Icon={Wallet}      label="Prim"     value={fmtMoney(team.total_premium)} tint="bg-amber-50 text-amber-600" />
           <StatCard Icon={TrendingUp}  label="Dönüşüm"  value={`%${team.conversion}`}        tint="bg-indigo-50 text-indigo-600" />
