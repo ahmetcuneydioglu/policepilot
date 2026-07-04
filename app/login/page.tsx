@@ -16,13 +16,19 @@ function LoginForm() {
   const [error, setError]       = useState("");
   const [checking, setChecking] = useState(true);
 
-  // Redirect immediately if already authenticated
+  // Redirect immediately if already authenticated.
+  // ÖNEMLİ: getSession() yalnız YEREL depoya bakar — hesap silinmiş/oturum sunucuda
+  // geçersizse "var" sanır, proxy dashboard'dan geri atar → sonsuz döngü (spinner).
+  // getUser() sunucuda doğrular; ölü yerel oturum signOut ile temizlenir.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    supabase.auth.getSession().then((result: any) => {
-      if (result?.data?.session) router.replace(next);
-      else setChecking(false);
-    });
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (data?.user && !error) {
+        router.replace(next);
+      } else {
+        if (error) supabase.auth.signOut().catch(() => {}); // ölü local token'ı temizle
+        setChecking(false);
+      }
+    }).catch(() => setChecking(false));
   }, [router, next]);
 
   async function handleSubmit(e: React.FormEvent) {
