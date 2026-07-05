@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   buildWarningBody:  { fontSize: 13, color: '#78350F', lineHeight: 19, marginBottom: 10 },
   buildWarningNote:  { fontSize: 12, color: '#A16207', marginTop: 10, lineHeight: 17 },
   codeBox: { backgroundColor: '#1C1917', borderRadius: Radius.sm, padding: 12 },
-  codeText: { color: '#86EFAC', fontSize: 13, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: '700' },
+  codeText: { color: Colors.success, fontSize: 13, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: '700' },
 
   card: {
     backgroundColor: Colors.card, borderRadius: Radius.lg,

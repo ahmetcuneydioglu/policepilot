@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
   note: { fontSize: 11, color: Colors.secondary, marginTop: 3 },
   cardActions: { alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   waBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: '#F0FDF4',
+    width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.successBg,
     justifyContent: 'center', alignItems: 'center', marginBottom: 4,
   },
   waBtnText: { fontSize: 18 },

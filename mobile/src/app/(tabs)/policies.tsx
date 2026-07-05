@@ -1054,7 +1054,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  cardCritical: { borderColor: '#FECACA', backgroundColor: '#FFFAFA' },
+  cardCritical: { borderColor: Colors.danger, backgroundColor: Colors.dangerBg },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   avatar: {
     width: 40,

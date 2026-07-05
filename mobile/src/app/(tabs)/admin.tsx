@@ -367,7 +367,7 @@ const card = StyleSheet.create({
     overflow: 'hidden',
   },
   inactive: {
-    borderColor: '#FECACA',
+    borderColor: Colors.danger,
     opacity: 0.8,
   },
   header: {
@@ -478,8 +478,8 @@ const card = StyleSheet.create({
     color: '#059669',
   },
   passiveBtn: {
-    borderColor: '#FECACA',
-    backgroundColor: '#FEF2F2',
+    borderColor: Colors.danger,
+    backgroundColor: Colors.dangerBg,
   },
   passiveBtnText: {
     color: '#DC2626',
@@ -494,8 +494,8 @@ const card = StyleSheet.create({
     color: Colors.text,
   },
   deleteBtn: {
-    borderColor: '#FECACA',
-    backgroundColor: '#FEF2F2',
+    borderColor: Colors.danger,
+    backgroundColor: Colors.dangerBg,
   },
   deleteBtnText: {
     fontSize: 12,
@@ -811,12 +811,12 @@ const fm = StyleSheet.create({
     paddingBottom: 40,
   },
   errorBox: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Colors.dangerBg,
     borderRadius: 10,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: Colors.danger,
   },
   errorText: { fontSize: 13, color: '#DC2626' },
   label: {

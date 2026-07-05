@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   hBack: { ...Type.subhead, color: Colors.primary },
   hTitle: { ...Type.heading, fontSize: 16 },
 
-  errBanner: { backgroundColor: Colors.dangerBg, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: '#FECACA' },
+  errBanner: { backgroundColor: Colors.dangerBg, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.danger },
   errText: { ...Type.caption, color: Colors.danger, lineHeight: 17 },
   errRetry: { ...Type.subhead, color: Colors.danger, marginTop: 6 },
 
