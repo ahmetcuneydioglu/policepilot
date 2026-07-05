@@ -9,10 +9,11 @@ import {
   ActivityIndicator, Alert, RefreshControl, Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, Redirect } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { supabase } from '@/lib/supabase';
+import { FEATURES } from '@/lib/features';
 import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import { formatTRY, formatShortTRY } from '@/lib/format';
@@ -29,6 +30,8 @@ function initials(n: string) { return n.trim().split(/\s+/).map((w) => w[0]).sli
 
 export default function QuoteCenterScreen() {
   const router = useRouter();
+  // App Store v1.0: Teklif Merkezi kapalı — deep link/scheme ile doğrudan erişim de kilitli
+  if (!FEATURES.quoteCenter) return <Redirect href="/(tabs)" />;
   const { agencyId } = useProfile();
   const tabBarHeight = useBottomTabBarHeight();
   const [runs, setRuns] = useState<QuoteRun[]>([]);

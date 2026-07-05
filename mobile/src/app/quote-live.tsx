@@ -9,8 +9,9 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Redirect } from 'expo-router';
 import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
+import { FEATURES } from '@/lib/features';
 import { formatTRY } from '@/lib/format';
 import { startQuoteRun, StartQuoteParams } from '@/lib/quoteCenter';
 import { getActiveProvider, NormalizedQuote } from '@/lib/quoteProvider';
@@ -28,6 +29,8 @@ function statusView(q: NormalizedQuote) {
 }
 
 export default function QuoteLiveScreen() {
+  // App Store v1.0: teklif akışı kapalı (bkz. features.ts)
+  if (!FEATURES.quoteCenter) return <Redirect href="/(tabs)" />;
   const router = useRouter();
   const { payload } = useLocalSearchParams<{ payload: string }>();
   const [quotes, setQuotes] = useState<NormalizedQuote[]>([]);

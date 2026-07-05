@@ -234,7 +234,6 @@ export default function WhatsappCenterScreen() {
               <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>OTOMASYONLAR</Text>
               <View style={styles.card}>
                 <AutoRow emoji="🔄" label="Yenileme Hatırlatmaları" note="Cron ile çalışıyor" />
-                <AutoRow emoji="🎂" label="Doğum Günü Mesajları" note="Yakında" />
               </View>
             </>
           }
