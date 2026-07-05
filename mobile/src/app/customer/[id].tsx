@@ -7,7 +7,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Colors, Spacing, Radius, Type, Shadow, Dark, renewalUrgency } from '@/lib/theme';
+import { Colors, Spacing, Radius, Type, Shadow, Dark, isDarkMode, renewalUrgency } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import { formatTRY } from '@/lib/format';
 import { daysUntil } from '@/lib/renewals';
@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
   muayeneEmptyHint: { ...Type.caption, color: Colors.placeholder, marginTop: 4 },
   muayeneDateBtn: { borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 8 },
   muayeneDateBtnText: { ...Type.body, color: Colors.heading },
-  tahminiNote: { fontSize: 12, color: '#B45309', backgroundColor: '#FEF9C3', borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8, lineHeight: 17 },
+  tahminiNote: { fontSize: 12, color: isDarkMode ? '#F5B441' : '#B45309', backgroundColor: Colors.amberBg, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8, lineHeight: 17 },
   noteSave: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center', marginTop: Spacing.sm },
   noteSaveText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 

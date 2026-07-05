@@ -605,7 +605,7 @@ const card = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: Colors.warning,
   },
   limitWarningText: {
     fontSize: 11,

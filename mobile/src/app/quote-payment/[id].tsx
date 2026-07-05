@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
 
   noticeBox: { backgroundColor: Colors.amberBg, borderRadius: Radius.md, padding: Spacing.md, marginTop: 12 },
   noticeText: { ...Type.caption, color: '#92400E', lineHeight: 17 },
-  errBox: { backgroundColor: Colors.dangerBg, borderRadius: Radius.md, padding: Spacing.md, marginTop: 12, borderWidth: 1, borderColor: '#FECACA' },
+  errBox: { backgroundColor: Colors.dangerBg, borderRadius: Radius.md, padding: Spacing.md, marginTop: 12, borderWidth: 1, borderColor: Colors.danger },
   errText: { ...Type.caption, color: Colors.danger },
 
   sectionLabel: { ...Type.label, marginTop: Spacing.lg, marginBottom: Spacing.sm },
