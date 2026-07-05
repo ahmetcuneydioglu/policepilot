@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   suggestion: { backgroundColor: Colors.card, padding: Spacing.md, borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border, marginTop: 4 },
   suggestionText: { ...Type.subhead, fontSize: 14 },
   suggestionSub: { ...Type.caption, marginTop: 2 },
-  selectedBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: '#86EFAC' },
+  selectedBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.successBg, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.success },
   selectedText: { fontSize: 14, color: Colors.success, fontWeight: '600' },
 
   sectionLabel: { ...Type.label, marginTop: Spacing.lg, marginBottom: Spacing.sm },

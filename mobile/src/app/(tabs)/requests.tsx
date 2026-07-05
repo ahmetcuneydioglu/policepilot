@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 11, fontWeight: '700', color: Colors.secondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.sm, marginTop: Spacing.sm },
   fieldGroup: { marginBottom: Spacing.sm },
   input: { backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 12, fontSize: 14, color: Colors.heading },
-  selectedBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: '#86EFAC', marginBottom: Spacing.sm },
+  selectedBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.successBg, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.success, marginBottom: Spacing.sm },
   selectedText: { fontSize: 14, color: Colors.success, fontWeight: '600' },
   suggestion: { backgroundColor: Colors.card, padding: Spacing.md, borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border, marginTop: 4 },
   suggestionText: { fontSize: 14, color: Colors.heading, fontWeight: '500' },

@@ -25,9 +25,9 @@ type PermStatus = 'granted' | 'denied' | 'undetermined' | 'unavailable' | 'loadi
 
 function StatusBadge({ status }: { status: PermStatus }) {
   const configs: Record<PermStatus, { bg: string; text: string; dot: string; label: string }> = {
-    granted:      { bg: '#F0FDF4', text: Colors.success,  dot: Colors.success,  label: '✓ İzin Verildi' },
-    denied:       { bg: '#FEF2F2', text: Colors.danger,   dot: Colors.danger,   label: '✕ İzin Reddedildi' },
-    undetermined: { bg: '#FEF9C3', text: '#CA8A04',       dot: '#EAB308',       label: 'İzin Bekleniyor' },
+    granted:      { bg: Colors.successBg, text: Colors.success,  dot: Colors.success,  label: '✓ İzin Verildi' },
+    denied:       { bg: Colors.dangerBg, text: Colors.danger,   dot: Colors.danger,   label: '✕ İzin Reddedildi' },
+    undetermined: { bg: Colors.amberBg, text: Colors.warning,       dot: '#EAB308',       label: 'İzin Bekleniyor' },
     unavailable:  { bg: '#F3F4F6', text: Colors.secondary, dot: '#9CA3AF',      label: 'Native Modül Yok' },
     loading:      { bg: Colors.background, text: Colors.secondary, dot: Colors.secondary, label: 'Kontrol ediliyor...' },
   };
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.md, paddingBottom: 60 },
 
   buildWarning: {
-    backgroundColor: '#FEF9C3',
+    backgroundColor: Colors.amberBg,
     borderWidth: 1.5, borderColor: '#FDE047',
     borderRadius: Radius.lg,
     padding: Spacing.md,
@@ -303,13 +303,13 @@ const styles = StyleSheet.create({
   statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   statusText: { fontSize: 13, fontWeight: '700' },
   permBtn: { backgroundColor: Colors.primaryLight, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.md, marginRight: 8, marginBottom: 6 },
-  permBtnDanger: { backgroundColor: '#FEF2F2' },
+  permBtnDanger: { backgroundColor: Colors.dangerBg },
   permBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
 
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   infoLabel: { fontSize: 13, color: Colors.secondary },
   infoValue: { fontSize: 13, color: Colors.heading, fontWeight: '600' },
-  warnBox: { backgroundColor: '#FEF9C3', borderRadius: Radius.sm, padding: 10, marginTop: 10 },
+  warnBox: { backgroundColor: Colors.amberBg, borderRadius: Radius.sm, padding: 10, marginTop: 10 },
   warnText: { fontSize: 12, color: '#92400E', lineHeight: 17 },
 
   tokenText: { fontSize: 12, color: Colors.secondary, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 8 },

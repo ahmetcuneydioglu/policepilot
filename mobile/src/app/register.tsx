@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
 
   // Başarı
   successWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },
-  successIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg },
+  successIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.successBg, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg },
   successTitle: { fontSize: 24, fontWeight: '800', color: Colors.heading, marginBottom: 8 },
   successSub: { fontSize: 14, color: Colors.secondary, textAlign: 'center', lineHeight: 21, paddingHorizontal: 8 },
   linkBox: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.lg, alignSelf: 'stretch' },

@@ -20,7 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { supabase } from '@/lib/supabase';
-import { Colors, Spacing, Radius } from '@/lib/theme';
+import { Colors, Spacing, Radius, isDarkMode } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import type { Policy, PolicyStatus, Customer } from '@/lib/types';
 import DocumentSection from '@/components/DocumentSection';
@@ -73,8 +73,8 @@ function expiryBadge(endDate: string, status: PolicyStatus): BadgeCfg {
   const days = daysLeft(endDate);
   if (days <= 5) return { bg: Colors.dangerBg, text: Colors.danger, dot: Colors.danger, label: `${days} gün kaldı` };
   if (days <= 15) return { bg: '#FEF3C7', text: '#D97706', dot: '#F59E0B', label: `${days} gün kaldı` };
-  if (days <= 30) return { bg: '#FEF9C3', text: '#CA8A04', dot: '#EAB308', label: `${days} gün kaldı` };
-  return { bg: '#F0FDF4', text: '#16A34A', dot: '#16A34A', label: `${days} gün kaldı` };
+  if (days <= 30) return { bg: Colors.amberBg, text: isDarkMode ? '#EAB308' : '#CA8A04', dot: '#EAB308', label: `${days} gün kaldı` };
+  return { bg: Colors.successBg, text: Colors.success, dot: Colors.success, label: `${days} gün kaldı` };
 }
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -967,9 +967,9 @@ const styles = StyleSheet.create({
   bannerCritical: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Colors.dangerBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: Colors.danger,
     marginHorizontal: Spacing.lg,
     marginBottom: 6,
     borderRadius: Radius.md,
@@ -981,9 +981,9 @@ const styles = StyleSheet.create({
   bannerWarning: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFBEB',
+    backgroundColor: Colors.warningBg,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: Colors.warning,
     marginHorizontal: Spacing.lg,
     marginBottom: 6,
     borderRadius: Radius.md,
@@ -1147,7 +1147,7 @@ const detailStyles = StyleSheet.create({
   waBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: Colors.successBg,
     borderRadius: Radius.sm,
     marginLeft: 8,
   },
@@ -1232,8 +1232,8 @@ const detailStyles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  statusTogglePasif: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
-  statusToggleAktif: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#86EFAC' },
+  statusTogglePasif: { backgroundColor: Colors.dangerBg, borderWidth: 1, borderColor: Colors.danger },
+  statusToggleAktif: { backgroundColor: Colors.successBg, borderWidth: 1, borderColor: Colors.success },
   statusToggleText: { fontSize: 15, fontWeight: '700', color: Colors.heading },
 });
 
