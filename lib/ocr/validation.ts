@@ -12,6 +12,7 @@ export const KNOWN_POLICY_TYPES = [
   "Yeşil Kart",
   "Sağlık",
   "Tamamlayıcı",
+  "Hayat",
   "DASK",
   "Konut",
   "Seyahat",

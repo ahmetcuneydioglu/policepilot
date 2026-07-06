@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -28,6 +28,11 @@ import { checkLimit } from '@/lib/limits';
 import type { LimitResult } from '@/lib/limits';
 import LimitModal from '@/components/LimitModal';
 import BulkPolicyImportMobile from '@/components/BulkPolicyImportMobile';
+import {
+  LIFE_POLICY_TYPE, LifeDetails, PolicyPayment, fetchPayments, setPaymentPaid,
+  paymentStatus, PAYMENT_STATUS_META, currencySymbol, periodLabel,
+} from '@/lib/lifePolicy';
+import { tapHaptic, successHaptic } from '@/lib/haptics';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -419,6 +424,9 @@ function DetailModal({
               )}
             </View>
           )}
+
+          {/* ❤️ Hayat Sigortası — ürün-özel bölümler */}
+          {policy.policy_type.startsWith('Hayat') && <LifeSections policy={policy} onClose={onClose} />}
 
           {/* Status toggle */}
           <TouchableOpacity
@@ -1094,6 +1102,162 @@ const styles = StyleSheet.create({
   policyNoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   policyNoLabel: { fontSize: 11, color: Colors.secondary, marginRight: 6 },
   policyNoValue: { fontSize: 12, color: Colors.heading, fontWeight: '600' },
+});
+
+// ─── ❤️ Hayat Sigortası bölümleri (detay modalı) ──────────────────────────────
+function LifeSections({ policy, onClose }: { policy: Policy; onClose: () => void }) {
+  const router = useRouter();
+  const d = (policy.details ?? null) as LifeDetails | null;
+  const [payments, setPayments] = useState<PolicyPayment[]>([]);
+  const [paysLoading, setPaysLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPayments(policy.id).then((rows) => { setPayments(rows); setPaysLoading(false); });
+  }, [policy.id]);
+
+  async function togglePaid(pmt: PolicyPayment) {
+    const willPay = !pmt.paid_at;
+    const prevPaidAt = pmt.paid_at;
+    tapHaptic();
+    // optimistic
+    setPayments((prev) => prev.map((x) => (x.id === pmt.id ? { ...x, paid_at: willPay ? new Date().toISOString() : null } : x)));
+    const { error } = await setPaymentPaid(pmt.id, willPay);
+    if (error) {
+      // geri al
+      setPayments((prev) => prev.map((x) => (x.id === pmt.id ? { ...x, paid_at: prevPaidAt } : x)));
+      Alert.alert('Güncellenemedi', error);
+      return;
+    }
+    if (willPay) successHaptic();
+  }
+
+  const paidCount = payments.filter((x) => x.paid_at).length;
+
+  return (
+    <>
+      {/* Sigortalı Bilgileri */}
+      {!!d && (
+        <View style={detailStyles.infoCard}>
+          <Text style={detailStyles.sectionTitle}>Sigortalı Bilgileri</Text>
+          {!!d.product_name && <InfoRow label="Ürün" value={d.product_name} />}
+          {!!d.policyholder && <InfoRow label="Sigorta Ettiren" value={d.policyholder} />}
+          {!!d.insured && <InfoRow label="Sigortalı" value={d.insured} />}
+          {!!d.insured_relation && <InfoRow label="Yakınlık" value={d.insured_relation} />}
+          <InfoRow label="Ödeme Periyodu" value={periodLabel(d.payment_period)} />
+        </View>
+      )}
+
+      {/* Teminatlar */}
+      {!!d && d.coverages.length > 0 && (
+        <View style={detailStyles.infoCard}>
+          <Text style={detailStyles.sectionTitle}>Teminatlar</Text>
+          <View style={lifeStyles.covRow}>
+            {d.coverages.map((c) => (
+              <View key={c} style={lifeStyles.covChip}><Text style={lifeStyles.covText}>{c}</Text></View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Lehtarlar */}
+      {!!d && d.beneficiaries.length > 0 && (
+        <View style={detailStyles.infoCard}>
+          <Text style={detailStyles.sectionTitle}>Lehtarlar</Text>
+          {d.beneficiaries.map((b, i) => (
+            <View key={i} style={[lifeStyles.benRow, i > 0 && lifeStyles.benRowBorder]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={lifeStyles.benName} numberOfLines={1}>{b.name}</Text>
+                <Text style={lifeStyles.benMeta} numberOfLines={1}>
+                  {b.relation}{b.phone ? ` · ${b.phone}` : ''}
+                </Text>
+              </View>
+              {b.share != null && (
+                <View style={lifeStyles.shareBadge}><Text style={lifeStyles.shareText}>%{b.share}</Text></View>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Prim Takibi */}
+      <View style={detailStyles.infoCard}>
+        <View style={lifeStyles.payHead}>
+          <Text style={detailStyles.sectionTitle}>Prim Takibi</Text>
+          {payments.length > 0 && (
+            <Text style={lifeStyles.payCount}>{paidCount}/{payments.length} ödendi</Text>
+          )}
+        </View>
+        {paysLoading ? (
+          <ActivityIndicator color={Colors.primary} style={{ marginVertical: 12 }} />
+        ) : payments.length === 0 ? (
+          <Text style={lifeStyles.payEmpty}>Prim takvimi bulunamadı.</Text>
+        ) : (
+          payments.map((pmt) => {
+            const stt = paymentStatus(pmt);
+            const meta = PAYMENT_STATUS_META[stt];
+            const tone = stt === 'paid' ? { bg: Colors.successBg, fg: Colors.success }
+                       : stt === 'overdue' ? { bg: Colors.dangerBg, fg: Colors.danger }
+                       : { bg: Colors.amberBg, fg: Colors.warning };
+            return (
+              <TouchableOpacity key={pmt.id} style={lifeStyles.payRow} onPress={() => togglePaid(pmt)} activeOpacity={0.7}>
+                <View style={{ flex: 1 }}>
+                  <Text style={lifeStyles.payTitle}>{pmt.seq}. Prim</Text>
+                  <Text style={lifeStyles.payMeta}>
+                    {new Date(`${pmt.due_date}T12:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {pmt.amount != null ? ` · ${currencySymbol(pmt.currency)}${Number(pmt.amount).toLocaleString('tr-TR')}` : ''}
+                  </Text>
+                </View>
+                <View style={[lifeStyles.payBadge, { backgroundColor: tone.bg }]}>
+                  <Text style={[lifeStyles.payBadgeText, { color: tone.fg }]}>{meta.icon} {meta.label}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+        {payments.length > 0 && (
+          <Text style={lifeStyles.payHint}>Satıra dokunarak Ödendi / geri al işaretleyebilirsin.</Text>
+        )}
+      </View>
+
+      {/* İlişki akışı köprüsü */}
+      <TouchableOpacity
+        style={lifeStyles.timelineBtn}
+        onPress={() => { onClose(); router.push(`/customer/${policy.customer_id}`); }}
+        activeOpacity={0.8}
+      >
+        <Text style={lifeStyles.timelineBtnText}>🤝 Müşteri Kartı & İlişki Akışı</Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
+const lifeStyles = StyleSheet.create({
+  covRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  covChip: { backgroundColor: Colors.primaryLight, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 5 },
+  covText: { fontSize: 12, fontWeight: '600', color: Colors.primary },
+
+  benRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  benRowBorder: { borderTopWidth: 1, borderTopColor: Colors.border },
+  benName: { fontSize: 14, fontWeight: '700', color: Colors.heading },
+  benMeta: { fontSize: 12, color: Colors.secondary, marginTop: 1 },
+  shareBadge: { backgroundColor: Colors.primaryLight, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 8 },
+  shareText: { fontSize: 12, fontWeight: '800', color: Colors.primary },
+
+  payHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  payCount: { fontSize: 12, fontWeight: '700', color: Colors.secondary },
+  payEmpty: { fontSize: 13, color: Colors.secondary, marginTop: 6 },
+  payRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  payTitle: { fontSize: 14, fontWeight: '700', color: Colors.heading },
+  payMeta: { fontSize: 12, color: Colors.secondary, marginTop: 1 },
+  payBadge: { borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 5, marginLeft: 8 },
+  payBadgeText: { fontSize: 11, fontWeight: '800' },
+  payHint: { fontSize: 11, color: Colors.placeholder, marginTop: 8 },
+
+  timelineBtn: {
+    backgroundColor: Colors.primaryLight, borderRadius: Radius.lg, paddingVertical: 13,
+    alignItems: 'center', marginBottom: 20,
+  },
+  timelineBtnText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
 });
 
 const detailStyles = StyleSheet.create({

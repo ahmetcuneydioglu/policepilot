@@ -107,5 +107,6 @@ export type Policy = {
   policy_no?: string | null;
   commission?: number | null;
   note?: string | null;
+  details?: Record<string, unknown> | null;  // ürün-özel alanlar (ör. Hayat: LifeDetails)
   customers?: { name: string; phone: string } | null;
 };
