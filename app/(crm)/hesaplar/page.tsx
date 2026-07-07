@@ -15,9 +15,10 @@ import { withAgencyFilter } from "@/lib/tenant";
 import {
   ACCOUNT_KINDS, accountKindMeta, dealStageOf, type Account, type Deal,
 } from "@/lib/portfolio";
+import { canAddCustomer, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
-import { Plus, Building2, Search, X, Users, KanbanSquare, Loader2, Unlink } from "lucide-react";
+import { Plus, Building2, Search, X, Users, KanbanSquare, Loader2, Unlink, UserPlus } from "lucide-react";
 
 type Person = { id: string; name: string; phone: string | null; title: string | null; account_id: string | null };
 
@@ -128,7 +129,7 @@ export default function AccountsPage() {
           onCreated={() => { setShowAdd(false); load(); }} />
       )}
       {openAccount && (
-        <AccountDrawer account={openAccount} people={people} deals={deals}
+        <AccountDrawer account={openAccount} people={people} deals={deals} agencyId={agencyId}
           onClose={() => setOpenId(null)} onChanged={load}
           onOpenDeal={(id) => router.push(`/portfoy?open=${id}`)} />
       )}
@@ -216,11 +217,12 @@ function AddAccountModal({ agencyId, onClose, onCreated }: { agencyId: string | 
 
 /* ── Hesap detayı ───────────────────────────────────────────────────────── */
 function AccountDrawer({
-  account, people, deals, onClose, onChanged, onOpenDeal,
+  account, people, deals, agencyId, onClose, onChanged, onOpenDeal,
 }: {
   account: Account;
   people: Person[];
   deals: Deal[];
+  agencyId: string | null;
   onClose: () => void;
   onChanged: () => void;
   onOpenDeal: (id: string) => void;
@@ -228,6 +230,11 @@ function AccountDrawer({
   const [show, setShow] = useState(false);
   const [linkQuery, setLinkQuery] = useState("");
   const [linking, setLinking] = useState(false);
+  // Hızlı kişi ekle (hesaba bağlı yeni müşteri kaydı)
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [qPhone, setQPhone] = useState("");
+  const [qTitle, setQTitle] = useState("");
+  const [qError, setQError] = useState("");
   useEffect(() => { setShow(true); }, []);
   const close = () => { setShow(false); setTimeout(onClose, 200); };
 
@@ -246,6 +253,33 @@ function AccountDrawer({
     await (supabase.from("customers") as any).update({ account_id: accountId }).eq("id", personId);
     setLinking(false);
     setLinkQuery("");
+    onChanged();
+  };
+
+  // Hızlı kişi ekle: müşteri kaydı hesaba bağlı doğar
+  const quickAdd = async () => {
+    const nm = linkQuery.trim();
+    if (!nm) return;
+    if (!qPhone.trim()) { setQError("Telefon girin — kişi kaydı için zorunlu."); return; }
+    if (!agencyId) { setQError("Bağlı acente bulunamadı."); return; }
+    setLinking(true);
+    setQError("");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lim = await canAddCustomer(supabase as any, agencyId);
+    if (!lim.isActive) { setLinking(false); setQError(INACTIVE_MESSAGE); return; }
+    if (!lim.ok) { setLinking(false); setQError(`${limitMessage("customer")} (${lim.current}/${lim.max})`); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: err } = await (supabase.from("customers") as any).insert({
+      agency_id: agencyId,
+      name: nm,
+      phone: qPhone.trim(),
+      insurance_type: "Diğer",
+      title: qTitle.trim() || null,
+      account_id: account.id,
+    });
+    setLinking(false);
+    if (err) { setQError("Kişi eklenemedi: " + err.message); return; }
+    setQuickOpen(false); setQPhone(""); setQTitle(""); setLinkQuery("");
     onChanged();
   };
 
@@ -287,11 +321,11 @@ function AccountDrawer({
                 </div>
               ))}
             </div>
-            {/* Kişi bağla */}
+            {/* Kişi bağla / hızlı ekle */}
             <div className="mt-3">
-              <input value={linkQuery} onChange={(e) => setLinkQuery(e.target.value)}
+              <input value={linkQuery} onChange={(e) => { setLinkQuery(e.target.value); setQuickOpen(false); setQError(""); }}
                 placeholder="Kişi bağla: müşteri adı yaz…" className={INPUT} />
-              {candidates.length > 0 && (
+              {linkQuery.trim() && (
                 <div className="mt-1 border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-50 bg-white">
                   {candidates.map((p) => (
                     <button key={p.id} onClick={() => setPersonAccount(p.id, account.id)} disabled={linking}
@@ -300,6 +334,25 @@ function AccountDrawer({
                       {p.phone && <span className="text-slate-400 text-xs ml-2">{p.phone}</span>}
                     </button>
                   ))}
+                  <button onClick={() => setQuickOpen(true)}
+                    className="w-full px-3 py-2 text-left text-sm bg-indigo-50/40 hover:bg-indigo-50 transition-colors inline-flex items-center gap-2">
+                    <UserPlus className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+                    <span className="font-semibold text-indigo-600">&quot;{linkQuery.trim()}&quot; yeni kişi olarak ekle</span>
+                  </button>
+                </div>
+              )}
+              {quickOpen && linkQuery.trim() && (
+                <div className="mt-2 p-3 rounded-xl bg-indigo-50/50 border border-indigo-100 space-y-2">
+                  {qError && <p className="text-xs text-rose-600">{qError}</p>}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={qPhone} onChange={(e) => setQPhone(e.target.value)} placeholder="Telefon *" inputMode="tel" className={INPUT} />
+                    <input value={qTitle} onChange={(e) => setQTitle(e.target.value)} placeholder="Unvan (Başhekim…)" className={INPUT} />
+                  </div>
+                  <button onClick={quickAdd} disabled={linking}
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-60">
+                    {linking && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Kişiyi Ekle ve Bağla
+                  </button>
+                  <p className="text-[10px] text-indigo-400">Müşteri kaydı oluşturulur ve {account.name} hesabına bağlanır.</p>
                 </div>
               )}
             </div>

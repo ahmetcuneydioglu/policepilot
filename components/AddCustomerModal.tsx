@@ -14,9 +14,12 @@ const INSURANCE_TYPES = [
   { value: "Yeşil Kart",  label: "🌍 Yeşil Kart",         group: "vehicle"   },
   { value: "Sağlık",      label: "🩺 Sağlık Sigortası",   group: "health"    },
   { value: "Tamamlayıcı", label: "🏥 Tamamlayıcı Sağlık", group: "health"    },
-  // "Hayat" bilinçli olarak YOK: uzun döngülü ürünler Portföy → Satış Hattı'nda
-  // açılır (İki Dünya mimarisi). OCR'dan gelen Hayat poliçeleri yine tanınır
-  // (TYPE_REVIEW_FIELDS["Hayat"] + KNOWN_POLICY_TYPES korunur).
+  // Uzun döngü ürünleri DÜZ ETİKETTİR — özel form tetiklemez; satış süreci
+  // Portföy → Satış Hattı'nda yaşar (İki Dünya). Kişi eklemeyi kilitlememek için var.
+  { value: "Hayat",       label: "❤️ Hayat",              group: "health"    },
+  { value: "BES",         label: "💰 BES",                group: "other"     },
+  { value: "Kurumsal Sağlık", label: "🏢 Kurumsal Sağlık", group: "other"    },
+  { value: "Grup Hayat",  label: "👨‍👩‍👧 Grup Hayat",        group: "other"     },
   { value: "DASK",        label: "🏠 DASK",               group: "property"  },
   { value: "Konut",       label: "🏡 Konut Sigortası",    group: "property"  },
   { value: "Seyahat",     label: "✈️ Seyahat Sağlık",    group: "other"     },

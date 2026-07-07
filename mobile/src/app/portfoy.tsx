@@ -18,6 +18,7 @@ import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
 import { useCachedQuery } from '@/lib/query';
 import { tapHaptic, successHaptic, errorHaptic, warningHaptic } from '@/lib/haptics';
+import { checkLimit, limitErrorMessage } from '@/lib/limits';
 import AddInteractionSheet from '@/components/AddInteractionSheet';
 import LifePolicySheet from '@/components/LifePolicySheet';
 import { channelMeta, outcomeLabel, fetchInteractions, Interaction } from '@/lib/relationship';
@@ -454,6 +455,11 @@ function AddDealSheet({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ id: string; name: string; phone: string | null }[]>([]);
   const [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
+  // Hızlı kişi ekle (eşleşme yoksa — Portföy'den çıkmadan müşteri kaydı)
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [qPhone, setQPhone] = useState('');
+  const [qTitle, setQTitle] = useState('');
+  const [qSaving, setQSaving] = useState(false);
 
   // Hesap seçimi (opsiyonel)
   const { data: accounts } = useCachedQuery(['accounts', agencyId], () => fetchAccounts(agencyId, 'agency_user'));
@@ -461,6 +467,7 @@ function AddDealSheet({
 
   const searchCustomers = useCallback(async (q: string) => {
     setQuery(q);
+    setQuickOpen(false);
     if (q.trim().length < 2) { setResults([]); return; }
     const { data } = await (supabase.from('customers') as any)
       .select('id, name, phone')
@@ -470,6 +477,37 @@ function AddDealSheet({
       .limit(6);
     setResults(data ?? []);
   }, [agencyId]);
+
+  // Hızlı kişi ekle: müşteri kaydı burada doğar, işe seçilmiş gelir
+  async function quickAdd() {
+    const nm = query.trim();
+    if (!nm) return;
+    if (!qPhone.trim()) { setError('Telefon gir — kişi kaydı için zorunlu.'); return; }
+    setQSaving(true);
+    setError('');
+    const lim = await checkLimit(agencyId, 'customers');
+    if (!lim.ok) {
+      setQSaving(false);
+      setError(limitErrorMessage('customers', lim));
+      return;
+    }
+    const { data, error: err } = await (supabase.from('customers') as any)
+      .insert({
+        agency_id: agencyId,
+        name: nm,
+        phone: qPhone.trim(),
+        insurance_type: product,
+        title: qTitle.trim() || null,
+        account_id: accountId,
+      })
+      .select('id, name')
+      .single();
+    setQSaving(false);
+    if (err) { errorHaptic(); setError('Kişi eklenemedi: ' + err.message); return; }
+    successHaptic();
+    setSelected({ id: data.id, name: data.name });
+    setQuickOpen(false); setQPhone(''); setQTitle(''); setResults([]);
+  }
 
   async function save() {
     if (!selected) { setError('Kişi seç — Satış Hattı ilişki üzerinden ilerler.'); return; }
@@ -544,8 +582,29 @@ function AddDealSheet({
                     {r.phone ? <Text style={styles.resultPhone}>{r.phone}</Text> : null}
                   </TouchableOpacity>
                 ))}
-                {query.trim().length >= 2 && results.length === 0 && (
-                  <Text style={styles.dealMeta}>Eşleşen müşteri yok — önce Müşteriler&apos;den ekle.</Text>
+                {/* Hızlı kişi ekle — Portföy'den çıkmadan müşteri kaydı */}
+                {query.trim().length >= 2 && !quickOpen && (
+                  <TouchableOpacity style={styles.quickAddRow}
+                    onPress={() => { tapHaptic(); setQuickOpen(true); }} activeOpacity={0.7}>
+                    <Text style={styles.quickAddText}>➕ &quot;{query.trim()}&quot; yeni kişi olarak ekle</Text>
+                  </TouchableOpacity>
+                )}
+                {quickOpen && query.trim().length >= 2 && (
+                  <View style={styles.quickAddBox}>
+                    <TextInput style={styles.input} value={qPhone} onChangeText={setQPhone}
+                      placeholder="Telefon *" placeholderTextColor={Colors.placeholder} keyboardType="phone-pad" />
+                    <TextInput style={styles.input} value={qTitle} onChangeText={setQTitle}
+                      placeholder="Unvan (Başhekim, İK Müdürü…)" placeholderTextColor={Colors.placeholder} />
+                    <TouchableOpacity style={[styles.quickAddBtn, qSaving && { opacity: 0.6 }]}
+                      onPress={quickAdd} disabled={qSaving} activeOpacity={0.85}>
+                      {qSaving ? <ActivityIndicator color="#fff" size="small" /> : (
+                        <Text style={styles.quickAddBtnText}>Kişiyi Ekle ve Seç</Text>
+                      )}
+                    </TouchableOpacity>
+                    <Text style={styles.quickAddHint}>
+                      Müşteri kaydı oluşturulur (tür: {product}{accountId ? ', hesaba bağlı' : ''}) ve bu işe seçilir.
+                    </Text>
+                  </View>
                 )}
               </>
             )}
@@ -705,6 +764,21 @@ const styles = StyleSheet.create({
   },
   resultName: { fontSize: 13.5, fontWeight: '600', color: Colors.heading },
   resultPhone: { fontSize: 12, color: Colors.secondary },
+  quickAddRow: {
+    backgroundColor: Colors.primaryLight, borderRadius: Radius.md,
+    paddingHorizontal: 12, paddingVertical: 11, marginTop: 6,
+  },
+  quickAddText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  quickAddBox: {
+    backgroundColor: Colors.primaryLight, borderRadius: Radius.md,
+    padding: 10, marginTop: 6, gap: 8,
+  },
+  quickAddBtn: {
+    backgroundColor: Colors.primary, borderRadius: Radius.md,
+    paddingVertical: 11, alignItems: 'center',
+  },
+  quickAddBtnText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  quickAddHint: { fontSize: 11, color: Colors.primary, opacity: 0.75 },
   saveBtn: {
     marginTop: Spacing.lg, backgroundColor: Colors.primary, borderRadius: Radius.md,
     paddingVertical: 15, alignItems: 'center',

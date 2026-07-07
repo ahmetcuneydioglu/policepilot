@@ -242,7 +242,7 @@ export default function PortfolioPage() {
 
       {showAdd && (
         <AddDealModal customers={customers} accounts={accounts} members={members}
-          managerial={managerial} selfId={selfId}
+          managerial={managerial} selfId={selfId} agencyId={agencyId}
           onClose={() => setShowAdd(false)}
           onCreated={() => { setShowAdd(false); load(); }} />
       )}

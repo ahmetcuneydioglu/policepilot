@@ -3,10 +3,14 @@
 /**
  * Yeni Portföy işi — Satış Hattı'na kayıt açar (POST /api/portfolio).
  * Kişi zorunlu (ilişki akışı kişiye bağlanır); hesap opsiyonel.
+ * Eşleşme yoksa Hızlı Kişi Ekle: ad + telefon + unvan → müşteri kaydı burada doğar
+ * (insurance_type = seçili ürün, hesap seçiliyse account_id bağlı).
  */
 
 import { useMemo, useState } from "react";
-import { X, Search, Loader2 } from "lucide-react";
+import { X, Search, Loader2, UserPlus } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { canAddCustomer, limitMessage, INACTIVE_MESSAGE } from "@/lib/limits";
 import { PORTFOLIO_PRODUCTS, DEAL_SOURCES, accountKindMeta, type Account } from "@/lib/portfolio";
 import type { Customer } from "@/lib/database.types";
 
@@ -15,21 +19,29 @@ type Member = { id: string; full_name: string };
 const INPUT = "w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500";
 const LABEL = "block text-xs font-semibold text-slate-600 mb-1.5";
 
+type SelectedPerson = { id: string; name: string; phone: string | null };
+
 export default function AddDealModal({
-  customers, accounts, members, managerial, selfId, onClose, onCreated,
+  customers, accounts, members, managerial, selfId, agencyId, onClose, onCreated,
 }: {
   customers: Customer[];
   accounts: Account[];
   members: Member[];
   managerial: boolean;
   selfId: string | null;
+  agencyId: string | null;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [product, setProduct] = useState<string>("Hayat");
-  const [customerId, setCustomerId] = useState<string>("");
+  const [selected, setSelected] = useState<SelectedPerson | null>(null);
   const [customerQuery, setCustomerQuery] = useState("");
+  // Hızlı kişi ekleme (eşleşme yoksa)
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [qPhone, setQPhone] = useState("");
+  const [qTitle, setQTitle] = useState("");
+  const [qSaving, setQSaving] = useState(false);
   const [accountId, setAccountId] = useState<string>("");
   const [ownerId, setOwnerId] = useState<string>(selfId ?? "");
   const [premium, setPremium] = useState("");
@@ -46,10 +58,38 @@ export default function AddDealModal({
     return list.slice(0, 8);
   }, [customers, customerQuery]);
 
-  const selected = customers.find((c) => c.id === customerId) ?? null;
+  // Hızlı kişi ekle: müşteri kaydı burada doğar, işe seçilmiş gelir
+  const quickAdd = async () => {
+    const nm = customerQuery.trim();
+    if (!nm) return;
+    if (!qPhone.trim()) { setError("Telefon girin — kişi kaydı için zorunlu."); return; }
+    if (!agencyId) { setError("Bağlı acente bulunamadı."); return; }
+    setQSaving(true);
+    setError("");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lim = await canAddCustomer(supabase as any, agencyId);
+    if (!lim.isActive) { setQSaving(false); setError(INACTIVE_MESSAGE); return; }
+    if (!lim.ok) { setQSaving(false); setError(`${limitMessage("customer")} (${lim.current}/${lim.max})`); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error: err } = await (supabase.from("customers") as any)
+      .insert({
+        agency_id: agencyId,
+        name: nm,
+        phone: qPhone.trim(),
+        insurance_type: product,
+        title: qTitle.trim() || null,
+        account_id: accountId || null,
+      })
+      .select("id, name, phone")
+      .single();
+    setQSaving(false);
+    if (err) { setError("Kişi eklenemedi: " + err.message); return; }
+    setSelected(data as SelectedPerson);
+    setQuickOpen(false); setQPhone(""); setQTitle("");
+  };
 
   const save = async () => {
-    if (!customerId) { setError("Kişi seçin — Satış Hattı ilişki üzerinden ilerler."); return; }
+    if (!selected) { setError("Kişi seçin — Satış Hattı ilişki üzerinden ilerler."); return; }
     const t = title.trim() || `${selected?.name ?? "Müşteri"} — ${product}`;
     setSaving(true);
     setError("");
@@ -59,7 +99,7 @@ export default function AddDealModal({
       body: JSON.stringify({
         title: t,
         product_interest: product,
-        customer_id: customerId,
+        customer_id: selected.id,
         account_id: accountId || null,
         owner_id: managerial && ownerId ? ownerId : undefined,
         expected_premium: premium.trim() ? Number(premium.replace(",", ".")) : null,
@@ -104,26 +144,45 @@ export default function AddDealModal({
             {selected ? (
               <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-indigo-50 border border-indigo-100">
                 <span className="text-sm font-semibold text-indigo-800">{selected.name}{selected.phone ? ` · ${selected.phone}` : ""}</span>
-                <button onClick={() => { setCustomerId(""); setCustomerQuery(""); }} className="text-xs font-semibold text-indigo-500 hover:text-indigo-700">Değiştir</button>
+                <button onClick={() => { setSelected(null); setCustomerQuery(""); setQuickOpen(false); }} className="text-xs font-semibold text-indigo-500 hover:text-indigo-700">Değiştir</button>
               </div>
             ) : (
               <>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                  <input value={customerQuery} onChange={(e) => setCustomerQuery(e.target.value)}
+                  <input value={customerQuery} onChange={(e) => { setCustomerQuery(e.target.value); setQuickOpen(false); }}
                     placeholder="Müşteri adı veya telefon ara…" className={`${INPUT} pl-9`} />
                 </div>
                 {customerQuery.trim() && (
                   <div className="mt-1 border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-50">
-                    {filteredCustomers.length === 0 ? (
-                      <p className="px-3 py-2.5 text-xs text-slate-400">Eşleşen müşteri yok — önce Müşteriler&apos;den ekleyin.</p>
-                    ) : filteredCustomers.map((c) => (
-                      <button key={c.id} onClick={() => setCustomerId(c.id)}
+                    {filteredCustomers.map((c) => (
+                      <button key={c.id} onClick={() => setSelected({ id: c.id, name: c.name, phone: c.phone ?? null })}
                         className="w-full px-3 py-2 text-left text-sm hover:bg-indigo-50/60 transition-colors">
                         <span className="font-medium text-slate-800">{c.name}</span>
                         {c.phone && <span className="text-slate-400 text-xs ml-2">{c.phone}</span>}
                       </button>
                     ))}
+                    {/* Hızlı kişi ekle — Portföy'den çıkmadan müşteri kaydı */}
+                    <button onClick={() => setQuickOpen(true)}
+                      className="w-full px-3 py-2 text-left text-sm bg-indigo-50/40 hover:bg-indigo-50 transition-colors inline-flex items-center gap-2">
+                      <UserPlus className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+                      <span className="font-semibold text-indigo-600">&quot;{customerQuery.trim()}&quot; yeni kişi olarak ekle</span>
+                    </button>
+                  </div>
+                )}
+                {quickOpen && customerQuery.trim() && (
+                  <div className="mt-2 p-3 rounded-xl bg-indigo-50/50 border border-indigo-100 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={qPhone} onChange={(e) => setQPhone(e.target.value)} placeholder="Telefon *" inputMode="tel" className={INPUT} />
+                      <input value={qTitle} onChange={(e) => setQTitle(e.target.value)} placeholder="Unvan (Başhekim…)" className={INPUT} />
+                    </div>
+                    <button onClick={quickAdd} disabled={qSaving}
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-60">
+                      {qSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Kişiyi Ekle ve Seç
+                    </button>
+                    <p className="text-[10px] text-indigo-400">
+                      Müşteri kaydı oluşturulur (tür: {product}{accountId ? ", hesaba bağlı" : ""}) ve bu işe seçilir.
+                    </p>
                   </div>
                 )}
               </>
