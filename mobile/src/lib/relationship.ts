@@ -23,6 +23,8 @@ export type Interaction = {
   next_action: string | null;
   next_action_date: string | null;
   next_action_done: boolean;
+  /** Portföy: görüşme bir Satış Hattı işine bağlıysa (opsiyonel) */
+  deal_id?: string | null;
   created_at: string;
 };
 
@@ -47,7 +49,8 @@ export const LOCATIONS = [
 ] as const;
 
 export const INTERACTION_PRODUCTS = [
-  'Trafik', 'Kasko', 'TSS', 'Özel Sağlık', 'DASK', 'Konut', 'Seyahat', 'Ferdi Kaza', 'Diğer',
+  'Trafik', 'Kasko', 'TSS', 'Özel Sağlık', 'DASK', 'Konut', 'Seyahat', 'Ferdi Kaza',
+  'Hayat', 'BES', 'Kurumsal Sağlık', 'Grup Hayat', 'Diğer',
 ] as const;
 
 export const OUTCOMES = [
@@ -123,6 +126,8 @@ export type NewInteraction = {
   note: string | null;
   next_action: string | null;
   next_action_date: string | null;
+  /** Portföy: görüşmeyi bir Satış Hattı işine bağla (opsiyonel) */
+  deal_id?: string | null;
 };
 
 export async function addInteraction(input: NewInteraction): Promise<{ error: string | null }> {

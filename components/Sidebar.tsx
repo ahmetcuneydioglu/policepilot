@@ -24,6 +24,7 @@ import {
   MessageCircle, UserCog, Bot, Settings, Building2, Radar, Gauge,
   Zap, LogOut, Search, Plus, ChevronsLeft, ChevronsRight, ChevronDown,
   UserPlus, Target, FilePlus2, ListTodo, Send, Sparkles, Menu, X,
+  KanbanSquare, Landmark,
   type LucideIcon,
 } from "lucide-react";
 
@@ -159,6 +160,7 @@ export default function Sidebar() {
   const NEW_ITEMS: { href: string; label: string; Icon: LucideIcon }[] = [
     { href: "/customers?new=1", label: "Yeni Müşteri", Icon: UserPlus },
     { href: "/firsatlar?new=1", label: "Yeni Satış Fırsatı", Icon: Target },
+    { href: "/portfoy?new=1", label: "Yeni Portföy İşi", Icon: KanbanSquare },
     { href: "/policies?new=1", label: "Yeni Poliçe", Icon: FilePlus2 },
     { href: "/dashboard?task=1", label: "Yeni Görev", Icon: ListTodo },
     { href: "/whatsapp-queue", label: "WhatsApp Gönder", Icon: Send },
@@ -173,6 +175,14 @@ export default function Sidebar() {
       items: [
         { href: "/firsatlar", label: "Satış Fırsatları", Icon: Filter, active: pathname.startsWith("/firsatlar"), badge: leadBadge, dot: unreadCount > 0 },
         { href: "/customers", label: "Müşteriler", Icon: Users, active: pathname.startsWith("/customers") },
+      ],
+    },
+    {
+      // İki Dünya: uzun satış döngüsü (Hayat/BES/kurumsal) — kısa döngü Satış'ta kalır
+      key: "portfoy", label: "Portföy",
+      items: [
+        { href: "/portfoy", label: "Satış Hattı", Icon: KanbanSquare, active: pathname.startsWith("/portfoy") },
+        { href: "/hesaplar", label: "Hesaplar", Icon: Landmark, active: pathname.startsWith("/hesaplar") },
       ],
     },
     {

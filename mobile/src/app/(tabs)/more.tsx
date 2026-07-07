@@ -100,6 +100,13 @@ export default function MoreScreen() {
         { emoji: '🔔', symbol: 'bell.fill', label: 'Bildirimler', href: '/notifications' },
       ],
     },
+    {
+      // İki Dünya: uzun satış döngüsü (Hayat/BES/kurumsal) — kısa döngü Fırsatlar'da
+      title: 'PORTFÖY',
+      rows: [
+        { emoji: '🧭', symbol: 'point.3.connected.trianglepath.dotted', label: 'Satış Hattı', href: '/portfoy' },
+      ],
+    },
     ...(isManager ? [{
       title: 'YÖNETİM',
       rows: [

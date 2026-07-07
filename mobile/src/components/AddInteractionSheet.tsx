@@ -43,7 +43,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function AddInteractionSheet({
-  customerId, agencyId, staffId, staffName, onClose, onSaved, initialChannel,
+  customerId, agencyId, staffId, staffName, onClose, onSaved, initialChannel, dealId, initialProduct,
 }: {
   customerId: string;
   agencyId: string;
@@ -53,13 +53,16 @@ export default function AddInteractionSheet({
   onSaved: () => void;
   /** Nudge akışı: "aramadan döndün → kaydet?" kanal ön-seçili gelir */
   initialChannel?: string;
+  /** Portföy: görüşme bir Satış Hattı işinden açıldıysa işe bağlanır */
+  dealId?: string;
+  initialProduct?: string;
 }) {
   const [channel, setChannel] = useState(initialChannel ?? 'phone');
   const [location, setLocation] = useState<string | null>(null);
   const [locationNote, setLocationNote] = useState('');
   const [when, setWhen] = useState(new Date());
   const [showWhenPicker, setShowWhenPicker] = useState(false); // Android
-  const [product, setProduct] = useState<string | null>(null);
+  const [product, setProduct] = useState<string | null>(initialProduct ?? null);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [nextAction, setNextAction] = useState<string | null>(null);
@@ -83,6 +86,7 @@ export default function AddInteractionSheet({
       note: note.trim() || null,
       next_action: nextAction,
       next_action_date: nextAction && nextDate ? toLocalISO(nextDate) : null,
+      deal_id: dealId ?? null,
     });
     setSaving(false);
     if (error) {

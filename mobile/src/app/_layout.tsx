@@ -292,6 +292,7 @@ function RootLayoutInner() {
         <Stack.Screen name="whatsapp"                options={{ presentation: 'card' }} />
         <Stack.Screen name="evraklar"                options={{ presentation: 'card' }} />
         <Stack.Screen name="gorevler"                options={{ presentation: 'card' }} />
+        <Stack.Screen name="portfoy"                 options={{ presentation: 'card' }} />
         <Stack.Screen name="performans"              options={{ presentation: 'card' }} />
         <Stack.Screen name="raporlar"                options={{ presentation: 'card' }} />
         <Stack.Screen name="quote-center"            options={{ presentation: 'card' }} />

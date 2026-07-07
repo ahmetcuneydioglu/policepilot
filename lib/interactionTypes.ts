@@ -23,6 +23,8 @@ export type Interaction = {
   next_action: string | null;
   next_action_date: string | null;
   next_action_done: boolean;
+  /** Portföy: görüşme bir Satış Hattı işine bağlıysa (opsiyonel) */
+  deal_id?: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
 };
@@ -48,7 +50,8 @@ export const LOCATIONS = [
 ] as const;
 
 export const INTERACTION_PRODUCTS = [
-  "Trafik", "Kasko", "TSS", "Özel Sağlık", "DASK", "Konut", "Seyahat", "Ferdi Kaza", "Diğer",
+  "Trafik", "Kasko", "TSS", "Özel Sağlık", "DASK", "Konut", "Seyahat", "Ferdi Kaza",
+  "Hayat", "BES", "Kurumsal Sağlık", "Grup Hayat", "Diğer",
 ] as const;
 
 export const OUTCOMES = [
