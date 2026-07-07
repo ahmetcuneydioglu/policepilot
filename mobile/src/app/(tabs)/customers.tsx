@@ -14,7 +14,6 @@ import { useProfile } from '@/lib/useProfile';
 import DarkHero, { heroGlass } from '@/components/DarkHero';
 import LimitModal from '@/components/LimitModal';
 import BulkPolicyImportMobile from '@/components/BulkPolicyImportMobile';
-import LifePolicySheet from '@/components/LifePolicySheet';
 import { checkLimit, limitErrorMessage } from '@/lib/limits';
 import type { LimitResult } from '@/lib/limits';
 
@@ -28,7 +27,8 @@ const INSURANCE_TYPES = [
   { value: 'Yeşil Kart',   label: '🌍 Yeşil Kart',         group: 'vehicle'   },
   { value: 'Sağlık',       label: '🩺 Sağlık Sigortası',   group: 'health'    },
   { value: 'Tamamlayıcı',  label: '🏥 Tamamlayıcı Sağlık', group: 'health'    },
-  { value: 'Hayat',        label: '❤️ Hayat Sigortası',    group: 'life'      },
+  // "Hayat" bilinçli olarak YOK: uzun döngülü ürünler Portföy → Satış Hattı'nda
+  // yönetilir (İki Dünya). LifePolicySheet, işin "Poliçeleşti" kapanış adımıdır.
   { value: 'DASK',         label: '🏠 DASK',               group: 'property'  },
   { value: 'Konut',        label: '🏡 Konut Sigortası',    group: 'property'  },
   { value: 'Seyahat',      label: '✈️ Seyahat Sağlık',    group: 'other'     },
@@ -101,13 +101,10 @@ function AddCustomerModal({
   agencyId,
   onClose,
   onSaved,
-  onLifeSaved,
 }: {
   agencyId: string | null;
   onClose: () => void;
   onSaved: () => void;
-  /** Hayat seçildiyse: müşteri kaydedildi → ürün-özel poliçe formu açılsın */
-  onLifeSaved?: (c: { id: string; name: string }) => void;
 }) {
   const [name, setName]               = useState('');
   const [phone, setPhone]             = useState('');
@@ -193,20 +190,12 @@ function AddCustomerModal({
     };
     if (agencyId) payload.agency_id = agencyId;
 
-    const { data: newCust, error: err } = await (supabase.from('customers') as any)
+    const { error: err } = await (supabase.from('customers') as any)
       .insert(payload).select('id').single();
 
     if (err) {
       setError('Kaydedilemedi: ' + err.message);
       setSaving(false);
-      return;
-    }
-
-    // ❤️ Hayat: ürün-özel form devralır (poliçe + prim takvimi orada oluşur).
-    // agencyId yoksa (acentesiz süper admin) normal akışa düş — sessiz kopuş olmasın.
-    if (group === 'life' && agencyId && onLifeSaved) {
-      setSaving(false);
-      onLifeSaved({ id: newCust.id, name: name.trim() });
       return;
     }
 
@@ -345,18 +334,8 @@ function AddCustomerModal({
                 <SectionTitle title={
                   group === 'vehicle' ? 'Araç Bilgileri' :
                   group === 'health'  ? 'Sağlık Bilgileri' :
-                  group === 'property'? 'Konut Bilgileri' :
-                  group === 'life'    ? 'Hayat Sigortası'  : 'Ek Bilgiler'
+                  group === 'property'? 'Konut Bilgileri' : 'Ek Bilgiler'
                 } />
-
-                {group === 'life' && (
-                  <View style={styles.infoHint}>
-                    <Text style={styles.infoHintText}>
-                      ❤️ Müşteri kaydedilince Hayat Sigortası formu açılacak: poliçe bilgileri,
-                      sigortalı, teminatlar, lehtarlar ve otomatik prim takvimi.
-                    </Text>
-                  </View>
-                )}
 
                 {group === 'vehicle' && (
                   <>
@@ -458,8 +437,6 @@ function AddCustomerModal({
                   </Field>
                 )}
 
-                {/* Policy end date (Hayat'ta ürün formu yönetir) */}
-                {group !== 'life' && (<>
                 <Field label="Poliçe Bitiş Tarihi">
                   <TextInput style={styles.input} value={policyEndDate} onChangeText={setEndDate} placeholder="2026-01-01" placeholderTextColor={Colors.secondary} />
                 </Field>
@@ -468,7 +445,6 @@ function AddCustomerModal({
                     <Text style={styles.infoHintText}>✓ Poliçe kaydı da otomatik oluşturulacak.</Text>
                   </View>
                 ) : null}
-                </>)}
               </>
             ) : null}
 
@@ -511,7 +487,6 @@ export default function CustomersScreen() {
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addVisible, setAddVisible] = useState(false);
-  const [lifeFor, setLifeFor] = useState<{ id: string; name: string } | null>(null);
   const [bulkOpen, setBulkOpen]   = useState(false);
 
   async function fetchCustomers() {
@@ -630,18 +605,6 @@ export default function CustomersScreen() {
           agencyId={agencyId}
           onClose={() => setAddVisible(false)}
           onSaved={() => { setAddVisible(false); fetchCustomers(); }}
-          onLifeSaved={(c) => { setAddVisible(false); fetchCustomers(); setTimeout(() => setLifeFor(c), 400); /* iOS modal dismiss/present yarışı */ }}
-        />
-      )}
-
-      {/* Hayat Sigortası — ürün-özel form (Yeni Müşteri'de Hayat seçilince) */}
-      {lifeFor && agencyId && (
-        <LifePolicySheet
-          customerId={lifeFor.id}
-          customerName={lifeFor.name}
-          agencyId={agencyId}
-          onClose={() => setLifeFor(null)}
-          onSaved={() => { setLifeFor(null); fetchCustomers(); }}
         />
       )}
     </View>
