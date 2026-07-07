@@ -103,7 +103,7 @@ export default function PortfolioScreen() {
   const [filter, setFilter] = useState<'all' | 'lost' | DealStageKey>('all');
   const [addOpen, setAddOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [lifeFor, setLifeFor] = useState<{ id: string; name: string } | null>(null);
+  const [lifeFor, setLifeFor] = useState<{ id: string; name: string; agencyId: string } | null>(null);
 
   const list = useMemo(() => {
     const all = deals ?? [];
@@ -122,18 +122,19 @@ export default function PortfolioScreen() {
     return all.filter((d) => d.status === 'open' && d.stage === key).length;
   }, [deals]);
 
-  // Poliçeleşti + Hayat → LifePolicySheet kapanış adımı
+  // Poliçeleşti + Hayat → LifePolicySheet kapanış adımı.
+  // Acente, profilden değil İŞİN KENDİSİNDEN gelir (süper adminde profil acentesizdir).
   const maybeOfferLifeSheet = useCallback((deal: Deal, newStage: DealStageKey) => {
     if (newStage !== 'policelesti') return;
-    if (deal.product_interest !== 'Hayat' || !deal.customer_id || !agencyId) return;
+    if (deal.product_interest !== 'Hayat' || !deal.customer_id) return;
     const name = deal.customers?.name ?? deal.title;
     setTimeout(() => {
       Alert.alert('🎉 Poliçeleşti', `${name} için Hayat poliçesi ve prim takvimini şimdi oluşturmak ister misin?`, [
         { text: 'Sonra', style: 'cancel' },
-        { text: 'Poliçeyi Oluştur', onPress: () => setLifeFor({ id: deal.customer_id!, name }) },
+        { text: 'Poliçeyi Oluştur', onPress: () => setLifeFor({ id: deal.customer_id!, name, agencyId: deal.agency_id }) },
       ]);
     }, 350);
-  }, [agencyId]);
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -184,10 +185,11 @@ export default function PortfolioScreen() {
         />
       )}
 
-      {/* Yeni iş */}
-      {addOpen && agencyId && (
+      {/* Yeni iş — agencyId null olabilir (süper admin): acente, seçilen müşteriden türer */}
+      {addOpen && (
         <AddDealSheet
           agencyId={agencyId}
+          role={role}
           ownerId={userId ?? null}
           ownerName={profile?.full_name ?? null}
           onClose={() => setAddOpen(false)}
@@ -199,7 +201,6 @@ export default function PortfolioScreen() {
       {openDeal && (
         <DealDetailSheet
           deal={openDeal}
-          agencyId={agencyId}
           userId={userId ?? null}
           staffName={profile?.full_name ?? null}
           onClose={() => setOpenId(null)}
@@ -209,12 +210,12 @@ export default function PortfolioScreen() {
         />
       )}
 
-      {/* Poliçeleşti kapanışı: Hayat poliçesi + prim takvimi */}
-      {lifeFor && agencyId && (
+      {/* Poliçeleşti kapanışı: Hayat poliçesi + prim takvimi (acente = işin acentesi) */}
+      {lifeFor && (
         <LifePolicySheet
           customerId={lifeFor.id}
           customerName={lifeFor.name}
-          agencyId={agencyId}
+          agencyId={lifeFor.agencyId}
           onClose={() => setLifeFor(null)}
           onSaved={() => { setLifeFor(null); refetch(); }}
         />
@@ -225,10 +226,9 @@ export default function PortfolioScreen() {
 
 /* ── İş detayı sheet ──────────────────────────────────────────────────────── */
 function DealDetailSheet({
-  deal, agencyId, userId, staffName, onClose, onChanged, onStageChanged, onOpenCustomer,
+  deal, userId, staffName, onClose, onChanged, onStageChanged, onOpenCustomer,
 }: {
   deal: Deal;
-  agencyId: string | null;
   userId: string | null;
   staffName: string | null;
   onClose: () => void;
@@ -402,7 +402,7 @@ function DealDetailSheet({
                 );
               })
             )}
-            {deal.customer_id && agencyId && (
+            {deal.customer_id && (
               <TouchableOpacity style={styles.addInteractionBtn} onPress={() => setInteractionOpen(true)} activeOpacity={0.85}>
                 <Text style={styles.addInteractionText}>🤝 Görüşme Ekle</Text>
               </TouchableOpacity>
@@ -415,10 +415,10 @@ function DealDetailSheet({
           </Text>
         </ScrollView>
 
-        {interactionOpen && deal.customer_id && agencyId && (
+        {interactionOpen && deal.customer_id && (
           <AddInteractionSheet
             customerId={deal.customer_id}
-            agencyId={agencyId}
+            agencyId={deal.agency_id}
             staffId={userId}
             staffName={staffName}
             dealId={deal.id}
@@ -435,9 +435,11 @@ function DealDetailSheet({
 
 /* ── Yeni iş sheet ────────────────────────────────────────────────────────── */
 function AddDealSheet({
-  agencyId, ownerId, ownerName, onClose, onSaved,
+  agencyId, role, ownerId, ownerName, onClose, onSaved,
 }: {
-  agencyId: string;
+  /** null olabilir (süper admin) — acente, seçilen müşteriden türetilir */
+  agencyId: string | null;
+  role: string | null;
   ownerId: string | null;
   ownerName: string | null;
   onClose: () => void;
@@ -453,8 +455,8 @@ function AddDealSheet({
 
   // Kişi seçimi (zorunlu — ilişki akışı kişiye bağlanır)
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<{ id: string; name: string; phone: string | null }[]>([]);
-  const [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
+  const [results, setResults] = useState<{ id: string; name: string; phone: string | null; agency_id: string | null }[]>([]);
+  const [selected, setSelected] = useState<{ id: string; name: string; agencyId: string | null } | null>(null);
   // Hızlı kişi ekle (eşleşme yoksa — Portföy'den çıkmadan müşteri kaydı)
   const [quickOpen, setQuickOpen] = useState(false);
   const [qPhone, setQPhone] = useState('');
@@ -462,19 +464,20 @@ function AddDealSheet({
   const [qSaving, setQSaving] = useState(false);
 
   // Hesap seçimi (opsiyonel)
-  const { data: accounts } = useCachedQuery(['accounts', agencyId], () => fetchAccounts(agencyId, 'agency_user'));
+  const { data: accounts } = useCachedQuery(['accounts', agencyId], () => fetchAccounts(agencyId, role));
   const [accountId, setAccountId] = useState<string | null>(null);
 
   const searchCustomers = useCallback(async (q: string) => {
     setQuery(q);
     setQuickOpen(false);
     if (q.trim().length < 2) { setResults([]); return; }
-    const { data } = await (supabase.from('customers') as any)
-      .select('id, name, phone')
-      .eq('agency_id', agencyId)
+    let sq = (supabase.from('customers') as any)
+      .select('id, name, phone, agency_id')
       .ilike('name', `%${q.trim()}%`)
       .order('name')
       .limit(6);
+    if (agencyId) sq = sq.eq('agency_id', agencyId); // süper admin: tüm acenteler (RLS zaten korur)
+    const { data } = await sq;
     setResults(data ?? []);
   }, [agencyId]);
 
@@ -505,17 +508,20 @@ function AddDealSheet({
     setQSaving(false);
     if (err) { errorHaptic(); setError('Kişi eklenemedi: ' + err.message); return; }
     successHaptic();
-    setSelected({ id: data.id, name: data.name });
+    setSelected({ id: data.id, name: data.name, agencyId });
     setQuickOpen(false); setQPhone(''); setQTitle(''); setResults([]);
   }
 
   async function save() {
     if (!selected) { setError('Kişi seç — Satış Hattı ilişki üzerinden ilerler.'); return; }
+    // Acente: profilden; yoksa (süper admin) seçilen müşterinin acentesinden
+    const effectiveAgency = agencyId ?? selected.agencyId;
+    if (!effectiveAgency) { setError('Bu müşterinin bağlı acentesi yok — iş açılamaz.'); return; }
     setSaving(true);
     setError('');
     const premiumNum = premium.trim() ? parseFloat(premium.replace(/\./g, '').replace(',', '.')) : NaN;
     const { error: err } = await addDeal({
-      agency_id: agencyId,
+      agency_id: effectiveAgency,
       customer_id: selected.id,
       account_id: accountId,
       title: title.trim() || `${selected.name} — ${product}`,
@@ -577,13 +583,14 @@ function AddDealSheet({
                 />
                 {results.map((r) => (
                   <TouchableOpacity key={r.id} style={styles.resultRow}
-                    onPress={() => { tapHaptic(); setSelected({ id: r.id, name: r.name }); setResults([]); }}>
+                    onPress={() => { tapHaptic(); setSelected({ id: r.id, name: r.name, agencyId: r.agency_id }); setResults([]); }}>
                     <Text style={styles.resultName}>{r.name}</Text>
                     {r.phone ? <Text style={styles.resultPhone}>{r.phone}</Text> : null}
                   </TouchableOpacity>
                 ))}
-                {/* Hızlı kişi ekle — Portföy'den çıkmadan müşteri kaydı */}
-                {query.trim().length >= 2 && !quickOpen && (
+                {/* Hızlı kişi ekle — Portföy'den çıkmadan müşteri kaydı.
+                    Acentesiz süper adminde gizli: yeni kişinin acentesi bilinemez. */}
+                {query.trim().length >= 2 && !quickOpen && agencyId && (
                   <TouchableOpacity style={styles.quickAddRow}
                     onPress={() => { tapHaptic(); setQuickOpen(true); }} activeOpacity={0.7}>
                     <Text style={styles.quickAddText}>➕ &quot;{query.trim()}&quot; yeni kişi olarak ekle</Text>
