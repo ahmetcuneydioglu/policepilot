@@ -120,6 +120,18 @@ function sevTone(s: CoachingSeverity) {
   }
 }
 
+// Saha Günlüğü (Portföy Faz 4) — /api/portfolio/insights sözleşmesi
+type SahaStaff = {
+  id: string; name: string;
+  interactions: number; phone: number; visits: number; whatsapp: number;
+  quotes_sent: number; won: number; open_deals: number; stale_deals: number;
+};
+type SahaInsights = {
+  totals: { interactions: number; visits: number; quotes_sent: number; won: number };
+  staff: SahaStaff[];
+  stale_deals: { id: string; title: string; customer_name: string | null; owner_name: string | null; days: number }[];
+};
+
 export default function PerformansScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -133,6 +145,9 @@ export default function PerformansScreen() {
   const [coaching, setCoaching] = useState<CoachingResponse | null>(null);
   const [coachLoading, setCoachLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
+
+  // Saha Günlüğü (Portföy Faz 4) — haftalık kokpit, best-effort
+  const [saha, setSaha] = useState<SahaInsights | null>(null);
 
   const loadPerf = useCallback(async () => {
     setError(null);
@@ -166,16 +181,26 @@ export default function PerformansScreen() {
     }
   }, []);
 
+  const loadSaha = useCallback(async () => {
+    try {
+      const res = await apiGet<SahaInsights>('/api/portfolio/insights');
+      setSaha(res);
+    } catch {
+      // İkincil bölüm — sessizce geç (Portföy kullanılmıyorsa/deploy eskiyse ekran yine çalışır)
+    }
+  }, []);
+
   useEffect(() => {
     loadPerf();
     loadCoaching(false);
-  }, [loadPerf, loadCoaching]);
+    loadSaha();
+  }, [loadPerf, loadCoaching, loadSaha]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadPerf(), loadCoaching(false)]);
+    await Promise.all([loadPerf(), loadCoaching(false), loadSaha()]);
     setRefreshing(false);
-  }, [loadPerf, loadCoaching]);
+  }, [loadPerf, loadCoaching, loadSaha]);
 
   // Yalnız çalışanlar (owner hariç), skora göre azalan
   const staff = useMemo(
@@ -248,6 +273,47 @@ export default function PerformansScreen() {
                   })}
                 </View>
               </View>
+
+              {/* ══ SAHA GÜNLÜĞÜ · BU HAFTA (Portföy kokpiti) ═══════════════ */}
+              {saha && (saha.totals.interactions > 0 || saha.totals.quotes_sent > 0 || saha.totals.won > 0 || saha.stale_deals.length > 0) && (
+                <>
+                  <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>SAHA GÜNLÜĞÜ · BU HAFTA</Text>
+                  <Text style={styles.sectionSub}>
+                    {saha.totals.interactions} görüşme · {saha.totals.visits} ziyaret · {saha.totals.quotes_sent} teklif · {saha.totals.won} poliçe
+                  </Text>
+                  <View style={styles.sahaCard}>
+                    {saha.staff.filter((s) => s.interactions + s.quotes_sent + s.won + s.open_deals > 0).map((s, i, arr) => (
+                      <View key={s.id} style={[styles.sahaRow, i < arr.length - 1 && styles.sahaRowBorder]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.sahaName} numberOfLines={1}>{s.name}</Text>
+                          <Text style={styles.sahaSub}>
+                            🤝 {s.interactions} görüşme (📞{s.phone} · 🚶{s.visits} · 💬{s.whatsapp}) · 📄 {s.quotes_sent} · 🛡 {s.won}
+                          </Text>
+                        </View>
+                        {s.stale_deals > 0 ? (
+                          <View style={styles.sahaStaleBadge}>
+                            <Text style={styles.sahaStaleText}>⏳ {s.stale_deals}</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.sahaOpen}>{s.open_deals} açık iş</Text>
+                        )}
+                      </View>
+                    ))}
+                    {saha.stale_deals.length > 0 && (
+                      <View style={styles.sahaStaleBox}>
+                        <Text style={styles.sahaStaleTitle}>BEKLETİLEN İŞLER</Text>
+                        {saha.stale_deals.slice(0, 4).map((d) => (
+                          <TouchableOpacity key={d.id} onPress={() => router.push(`/portfoy?open=${d.id}`)} activeOpacity={0.7}>
+                            <Text style={styles.sahaStaleRow} numberOfLines={1}>
+                              • {d.customer_name ?? d.title} — {d.owner_name ?? '?'} · <Text style={{ fontWeight: '800' }}>{d.days} gün</Text> temassız
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
 
               {/* ══ 3) PERSONEL SIRALAMASI ═══════════════════════════════════ */}
               <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>PERSONEL SIRALAMASI</Text>
@@ -531,6 +597,19 @@ const styles = StyleSheet.create({
 
   // Bar
   barCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.sm, ...Shadow.sm },
+
+  // Saha Günlüğü (Portföy kokpiti)
+  sahaCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, ...Shadow.sm, overflow: 'hidden' },
+  sahaRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 11 },
+  sahaRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  sahaName: { ...Type.subhead, fontSize: 14 },
+  sahaSub: { ...Type.caption, marginTop: 2 },
+  sahaOpen: { ...Type.caption, color: Colors.placeholder, marginLeft: 8 },
+  sahaStaleBadge: { backgroundColor: Colors.dangerBg, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 8 },
+  sahaStaleText: { fontSize: 11, fontWeight: '800', color: Colors.danger },
+  sahaStaleBox: { backgroundColor: Colors.warningBg, paddingHorizontal: Spacing.md, paddingVertical: 10, gap: 4 },
+  sahaStaleTitle: { fontSize: 10, fontWeight: '800', color: '#D97706', letterSpacing: 0.6, marginBottom: 2 },
+  sahaStaleRow: { fontSize: 12, color: '#D97706', lineHeight: 18 }, // warningBg üstünde iki temada da okunur (gorevler ile aynı desen)
   barTitle: { ...Type.label, marginBottom: Spacing.md },
   barRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 86 },
   barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },

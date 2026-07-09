@@ -24,7 +24,7 @@ import {
   MessageCircle, UserCog, Bot, Settings, Building2, Radar, Gauge,
   Zap, LogOut, Search, Plus, ChevronsLeft, ChevronsRight, ChevronDown,
   UserPlus, Target, FilePlus2, ListTodo, Send, Sparkles, Menu, X,
-  KanbanSquare, Landmark,
+  KanbanSquare, Landmark, ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -183,6 +183,7 @@ export default function Sidebar() {
       items: [
         { href: "/portfoy", label: "Satış Hattı", Icon: KanbanSquare, active: pathname.startsWith("/portfoy") },
         { href: "/hesaplar", label: "Hesaplar", Icon: Landmark, active: pathname.startsWith("/hesaplar") },
+        { href: "/saha", label: "Saha Günlüğü", Icon: ClipboardList, active: pathname.startsWith("/saha"), show: managerial },
       ],
     },
     {
