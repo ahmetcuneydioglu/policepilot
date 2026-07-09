@@ -8,14 +8,19 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import {
   Interaction, CHANNELS, LOCATIONS, INTERACTION_PRODUCTS, OUTCOMES, NEXT_ACTIONS,
   CUSTOMER_TAGS, channelMeta, outcomeMeta, nextActionMeta, locationMeta, AUTO_SOURCE_META,
 } from "@/lib/interactionTypes";
+import { dealStageOf } from "@/lib/portfolio";
 import type { CustomerTimelineEvent } from "./types";
-import { Plus, X, HeartHandshake, Sparkles, RefreshCw } from "lucide-react";
+import { Plus, X, HeartHandshake, Sparkles, RefreshCw, KanbanSquare } from "lucide-react";
+
+/** Müşterinin açık Satış Hattı işi (Portföy köprüsü) */
+type OpenDeal = { id: string; title: string; stage: string; product_interest: string };
 
 // Türetilmiş (eski) timeline olay ikonları
 const DERIVED_ICON: Record<string, string> = {
@@ -52,6 +57,7 @@ export default function RelationshipTab({
 }) {
   const { profile, agencyId } = useAuth();
   const [items, setItems] = useState<Interaction[]>([]);
+  const [deals, setDeals] = useState<OpenDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -74,13 +80,24 @@ export default function RelationshipTab({
   }
 
   const load = useCallback(async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase.from("customer_interactions") as any)
-      .select("*")
-      .eq("customer_id", customerId)
-      .order("occurred_at", { ascending: false })
-      .limit(200);
-    setItems((data ?? []) as Interaction[]);
+    const [intRes, dealRes] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase.from("customer_interactions") as any)
+        .select("*")
+        .eq("customer_id", customerId)
+        .order("occurred_at", { ascending: false })
+        .limit(200),
+      // Portföy: açık Satış Hattı işleri (görüşmeyi işe bağlamak + şerit için)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase.from("deals") as any)
+        .select("id, title, stage, product_interest")
+        .eq("customer_id", customerId)
+        .eq("status", "open")
+        .order("updated_at", { ascending: false })
+        .limit(10),
+    ]);
+    setItems((intRes.data ?? []) as Interaction[]);
+    setDeals((dealRes.data ?? []) as OpenDeal[]);
     setLoading(false);
   }, [customerId]);
 
@@ -101,8 +118,61 @@ export default function RelationshipTab({
     await (supabase.from("customers") as any).update({ tags: next }).eq("id", customerId);
   }
 
+  // Son Temas: en yeni MANUEL görüşme (vizyonun "karta girince tek bakışta" bloğu)
+  const lastTouch = useMemo(() => items.find((i) => i.kind === "manual") ?? null, [items]);
+
   return (
     <div className="space-y-4">
+      {/* ── Son Temas — kim, nerede, ne konuşuldu, sonraki adım ── */}
+      {lastTouch && (
+        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50/60 p-4">
+          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-2">Son Temas</p>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl leading-none">{channelMeta(lastTouch.channel).emoji}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-slate-800">
+                {channelMeta(lastTouch.channel).label}
+                {lastTouch.product ? ` · ${lastTouch.product}` : ""}
+                {outcomeMeta(lastTouch.outcome) ? ` · ${outcomeMeta(lastTouch.outcome)!.label}` : ""}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {lastTouch.staff_name ?? "Personel"} · {fmtDT(lastTouch.occurred_at)}
+                {locationMeta(lastTouch.location) ? ` · 📍 ${locationMeta(lastTouch.location)!.label}${lastTouch.location_note ? ` (${lastTouch.location_note})` : ""}` : ""}
+              </p>
+              {lastTouch.note && <p className="text-xs text-slate-600 mt-1.5 line-clamp-2">{lastTouch.note}</p>}
+              {nextActionMeta(lastTouch.next_action) && (
+                <p className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-100 text-[11px] font-semibold text-blue-700">
+                  → {nextActionMeta(lastTouch.next_action)!.emoji} {nextActionMeta(lastTouch.next_action)!.label}
+                  {lastTouch.next_action_date ? ` · ${new Date(lastTouch.next_action_date).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}` : ""}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Açık Satış Hattı işleri (Portföy köprüsü) ── */}
+      {deals.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <KanbanSquare className="w-3.5 h-3.5 text-indigo-500" />
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Açık İşler · Satış Hattı</p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {deals.map((d) => {
+              const st = dealStageOf(d.stage);
+              return (
+                <Link key={d.id} href={`/portfoy?open=${d.id}`}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50/60 transition-colors">
+                  <span className="text-xs font-semibold text-slate-700">{d.title}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${st.badge}`}>{st.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Müşteri analizi etiketleri ── */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">Müşteri Analizi</p>
@@ -190,6 +260,7 @@ export default function RelationshipTab({
           agencyId={customerAgencyId ?? agencyId}
           staffId={profile?.id ?? null}
           staffName={profile?.full_name ?? null}
+          openDeals={deals}
           onClose={() => setModalOpen(false)}
           onSaved={() => { setModalOpen(false); load(); }}
         />
@@ -287,12 +358,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function AddInteractionModal({
-  customerId, agencyId, staffId, staffName, onClose, onSaved,
+  customerId, agencyId, staffId, staffName, openDeals, onClose, onSaved,
 }: {
   customerId: string;
   agencyId: string | null;
   staffId: string | null;
   staffName: string | null;
+  /** Portföy: görüşme bir Satış Hattı işine bağlanabilir */
+  openDeals: OpenDeal[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -308,6 +381,7 @@ function AddInteractionModal({
   const [note, setNote] = useState("");
   const [nextAction, setNextAction] = useState<string | null>(null);
   const [nextDate, setNextDate] = useState("");
+  const [dealId, setDealId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -331,6 +405,7 @@ function AddInteractionModal({
       note: note.trim() || null,
       next_action: nextAction,
       next_action_date: nextAction && nextDate ? nextDate : null,
+      deal_id: dealId,
     });
     setSaving(false);
     if (error) { setErr("Kaydedilemedi: " + error.message); return; }
@@ -377,6 +452,18 @@ function AddInteractionModal({
             </select>
           </Field>
         </div>
+
+        {openDeals.length > 0 && (
+          <Field label="İşe Bağla (opsiyonel — Satış Hattı)">
+            <div className="flex flex-wrap gap-1.5">
+              {openDeals.map((d) => (
+                <Chip key={d.id} on={dealId === d.id} onClick={() => setDealId(dealId === d.id ? null : d.id)}>
+                  🧭 {d.title}
+                </Chip>
+              ))}
+            </div>
+          </Field>
+        )}
 
         <Field label="Görüşme Sonucu (opsiyonel)">
           <div className="flex flex-wrap gap-1.5">

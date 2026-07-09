@@ -7,10 +7,12 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
-  X, Phone, Mail, IdCard, Tag, User, Calendar, Loader2, MessageSquare, ArrowRight, Clock,
+  X, Phone, Mail, IdCard, Tag, User, Calendar, Loader2, MessageSquare, ArrowRight, Clock, KanbanSquare,
 } from "lucide-react";
 import { STAGES, stageOf } from "@/lib/opportunities";
+import { PORTFOLIO_PRODUCTS } from "@/lib/portfolio";
 import { fmtMoney } from "@/lib/format";
 import type { RequestStatus } from "@/lib/database.types";
 
@@ -31,6 +33,57 @@ function relTime(iso: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs} sa önce`;
   return `${Math.floor(hrs / 24)} gün önce`;
+}
+
+/* Fırsat → Portföy köprüsü: görüşmede işin uzun döngülü olduğu anlaşılırsa
+   (Trafik sormaya geldi, Grup Hayat çıktı) tek tıkla Satış Hattı'na iş açılır.
+   Fırsat kapatılmaz — kısa döngü kaydını nasıl sonlandıracağı kullanıcıya kalır. */
+function MoveToPortfolio({ detail }: { detail: Detail }) {
+  const [state, setState] = useState<"idle" | "saving" | "done">("idle");
+  const [dealId, setDealId] = useState<string | null>(null);
+  const [err, setErr] = useState("");
+
+  const move = async () => {
+    setState("saving");
+    setErr("");
+    const product = (PORTFOLIO_PRODUCTS as readonly string[]).includes(detail.request_type)
+      ? detail.request_type : "Diğer";
+    const res = await fetch("/api/portfolio", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: `${detail.customers?.name ?? "Müşteri"} — ${detail.request_type}`,
+        customer_id: detail.customer_id,
+        product_interest: product,
+        owner_id: detail.assigned_to ?? undefined,
+        expected_premium: detail.price_offer,
+        source: "Fırsat",
+        note: detail.notes ? `Fırsatlar'dan taşındı.\n${detail.notes}` : "Fırsatlar'dan taşındı.",
+      }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { setState("idle"); setErr(j.error ?? "Taşınamadı."); return; }
+    setDealId(j.id ?? null);
+    setState("done");
+  };
+
+  if (state === "done") {
+    return (
+      <Link href={dealId ? `/portfoy?open=${dealId}` : "/portfoy"}
+        className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition-colors">
+        ✓ Satış Hattı&apos;nda açıldı — İşe Git <ArrowRight className="w-3.5 h-3.5" />
+      </Link>
+    );
+  }
+  return (
+    <div>
+      <button onClick={move} disabled={state === "saving"}
+        className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors disabled:opacity-60">
+        <KanbanSquare className="w-3.5 h-3.5" />
+        {state === "saving" ? "Taşınıyor…" : "Portföy'e Taşı (uzun döngü)"}
+      </button>
+      {err && <p className="mt-1 text-[11px] text-rose-600 text-center">{err}</p>}
+    </div>
+  );
 }
 
 /* Tek tık takip görevi — fırsattan göreve köprü (Sprint 4) */
@@ -194,6 +247,7 @@ export default function OpportunityDrawer({
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <TaskFromOpportunity detail={detail} />
+                <MoveToPortfolio detail={detail} />
               </section>
 
               {/* Notlar */}

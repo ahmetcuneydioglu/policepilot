@@ -85,7 +85,8 @@ export default function LifePolicySheet({
   customerName: string;
   agencyId: string;
   onClose: () => void;
-  onSaved: () => void;
+  /** Oluşan poliçenin id'si geri verilir (Portföy: deals.policy_id bağlamak için) */
+  onSaved: (policyId?: string) => void;
 }) {
   const today = toISO(new Date());
   const nextYear = toISO(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
@@ -198,7 +199,7 @@ export default function LifePolicySheet({
       Alert.alert('Poliçe kaydedildi', `Ancak prim takvimi oluşturulamadı: ${schedErr}`);
     }
     successHaptic();
-    onSaved();
+    onSaved(pol.id as string);
   }
 
   return (

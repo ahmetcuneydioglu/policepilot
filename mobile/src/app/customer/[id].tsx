@@ -12,6 +12,7 @@ import { useProfile } from '@/lib/useProfile';
 import { formatTRY } from '@/lib/format';
 import { daysUntil } from '@/lib/renewals';
 import { stageOf } from '@/lib/opportunities';
+import { dealStageOf } from '@/lib/portfolio';
 import {
   fetchCustomerBundle, buildTimeline, upcomingRenewals,
   CustomerBundle, TimelineEvent,
@@ -60,6 +61,7 @@ export default function CustomerDetailScreen() {
   const [showMuayenePicker, setShowMuayenePicker] = useState(false); // Android dialog
   const [waMsgs, setWaMsgs] = useState<WaMsg[]>([]);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
+  const [deals, setDeals] = useState<{ id: string; title: string; stage: string; product_interest: string }[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetChannel, setSheetChannel] = useState<string | undefined>(undefined);
@@ -84,10 +86,21 @@ export default function CustomerDetailScreen() {
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [b, ints] = await Promise.all([fetchCustomerBundle(id), fetchInteractions(id)]);
+    const [b, ints, dealsRes] = await Promise.all([
+      fetchCustomerBundle(id),
+      fetchInteractions(id),
+      // Portföy: müşterinin açık Satış Hattı işleri (uzun döngü dünyası köprüsü)
+      (supabase.from('deals') as any)
+        .select('id, title, stage, product_interest')
+        .eq('customer_id', id)
+        .eq('status', 'open')
+        .order('updated_at', { ascending: false })
+        .limit(10),
+    ]);
     setBundle(b);
     setTimeline(buildTimeline(b));
     setInteractions(ints);
+    setDeals(dealsRes.data ?? []);
     setTags(((b.customer as unknown as { tags?: string[] })?.tags) ?? []);
     setAiSummary(((b.customer as unknown as { relationship_summary?: string | null })?.relationship_summary) ?? null);
     setNote(b.customer?.note ?? '');
@@ -220,6 +233,8 @@ export default function CustomerDetailScreen() {
   }
 
   const extra = c.extra_data ? Object.entries(c.extra_data).filter(([, v]) => v) : [];
+  // Son Temas: en yeni MANUEL görüşme (vizyonun "karta girince tek bakışta" bloğu)
+  const lastTouch = interactions.find((it) => it.kind === 'manual') ?? null;
 
   return (
     <View style={styles.safe}>
@@ -309,6 +324,54 @@ export default function CustomerDetailScreen() {
           <InfoRow label="Kayıt" value={fmtDate(c.created_at)} />
           {extra.map(([k, v]) => <InfoRow key={k} label={humanize(k)} value={String(v)} />)}
         </View>
+
+        {/* Son Temas — kim, nerede, ne konuşuldu, sonraki adım */}
+        {lastTouch && (
+          <Section label="SON TEMAS">
+            <View style={styles.lastTouchRow}>
+              <Text style={styles.lastTouchEmoji}>{channelMeta(lastTouch.channel).emoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle}>
+                  {channelMeta(lastTouch.channel).label}
+                  {lastTouch.product ? ` · ${lastTouch.product}` : ''}
+                  {outcomeLabel(lastTouch.outcome) ? ` · ${outcomeLabel(lastTouch.outcome)}` : ''}
+                </Text>
+                <Text style={styles.rowSub}>
+                  {lastTouch.staff_name ?? 'Personel'} · {fmtDate(lastTouch.occurred_at)}
+                  {lastTouch.location ? ` · 📍 ${locationLabel(lastTouch.location)}${lastTouch.location_note ? ` (${lastTouch.location_note})` : ''}` : ''}
+                </Text>
+                {!!lastTouch.note && <Text style={styles.lastTouchNote} numberOfLines={2}>{lastTouch.note}</Text>}
+                {!!lastTouch.next_action && (
+                  <Text style={styles.lastTouchNext}>
+                    → {nextActionMeta(lastTouch.next_action)?.emoji} {nextActionMeta(lastTouch.next_action)?.label}
+                    {lastTouch.next_action_date ? ` · ${fmtDate(lastTouch.next_action_date)}` : ''}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </Section>
+        )}
+
+        {/* Portföy — açık Satış Hattı işleri */}
+        {deals.length > 0 && (
+          <Section label="PORTFÖY İŞLERİ">
+            {deals.map((d) => {
+              const st = dealStageOf(d.stage);
+              return (
+                <TouchableOpacity key={d.id} style={styles.rowItem} activeOpacity={0.7}
+                  onPress={() => { tapHaptic(); router.push(`/portfoy?open=${d.id}`); }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{d.title}</Text>
+                    <Text style={styles.rowSub}>{d.product_interest}</Text>
+                  </View>
+                  <View style={[styles.miniBadge, { backgroundColor: `${st.color}1A` }]}>
+                    <Text style={[styles.miniBadgeText, { color: st.color }]}>{st.label}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </Section>
+        )}
 
         {/* Aktif Poliçeler */}
         {activePolicies.length > 0 && (
@@ -547,6 +610,10 @@ const styles = StyleSheet.create({
   infoValue: { ...Type.body, color: Colors.heading, fontWeight: '600', flex: 1, textAlign: 'right', marginLeft: 12 },
 
   rowItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  lastTouchRow: { flexDirection: 'row', gap: 10, paddingVertical: 4 },
+  lastTouchEmoji: { fontSize: 20, marginTop: 1 },
+  lastTouchNote: { ...Type.caption, color: Colors.text, marginTop: 4, lineHeight: 17 },
+  lastTouchNext: { ...Type.caption, color: Colors.primary, fontWeight: '700', marginTop: 4 },
   rowTitle: { ...Type.subhead, fontSize: 14 },
   rowSub: { ...Type.caption, marginTop: 2 },
   miniBadge: { borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 4, marginLeft: 8 },

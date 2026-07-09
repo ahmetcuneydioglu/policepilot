@@ -6,13 +6,13 @@
  * Poliçeleşti + Hayat → LifePolicySheet kapanış adımı olarak açılır.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, ScrollView,
   Modal, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, RefreshControl, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Type, Shadow } from '@/lib/theme';
 import { useProfile } from '@/lib/useProfile';
@@ -94,6 +94,7 @@ function DealCard({ deal, onPress }: { deal: Deal; onPress: () => void }) {
 /* ── Ana ekran ────────────────────────────────────────────────────────────── */
 export default function PortfolioScreen() {
   const router = useRouter();
+  const { open: openParam } = useLocalSearchParams<{ open?: string }>();
   const { agencyId, role, userId, profile } = useProfile();
 
   const { data: deals, loading, refreshing, onRefresh, refetch } = useCachedQuery(
@@ -103,7 +104,17 @@ export default function PortfolioScreen() {
   const [filter, setFilter] = useState<'all' | 'lost' | DealStageKey>('all');
   const [addOpen, setAddOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [lifeFor, setLifeFor] = useState<{ id: string; name: string; agencyId: string } | null>(null);
+  const [lifeFor, setLifeFor] = useState<{ id: string; name: string; agencyId: string; dealId: string } | null>(null);
+
+  // Deep-link: müşteri kartındaki "Açık İşler"den /portfoy?open=<id> ile gelinir
+  const openConsumed = useRef(false);
+  useEffect(() => {
+    if (openConsumed.current || !openParam || !deals) return;
+    if (deals.some((d) => d.id === openParam)) {
+      openConsumed.current = true;
+      setOpenId(openParam);
+    }
+  }, [openParam, deals]);
 
   const list = useMemo(() => {
     const all = deals ?? [];
@@ -131,7 +142,7 @@ export default function PortfolioScreen() {
     setTimeout(() => {
       Alert.alert('🎉 Poliçeleşti', `${name} için Hayat poliçesi ve prim takvimini şimdi oluşturmak ister misin?`, [
         { text: 'Sonra', style: 'cancel' },
-        { text: 'Poliçeyi Oluştur', onPress: () => setLifeFor({ id: deal.customer_id!, name, agencyId: deal.agency_id }) },
+        { text: 'Poliçeyi Oluştur', onPress: () => setLifeFor({ id: deal.customer_id!, name, agencyId: deal.agency_id, dealId: deal.id }) },
       ]);
     }, 350);
   }, []);
@@ -217,7 +228,16 @@ export default function PortfolioScreen() {
           customerName={lifeFor.name}
           agencyId={lifeFor.agencyId}
           onClose={() => setLifeFor(null)}
-          onSaved={() => { setLifeFor(null); refetch(); }}
+          onSaved={async (policyId) => {
+            // Poliçeyi işe bağla (best-effort — bağ kurulamazsa poliçe yine de kayıtlı)
+            if (policyId) {
+              await (supabase.from('deals') as any)
+                .update({ policy_id: policyId, updated_by: userId })
+                .eq('id', lifeFor.dealId);
+            }
+            setLifeFor(null);
+            refetch();
+          }}
         />
       )}
     </SafeAreaView>
