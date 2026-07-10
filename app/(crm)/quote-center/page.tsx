@@ -1,5 +1,6 @@
 "use client";
 
+import { FEATURES } from "@/lib/features";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -142,6 +143,13 @@ function SkeletonRow({ delay = 0 }: { delay?: number }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function QuoteCenterPage() {
+  // Teklif Merkezi kapalıyken derin linkle erişim engellenir (Poliçe Yönetimi ilkesi:
+  // sistem poliçe KESMEZ, kaydeder). Flag açılırsa akış aynen geri gelir.
+  if (!FEATURES.quoteCenter) {
+    if (typeof window !== "undefined") window.location.replace("/policies");
+    return null;
+  }
+
   const router = useRouter();
   const { agencyId, can } = useAuth();
 

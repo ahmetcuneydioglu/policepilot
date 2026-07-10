@@ -5,6 +5,10 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import { withScopeFilter } from "@/lib/tenant";
 import type { Policy, PolicyStatus, Customer } from "@/lib/database.types";
+import {
+  POLICY_STATUSES, PRE_ACTIVE_STATUSES, CLOSED_STATUSES,
+  effectivePolicyStatus, policySourceMeta,
+} from "@/lib/policyStatus";
 import WhatsAppModal from "@/components/WhatsAppModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -13,7 +17,7 @@ type PolicyWithCustomer = Policy & {
   quote_runs?: { product_data: Record<string, string> } | null;
 };
 
-type FilterKey = "Tümü" | "Aktif" | "Yaklaşan" | "Geçmiş" | "Pasif";
+type FilterKey = "Tümü" | "Aktif" | "Yaklaşan" | "Hazırlıkta" | "Süresi Doldu" | "Kapalı";
 
 const POLICY_TYPES = [
   "Kasko", "Trafik", "Konut", "Sağlık", "Hayat",
@@ -39,25 +43,28 @@ function addDaysStr(base: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
-/** Filtre çipini DB sorgusuna çevirir (client isExpired/daysLeft mantığının server karşılığı). */
+/** Filtre çipini DB sorgusuna çevirir. "Süresi Doldu" saklanmaz: Aktif + geçmiş bitiş. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyPolicyFilter(q: any, filter: FilterKey, today: string): any {
-  if (filter === "Aktif")    return q.eq("status", "Aktif").gte("end_date", today);
-  if (filter === "Yaklaşan") return q.eq("status", "Aktif").gte("end_date", today).lte("end_date", addDaysStr(today, 30));
-  if (filter === "Geçmiş")   return q.lt("end_date", today);
-  if (filter === "Pasif")    return q.eq("status", "Pasif");
+  if (filter === "Aktif")        return q.eq("status", "Aktif").gte("end_date", today);
+  if (filter === "Yaklaşan")     return q.eq("status", "Aktif").gte("end_date", today).lte("end_date", addDaysStr(today, 30));
+  if (filter === "Hazırlıkta")   return q.in("status", PRE_ACTIVE_STATUSES);
+  if (filter === "Süresi Doldu") return q.eq("status", "Aktif").lt("end_date", today);
+  if (filter === "Kapalı")       return q.in("status", CLOSED_STATUSES);
   return q; // Tümü
 }
 
-function expiryBadge(endDate: string, status: PolicyStatus) {
-  if (status === "Yenilendi") return { label: "✅ Yenilendi", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
-  if (status === "Pasif") return { label: "Pasif", cls: "bg-gray-100 text-gray-500 border-gray-200" };
-  if (isExpired(endDate)) return { label: "Süresi Doldu", cls: "bg-red-100 text-red-700 border-red-200" };
-  const days = daysLeft(endDate);
-  if (days <= 5)  return { label: `${days} gün`, cls: "bg-red-100 text-red-700 border-red-200" };
-  if (days <= 15) return { label: `${days} gün`, cls: "bg-amber-100 text-amber-700 border-amber-200" };
-  if (days <= 30) return { label: `${days} gün`, cls: "bg-yellow-100 text-yellow-700 border-yellow-200" };
-  return { label: `${days} gün`, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+/** Satır/detay rozeti: Aktif'te kalan gün geri sayımı, diğerlerinde görünen durum. */
+function expiryBadge(p: { end_date: string; status: string; renewal_status?: string | null }) {
+  const eff = effectivePolicyStatus(p);
+  if (eff.key === "Aktif") {
+    const days = daysLeft(p.end_date);
+    if (days <= 5)  return { label: `${days} gün`, cls: "bg-red-100 text-red-700 border-red-200" };
+    if (days <= 15) return { label: `${days} gün`, cls: "bg-amber-100 text-amber-700 border-amber-200" };
+    if (days <= 30) return { label: `${days} gün`, cls: "bg-yellow-100 text-yellow-700 border-yellow-200" };
+    return { label: `${days} gün`, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+  }
+  return { label: `${eff.emoji} ${eff.label}`, cls: eff.badge };
 }
 
 // ─── WA SVG ───────────────────────────────────────────────────────────────────
@@ -132,6 +139,11 @@ function PolicyFormModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // PDF'ten doldurma (OCR) — poliçe dosyası kayıtla birlikte evrak olarak da eklenir
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
 
   // Müşteri arama
   const [custSearch, setCustSearch] = useState(initial?.customers?.name ?? "");
@@ -239,6 +251,58 @@ function PolicyFormModal({
     if (mode === "add") copyLastPolicy(c.id);
   }
 
+  // ── PDF'ten Doldur: OCR alanları forma yazar, müşteriyi eşleştirmeye çalışır ─
+  async function handlePdfPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setPdfFile(f);
+    setOcrBusy(true);
+    setError("");
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const res = await fetch("/api/ocr/policy", { method: "POST", body: fd });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "PDF okunamadı.");
+      const v = (k: string): string => j.fields?.[k]?.value ?? "";
+
+      setForm((prev) => ({
+        ...prev,
+        policy_type:       POLICY_TYPES.includes(v("policy_type")) ? v("policy_type") : prev.policy_type,
+        policy_no:         v("policy_no") || prev.policy_no,
+        insurance_company: v("insurance_company") || prev.insurance_company,
+        premium:           v("premium") || prev.premium,
+        start_date:        v("start_date") || prev.start_date,
+        end_date:          v("end_date") || prev.end_date,
+      }));
+
+      // Müşteri eşleştirme: PDF'teki ada tek eşleşme varsa otomatik seç
+      const nm = v("customer_name");
+      if (nm && !form.customer_id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let q = (supabase.from("customers") as any)
+          .select("id, name, phone, insurance_type, note, created_at")
+          .ilike("name", `%${nm.trim()}%`).limit(2);
+        if (agencyId) q = q.eq("agency_id", agencyId);
+        const { data } = await q;
+        const matches = (data ?? []) as Customer[];
+        if (matches.length === 1) {
+          selectCustomer(matches[0]);
+        } else {
+          setCustSearch(nm);
+          searchCustomers(nm);
+        }
+      }
+      setAutoToast("PDF'ten alanlar dolduruldu — kontrol edip kaydedin");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "PDF okunamadı.");
+      setPdfFile(null);
+    } finally {
+      setOcrBusy(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.customer_id) { setError("Lütfen bir müşteri seçin."); return; }
@@ -259,6 +323,8 @@ function PolicyFormModal({
       commission:        form.commission ? parseFloat(form.commission) : null,
       note:              form.note || null,
     };
+    // Kaynak yalnız yeni kayıtta yazılır (API entegrasyonu geldiğinde 'api' olacak)
+    if (mode === "add") payload.source = pdfFile ? "ocr" : "manual";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const q = mode === "add"
@@ -266,8 +332,17 @@ function PolicyFormModal({
       : (supabase.from("policies") as any).update(payload).eq("id", initial!.id).select("id").single();
 
     const { data: saved, error: err } = await q;
+    if (err) { setSaving(false); setError(err.message); return; }
+
+    // PDF'i poliçeye evrak olarak bağla (best-effort — kayıt zaten tamam)
+    if (mode === "add" && pdfFile && saved?.id) {
+      const fd = new FormData();
+      fd.append("policy_id", saved.id);
+      fd.append("file", pdfFile);
+      await fetch("/api/policy-documents", { method: "POST", body: fd }).catch(() => {});
+    }
+
     setSaving(false);
-    if (err) { setError(err.message); return; }
     onSaved(saved?.id ?? null);
     onClose();
   }
@@ -285,7 +360,12 @@ function PolicyFormModal({
             <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 text-lg">
               📄
             </div>
-            <h2 className="font-bold text-slate-800">{isEdit ? "Poliçeyi Düzenle" : "Yeni Poliçe Ekle"}</h2>
+            <div>
+              <h2 className="font-bold text-slate-800">{isEdit ? "Poliçeyi Düzenle" : "Poliçe Kaydet"}</h2>
+              {!isEdit && (
+                <p className="text-[11px] text-slate-400 mt-0.5">Şirket ekranından kestiğiniz poliçeyi kaydedin — takibini SigortaOS yapar</p>
+              )}
+            </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,6 +376,29 @@ function PolicyFormModal({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-6 space-y-4">
+
+          {/* PDF'ten Doldur — poliçe PDF'i yüklenir, alanlar OCR ile dolar */}
+          {!isEdit && (
+            <div className={`rounded-2xl border-2 border-dashed p-3.5 transition-colors ${pdfFile ? "border-indigo-300 bg-indigo-50/60" : "border-slate-200 bg-slate-50 hover:border-indigo-300"}`}>
+              <input ref={pdfInputRef} type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={handlePdfPick} />
+              {ocrBusy ? (
+                <div className="flex items-center gap-2.5 text-sm text-indigo-600 font-semibold">
+                  <span className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  PDF okunuyor — alanlar dolduruluyor…
+                </div>
+              ) : pdfFile ? (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-indigo-700 truncate">🧠 {pdfFile.name} <span className="text-indigo-400 font-normal">— alanlar dolduruldu, kayıtta evrak olarak eklenecek</span></p>
+                  <button type="button" onClick={() => setPdfFile(null)} className="text-xs font-bold text-slate-400 hover:text-rose-500 flex-shrink-0">Kaldır</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => pdfInputRef.current?.click()} className="w-full text-left">
+                  <p className="text-sm font-bold text-slate-700">📄 PDF&apos;ten Doldur</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Poliçe PDF&apos;ini yükleyin — poliçe no, şirket, prim ve tarihler otomatik okunsun. Siz sadece kontrol edip kaydedin.</p>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Müşteri arama */}
           <div className="relative">
@@ -472,30 +575,29 @@ function PolicyFormModal({
             />
           </div>
 
-          {/* Durum (edit modunda) */}
-          {isEdit && (
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Durum</label>
-              <div className="flex gap-2">
-                {(["Aktif", "Pasif"] as PolicyStatus[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setField("status", s)}
-                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${
-                      form.status === s
-                        ? s === "Aktif"
-                          ? "bg-emerald-500 text-white border-emerald-500"
-                          : "bg-gray-500 text-white border-gray-500"
-                        : "bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+          {/* Durum — kayıt yaşam döngüsü (Süresi Doldu seçilmez, bitiş tarihinden türetilir) */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Durum</label>
+            <div className="flex flex-wrap gap-1.5">
+              {POLICY_STATUSES.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setField("status", s.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    form.status === s.key
+                      ? `${s.badge} ring-2 ring-offset-1 ring-slate-300`
+                      : "bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  {s.emoji} {s.label}
+                </button>
+              ))}
             </div>
-          )}
+            <p className="text-[11px] text-slate-400 mt-1.5">
+              {POLICY_STATUSES.find((s) => s.key === form.status)?.desc ?? "Eski durum — istediğiniz zaman güncelleyebilirsiniz"} · Yenileme takibi yalnız <b>Aktif</b> poliçelerde çalışır.
+            </p>
+          </div>
 
           {error && (
             <div className="flex items-center gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -518,7 +620,7 @@ function PolicyFormModal({
             disabled={saving}
             className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 shadow-sm"
           >
-            {saving ? "Kaydediliyor..." : isEdit ? "Kaydet" : "Poliçe Ekle"}
+            {saving ? "Kaydediliyor..." : isEdit ? "Kaydet" : "Poliçeyi Kaydet"}
           </button>
         </div>
       </div>
@@ -530,15 +632,12 @@ function PolicyFormModal({
 }
 
 // ─── Source helpers ───────────────────────────────────────────────────────────
+// Standart sözlük lib/policyStatus'ta (manual|ocr|api); legacy değerler burada eşlenir.
 function sourceInfo(src: string | null | undefined): { label: string; cls: string; icon: string } {
-  switch (src) {
-    case "demo":    return { label: "Demo",         cls: "bg-amber-100 text-amber-700 border-amber-300",   icon: "🎭" };
-    case "manual":  return { label: "Manuel",       cls: "bg-blue-100 text-blue-700 border-blue-300",      icon: "📋" };
-    case "api":     return { label: "API",          cls: "bg-violet-100 text-violet-700 border-violet-300", icon: "🔗" };
-    case "robot":   return { label: "Robot",        cls: "bg-indigo-100 text-indigo-700 border-indigo-300", icon: "🤖" };
-    case "gateway": return { label: "InsurGateway", cls: "bg-teal-100 text-teal-700 border-teal-300",      icon: "🌐" };
-    default:        return { label: "Manuel",       cls: "bg-blue-100 text-blue-700 border-blue-300",      icon: "📋" };
-  }
+  if (src === "demo")  return { label: "Demo",  cls: "bg-amber-100 text-amber-700 border-amber-300",   icon: "🎭" };
+  if (src === "robot") return { label: "Robot", cls: "bg-indigo-100 text-indigo-700 border-indigo-300", icon: "🤖" };
+  const m = policySourceMeta(src);
+  return { label: m.label, cls: m.badge, icon: m.icon };
 }
 
 // ─── Detail / View Modal ──────────────────────────────────────────────────────
@@ -575,7 +674,7 @@ function PolicyDetailModal({
 
   const isDemo   = policy.source === "demo"   || (policy.policy_no?.startsWith("DEMO-") ?? false);
   const src      = sourceInfo(policy.source);
-  const badge    = expiryBadge(policy.end_date, policy.status);
+  const badge    = expiryBadge(policy);
   const days     = policy.status === "Aktif" && !isExpired(policy.end_date) ? daysLeft(policy.end_date) : 0;
   const expired  = isExpired(policy.end_date);
 
@@ -585,9 +684,9 @@ function PolicyDetailModal({
   // renewal ring colour
   const ringCls = days <= 5 ? "text-red-500 stroke-red-500" : days <= 15 ? "text-amber-500 stroke-amber-500" : days <= 30 ? "text-yellow-500 stroke-yellow-500" : "text-emerald-500 stroke-emerald-500";
 
-  async function toggleStatus() {
+  async function setStatusTo(next: PolicyStatus) {
+    if (next === policy.status) return;
     setTogglingStatus(true);
-    const next: PolicyStatus = policy.status === "Aktif" ? "Pasif" : "Aktif";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from("policies") as any).update({ status: next }).eq("id", policy.id);
     setTogglingStatus(false);
@@ -750,7 +849,9 @@ function PolicyDetailModal({
               </div>
               <div className="divide-y divide-slate-100">
                 {[
-                  ["Durum", <span key="st" className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${policy.status === "Aktif" ? "bg-emerald-100 text-emerald-700" : policy.status === "Yenilendi" ? "bg-teal-100 text-teal-700" : "bg-gray-100 text-gray-600"}`}>{policy.status === "Yenilendi" ? "✅ Yenilendi" : policy.status}</span>],
+                  ["Durum", (() => { const eff = effectivePolicyStatus(policy); return (
+                    <span key="st" className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${eff.badge}`}>{eff.emoji} {eff.label}</span>
+                  ); })()],
                   ["Başlangıç", fmtDate(policy.start_date)],
                   ["Bitiş",     fmtDate(policy.end_date)],
                   policy.premium    != null ? ["Prim",      `₺${policy.premium.toLocaleString("tr-TR")}`]    : null,
@@ -886,19 +987,29 @@ function PolicyDetailModal({
               </button>
             </div>
 
-            {/* Aktif/Pasif toggle — yenilenmiş poliçe geri açılamaz */}
-            {policy.status !== "Yenilendi" && (
-              <button
-                onClick={toggleStatus}
-                disabled={togglingStatus}
-                className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 border ${
-                  policy.status === "Aktif"
-                    ? "bg-red-50 text-red-700 border-red-100 hover:bg-red-100"
-                    : "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100"
-                }`}
-              >
-                {togglingStatus ? "İşleniyor..." : policy.status === "Aktif" ? "🔴 Poliçeyi Pasif Yap" : "✅ Poliçeyi Aktif Yap"}
-              </button>
+            {/* Durum değiştirme — yaşam döngüsü (yenilenmiş poliçe değiştirilemez) */}
+            {policy.status !== "Yenilendi" && policy.renewal_status !== "completed" && (
+              <div className="pt-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Durumu Değiştir {togglingStatus ? "· kaydediliyor…" : ""}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {POLICY_STATUSES.map((s) => (
+                    <button
+                      key={s.key}
+                      onClick={() => setStatusTo(s.key)}
+                      disabled={togglingStatus || policy.status === s.key}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all disabled:cursor-default ${
+                        policy.status === s.key
+                          ? `${s.badge} ring-2 ring-offset-1 ring-slate-200`
+                          : "bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      {s.emoji} {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -932,7 +1043,7 @@ function PolicyRow({
   onWa: (p: PolicyWithCustomer) => void;
 }) {
   const days  = policy.status === "Aktif" && !isExpired(policy.end_date) ? daysLeft(policy.end_date) : 0;
-  const badge = expiryBadge(policy.end_date, policy.status);
+  const badge = expiryBadge(policy);
   const isCritical = days > 0 && days <= 5 && policy.status === "Aktif";
 
   const initials = (policy.customers?.name ?? "?")
@@ -1012,7 +1123,7 @@ function PolicyRow({
 export default function PoliciesPage() {
   const { role, agencyId, profile, can } = useAuth();
   const [policies, setPolicies] = useState<PolicyWithCustomer[]>([]);
-  const [counts, setCounts] = useState<Record<FilterKey, number>>({ Tümü: 0, Aktif: 0, Yaklaşan: 0, Geçmiş: 0, Pasif: 0 });
+  const [counts, setCounts] = useState<Record<FilterKey, number>>({ "Tümü": 0, "Aktif": 0, "Yaklaşan": 0, "Hazırlıkta": 0, "Süresi Doldu": 0, "Kapalı": 0 });
   const [criticalCount, setCriticalCount] = useState(0);
   const [warningCount, setWarningCount]   = useState(0);
   const [total, setTotal] = useState(0);
@@ -1058,7 +1169,7 @@ export default function PoliciesPage() {
   // Filtre URL'de yaşar (?filter=Aktif — paylaşılabilir, yenilemeye dayanıklı)
   useEffect(() => {
     const f = new URLSearchParams(window.location.search).get("filter");
-    if (f && ["Tümü", "Aktif", "Yaklaşan", "Geçmiş", "Pasif"].includes(f)) setFilter(f as FilterKey);
+    if (f && ["Tümü", "Aktif", "Yaklaşan", "Hazırlıkta", "Süresi Doldu", "Kapalı"].includes(f)) setFilter(f as FilterKey);
   }, []);
   useEffect(() => {
     window.history.replaceState({}, "", filter === "Tümü" ? "/policies" : `/policies?filter=${encodeURIComponent(filter)}`);
@@ -1114,26 +1225,28 @@ export default function PoliciesPage() {
       base(),
       applyPolicyFilter(base(), "Aktif", today),
       applyPolicyFilter(base(), "Yaklaşan", today),
-      applyPolicyFilter(base(), "Geçmiş", today),
-      applyPolicyFilter(base(), "Pasif", today),
+      applyPolicyFilter(base(), "Hazırlıkta", today),
+      applyPolicyFilter(base(), "Süresi Doldu", today),
+      applyPolicyFilter(base(), "Kapalı", today),
       base().eq("status", "Aktif").gte("end_date", today).lte("end_date", addDaysStr(today, 5)),
       base().eq("status", "Aktif").gt("end_date", addDaysStr(today, 5)).lte("end_date", addDaysStr(today, 15)),
     ];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [a, ak, y, g, p, c, w] = await Promise.all(reqs.map((r: any) => r.then((x: any) => x.count ?? 0)));
-    setCounts({ Tümü: a, Aktif: ak, Yaklaşan: y, Geçmiş: g, Pasif: p });
+    const [a, ak, y, h, sd, kp, c, w] = await Promise.all(reqs.map((r: any) => r.then((x: any) => x.count ?? 0)));
+    setCounts({ "Tümü": a, "Aktif": ak, "Yaklaşan": y, "Hazırlıkta": h, "Süresi Doldu": sd, "Kapalı": kp });
     setCriticalCount(c); setWarningCount(w);
   }, [role, agencyId, profile?.id, profile?.agency_role]);
 
   useEffect(() => { loadCounts(); }, [loadCounts, refreshKey]);
 
-  const FILTERS: FilterKey[] = ["Tümü", "Aktif", "Yaklaşan", "Geçmiş", "Pasif"];
+  const FILTERS: FilterKey[] = ["Tümü", "Aktif", "Yaklaşan", "Hazırlıkta", "Süresi Doldu", "Kapalı"];
   const filterColors: Record<FilterKey, string> = {
-    Tümü:     "bg-blue-600 text-white",
-    Aktif:    "bg-emerald-500 text-white",
-    Yaklaşan: "bg-amber-500 text-white",
-    Geçmiş:   "bg-red-500 text-white",
-    Pasif:    "bg-gray-400 text-white",
+    "Tümü":         "bg-blue-600 text-white",
+    "Aktif":        "bg-emerald-500 text-white",
+    "Yaklaşan":     "bg-amber-500 text-white",
+    "Hazırlıkta":   "bg-violet-500 text-white",
+    "Süresi Doldu": "bg-red-500 text-white",
+    "Kapalı":       "bg-gray-400 text-white",
   };
 
   return (
@@ -1142,9 +1255,9 @@ export default function PoliciesPage() {
       {/* Başlık + Ekle */}
       <div className="flex items-center justify-between animate-fade-in-up">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Poliçe Takibi</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Poliçe Yönetimi</h1>
           <p className="text-gray-500 mt-0.5 text-sm">
-            {loading ? "Yükleniyor..." : `${counts.Tümü} poliçe`}
+            {loading ? "Yükleniyor..." : `${counts["Tümü"]} poliçe · şirkette kesin, burada yönetin`}
           </p>
         </div>
         {can("policy.create") && (
@@ -1155,7 +1268,7 @@ export default function PoliciesPage() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Poliçe Ekle
+            Poliçe Kaydet
           </button>
         )}
       </div>
@@ -1243,7 +1356,7 @@ export default function PoliciesPage() {
               onClick={() => setAddOpen(true)}
               className="mt-4 px-4 py-2 rounded-xl text-sm font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
             >
-              + İlk poliçeyi ekle
+              + İlk poliçeyi kaydet
             </button>
           )}
         </div>

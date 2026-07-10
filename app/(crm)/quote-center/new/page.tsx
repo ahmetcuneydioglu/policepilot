@@ -1,5 +1,6 @@
 "use client";
 
+import { FEATURES } from "@/lib/features";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -339,6 +340,13 @@ function ResultStatusBadge({ status }: { status: ResultStatus }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function NewQuoteRunPage() {
+  // Teklif Merkezi kapalıyken derin linkle erişim engellenir (Poliçe Yönetimi ilkesi:
+  // sistem poliçe KESMEZ, kaydeder). Flag açılırsa akış aynen geri gelir.
+  if (!FEATURES.quoteCenter) {
+    if (typeof window !== "undefined") window.location.replace("/policies");
+    return null;
+  }
+
   const router             = useRouter();
   const { role, agencyId } = useAuth();
 

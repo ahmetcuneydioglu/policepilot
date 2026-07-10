@@ -7,6 +7,7 @@
  * Gerçek kart verisi sunucuya GÖNDERİLMEZ.
  */
 
+import { FEATURES } from "@/lib/features";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
@@ -265,6 +266,13 @@ function PrintableSummary({ ctx, policy }: { ctx: IssueContext; policy: PolicyRe
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function PolicyIssuePage() {
+  // Teklif Merkezi kapalıyken derin linkle erişim engellenir (Poliçe Yönetimi ilkesi:
+  // sistem poliçe KESMEZ, kaydeder). Flag açılırsa akış aynen geri gelir.
+  if (!FEATURES.quoteCenter) {
+    if (typeof window !== "undefined") window.location.replace("/policies");
+    return null;
+  }
+
   const router = useRouter();
   const params = useParams();
   const id = params.quote_result_id as string;

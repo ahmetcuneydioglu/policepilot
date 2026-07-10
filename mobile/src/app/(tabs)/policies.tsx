@@ -32,6 +32,9 @@ import {
   LIFE_POLICY_TYPE, LifeDetails, PolicyPayment, fetchPayments, setPaymentPaid,
   paymentStatus, PAYMENT_STATUS_META, currencySymbol, periodLabel,
 } from '@/lib/lifePolicy';
+import { POLICY_STATUSES, effectivePolicyStatus, policyStatusMeta, policySourceMeta } from '@/lib/policyStatus';
+import { ocrExtract } from '@/lib/policyOcr';
+import { uploadDocument } from '@/lib/storage';
 import { tapHaptic, successHaptic } from '@/lib/haptics';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -68,23 +71,22 @@ function phoneDigits(p: string) {
 
 type BadgeCfg = { bg: string; text: string; dot: string; label: string };
 
-function expiryBadge(endDate: string, status: PolicyStatus): BadgeCfg {
-  if (status === 'Pasif') {
-    return { bg: '#F3F4F6', text: '#6B7280', dot: '#9CA3AF', label: 'Pasif' };
+/** Rozet: Aktif'te kalan gün geri sayımı, diğerlerinde görünen durum (Süresi Doldu türetilir). */
+function expiryBadge(p: { end_date: string; status: string; renewal_status?: string | null }): BadgeCfg {
+  const eff = effectivePolicyStatus(p);
+  if (eff.key === 'Aktif') {
+    const days = daysLeft(p.end_date);
+    if (days <= 5) return { bg: Colors.dangerBg, text: Colors.danger, dot: Colors.danger, label: `${days} gün kaldı` };
+    if (days <= 15) return { bg: Colors.warningBg, text: '#D97706', dot: '#F59E0B', label: `${days} gün kaldı` };
+    if (days <= 30) return { bg: Colors.amberBg, text: isDarkMode ? '#EAB308' : '#CA8A04', dot: '#EAB308', label: `${days} gün kaldı` };
+    return { bg: Colors.successBg, text: Colors.success, dot: Colors.success, label: `${days} gün kaldı` };
   }
-  if (isExpired(endDate)) {
-    return { bg: Colors.dangerBg, text: Colors.danger, dot: Colors.danger, label: 'Süresi geçmiş' };
-  }
-  const days = daysLeft(endDate);
-  if (days <= 5) return { bg: Colors.dangerBg, text: Colors.danger, dot: Colors.danger, label: `${days} gün kaldı` };
-  if (days <= 15) return { bg: '#FEF3C7', text: '#D97706', dot: '#F59E0B', label: `${days} gün kaldı` };
-  if (days <= 30) return { bg: Colors.amberBg, text: isDarkMode ? '#EAB308' : '#CA8A04', dot: '#EAB308', label: `${days} gün kaldı` };
-  return { bg: Colors.successBg, text: Colors.success, dot: Colors.success, label: `${days} gün kaldı` };
+  return { bg: `${eff.color}1A`, text: eff.color, dot: eff.color, label: eff.label };
 }
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
-type FilterKey = 'Tümü' | 'Aktif' | 'Yaklaşan' | 'Geçmiş' | 'Pasif';
+type FilterKey = 'Tümü' | 'Aktif' | 'Yaklaşan' | 'Hazırlıkta' | 'Süresi Doldu' | 'Kapalı';
 
 const POLICY_TYPES = [
   'Trafik Sigortası',
@@ -99,7 +101,9 @@ const POLICY_TYPES = [
   'Diğer',
 ];
 
-const FILTERS: FilterKey[] = ['Tümü', 'Aktif', 'Yaklaşan', 'Geçmiş', 'Pasif'];
+const FILTERS: FilterKey[] = ['Tümü', 'Aktif', 'Yaklaşan', 'Hazırlıkta', 'Süresi Doldu', 'Kapalı'];
+const PRE_ACTIVE = ['Taslak', 'Teklif Hazırlanıyor', 'Şirkette Kesildi'];
+const CLOSED = ['İptal', 'Pasif'];
 
 // ─── InfoRow ─────────────────────────────────────────────────────────────────
 
@@ -115,7 +119,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 // ─── PolicyCard ──────────────────────────────────────────────────────────────
 
 function PolicyCard({ policy, onPress }: { policy: Policy; onPress: () => void }) {
-  const badge = expiryBadge(policy.end_date, policy.status);
+  const badge = expiryBadge(policy);
   const isCritical = policy.status === 'Aktif' && !isExpired(policy.end_date) && daysLeft(policy.end_date) <= 5;
 
   return (
@@ -203,7 +207,7 @@ function DetailModal({
     note: policy.note ?? '',
   });
 
-  const badge = expiryBadge(policy.end_date, policy.status);
+  const badge = expiryBadge(policy);
   const phone = policy.customers?.phone ?? '';
   const days = policy.status === 'Aktif' && !isExpired(policy.end_date) ? daysLeft(policy.end_date) : 0;
 
@@ -246,22 +250,13 @@ function DetailModal({
     Linking.openURL(`whatsapp://send?phone=90${phoneDigits(phone)}&text=${message}`);
   }
 
-  async function handleToggleStatus() {
-    const next: PolicyStatus = policy.status === 'Aktif' ? 'Pasif' : 'Aktif';
-    Alert.alert(
-      `Poliçeyi ${next} yap`,
-      `Bu poliçeyi ${next} olarak işaretlemek istediğinize emin misiniz?`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Evet',
-          onPress: async () => {
-            await (supabase.from('policies') as any).update({ status: next }).eq('id', policy.id);
-            onRefresh();
-          },
-        },
-      ]
-    );
+  async function handleSetStatus(next: string) {
+    if (next === policy.status) return;
+    tapHaptic();
+    const { error } = await (supabase.from('policies') as any).update({ status: next }).eq('id', policy.id);
+    if (error) { Alert.alert('Güncellenemedi', error.message); return; }
+    successHaptic();
+    onRefresh();
   }
 
   return (
@@ -404,7 +399,8 @@ function DetailModal({
                 {policy.commission != null && (
                   <InfoRow label="Komisyon" value={`₺${policy.commission.toLocaleString('tr-TR')}`} />
                 )}
-                <InfoRow label="Durum" value={policy.status} />
+                <InfoRow label="Durum" value={`${effectivePolicyStatus(policy).emoji} ${effectivePolicyStatus(policy).label}`} />
+                <InfoRow label="Kaynak" value={`${policySourceMeta((policy as any).source).icon} ${policySourceMeta((policy as any).source).label}`} />
                 {!!policy.note && <InfoRow label="Not" value={policy.note} />}
 
                 <TouchableOpacity style={detailStyles.editBtn} onPress={() => setEditing(true)}>
@@ -428,18 +424,32 @@ function DetailModal({
           {/* ❤️ Hayat Sigortası — ürün-özel bölümler */}
           {policy.policy_type.startsWith('Hayat') && <LifeSections policy={policy} onClose={onClose} />}
 
-          {/* Status toggle */}
-          <TouchableOpacity
-            style={[
-              detailStyles.statusToggle,
-              policy.status === 'Aktif' ? detailStyles.statusTogglePasif : detailStyles.statusToggleAktif,
-            ]}
-            onPress={handleToggleStatus}
-          >
-            <Text style={detailStyles.statusToggleText}>
-              {policy.status === 'Aktif' ? '🔴 Poliçeyi Pasif Yap' : '✅ Poliçeyi Aktif Yap'}
-            </Text>
-          </TouchableOpacity>
+          {/* Durum değiştirme — yaşam döngüsü (Süresi Doldu seçilmez, bitişten türetilir) */}
+          {policy.status !== 'Yenilendi' && (
+            <View style={detailStyles.statusCard}>
+              <Text style={detailStyles.sectionTitle}>Durumu Değiştir</Text>
+              <View style={detailStyles.statusChipRow}>
+                {POLICY_STATUSES.map((s) => {
+                  const on = policy.status === s.key;
+                  return (
+                    <TouchableOpacity
+                      key={s.key}
+                      style={[detailStyles.statusChip, on && { backgroundColor: s.color, borderColor: s.color }]}
+                      onPress={() => handleSetStatus(s.key)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[detailStyles.statusChipText, on && { color: '#fff' }]}>
+                        {s.emoji} {s.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={detailStyles.statusHint}>
+                {policyStatusMeta(policy.status).desc} · Yenileme takibi yalnız Aktif poliçelerde çalışır.
+              </Text>
+            </View>
+          )}
 
           {/* Evraklar */}
           <DocumentSection
@@ -479,8 +489,12 @@ function AddModal({
   const [policyNo, setPolicyNo] = useState('');
   const [commission, setCommission] = useState('');
   const [note, setNote] = useState('');
+  const [status, setStatus] = useState('Aktif');
   const [saving, setSaving] = useState(false);
   const [limitModal, setLimitModal] = useState<LimitResult | null>(null);
+  // PDF'ten Doldur (OCR) — dosya kayıtla birlikte poliçe evrağı olarak da eklenir
+  const [pdfAsset, setPdfAsset] = useState<{ uri: string; fileName: string; mimeType: string; fileSize: number | null } | null>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -494,10 +508,73 @@ function AddModal({
       setPolicyNo('');
       setCommission('');
       setNote('');
+      setStatus('Aktif');
+      setPdfAsset(null);
       setCustomers([]);
       setShowSuggestions(false);
     }
   }, [visible]);
+
+  // ── PDF'ten Doldur: OCR alanları forma yazar, müşteriyi eşleştirmeye çalışır ─
+  async function handlePdfPick() {
+    let DP: any;
+    try {
+      DP = require('expo-document-picker'); // defensive — modül yoksa çökmez
+    } catch {
+      Alert.alert('Kullanılamıyor', 'Dosya seçici bu sürümde mevcut değil.');
+      return;
+    }
+    const res = await DP.getDocumentAsync({
+      type: ['application/pdf', 'image/jpeg', 'image/png'],
+      multiple: false,
+      copyToCacheDirectory: true,
+    });
+    if (res.canceled || !res.assets?.length) return;
+    const a = res.assets[0];
+    const asset = {
+      uri: a.uri,
+      fileName: a.name ?? 'police.pdf',
+      mimeType: a.mimeType ?? 'application/pdf',
+      fileSize: a.size ?? null,
+    };
+    setPdfAsset(asset);
+    setOcrBusy(true);
+    try {
+      const ocr = await ocrExtract(asset as any);
+      const v = (k: string): string => (ocr.fields as any)?.[k]?.value ?? '';
+      const t = v('policy_type');
+      const typeMatch = POLICY_TYPES.find((x) => x === t || (t && x.startsWith(t)));
+      if (typeMatch) setPolicyType(typeMatch);
+      if (v('policy_no')) setPolicyNo(v('policy_no'));
+      if (v('insurance_company')) setInsuranceCompany(v('insurance_company'));
+      if (v('premium')) setPremium(v('premium'));
+      if (v('start_date')) setStartDate(v('start_date'));
+      if (v('end_date')) setEndDate(v('end_date'));
+      // Müşteri eşleştirme: PDF'teki ada tek eşleşme varsa otomatik seç
+      const nm = v('customer_name');
+      if (nm && !selectedCustomer) {
+        let q = (supabase.from('customers') as any)
+          .select('id, name, insurance_type')
+          .ilike('name', `%${nm.trim()}%`)
+          .limit(2);
+        if (agencyId) q = q.eq('agency_id', agencyId);
+        const { data } = await q;
+        if ((data ?? []).length === 1) {
+          setSelectedCustomer(data[0]);
+          setCustomerSearch(data[0].name);
+        } else {
+          setCustomerSearch(nm);
+          searchCustomers(nm);
+        }
+      }
+      successHaptic();
+    } catch (e) {
+      Alert.alert('PDF okunamadı', e instanceof Error ? e.message : 'Tekrar deneyin.');
+      setPdfAsset(null);
+    } finally {
+      setOcrBusy(false);
+    }
+  }
 
   async function searchCustomers(text: string) {
     setCustomerSearch(text);
@@ -537,7 +614,8 @@ function AddModal({
       policy_type: policyType,
       start_date: startDate,
       end_date: endDate,
-      status: 'Aktif',
+      status,
+      source: pdfAsset ? 'ocr' : 'manual', // API entegrasyonu geldiğinde 'api' olacak
     };
     if (agencyId) insert.agency_id = agencyId;
     if (premium) insert.premium = parseFloat(premium);
@@ -546,14 +624,34 @@ function AddModal({
     if (commission) insert.commission = parseFloat(commission);
     if (note) insert.note = note;
 
-    const { error } = await (supabase.from('policies') as any).insert(insert);
-    setSaving(false);
+    const { data: saved, error } = await (supabase.from('policies') as any)
+      .insert(insert).select('id').single();
     if (error) {
+      setSaving(false);
       Alert.alert('Hata', error.message);
-    } else {
-      onAdded();
-      onClose();
+      return;
     }
+
+    // PDF'i poliçeye evrak olarak bağla (best-effort — kayıt zaten tamam)
+    if (pdfAsset && saved?.id) {
+      try {
+        await uploadDocument({
+          uri: pdfAsset.uri,
+          fileName: pdfAsset.fileName,
+          mimeType: pdfAsset.mimeType,
+          fileSize: pdfAsset.fileSize,
+          entity: 'policies',
+          entityId: saved.id,
+          agencyId,
+          uploadedBy: null,
+          docType: 'Poliçe',
+        });
+      } catch { /* evrak eklenemedi — poliçe kayıtlı, kullanıcı detaydan yükleyebilir */ }
+    }
+
+    setSaving(false);
+    onAdded();
+    onClose();
   }
 
   const typeChipWidth = (SCREEN_WIDTH - Spacing.md * 2 - 8) / 2;
@@ -563,7 +661,10 @@ function AddModal({
       <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={['top']}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={addStyles.header}>
-            <Text style={addStyles.title}>Yeni Poliçe</Text>
+            <View>
+              <Text style={addStyles.title}>Poliçe Kaydet</Text>
+              <Text style={addStyles.subtitle}>Şirkette kesin, burada yönetin</Text>
+            </View>
             <TouchableOpacity onPress={onClose} style={addStyles.closeBtn}>
               <Text style={addStyles.closeBtnText}>✕</Text>
             </TouchableOpacity>
@@ -582,6 +683,30 @@ function AddModal({
           )}
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={addStyles.content} keyboardShouldPersistTaps="handled">
+            {/* PDF'ten Doldur — alanlar OCR ile dolar, PDF evrak olarak eklenir */}
+            <TouchableOpacity
+              style={[addStyles.pdfBox, pdfAsset && addStyles.pdfBoxDone]}
+              onPress={handlePdfPick}
+              disabled={ocrBusy}
+              activeOpacity={0.8}
+            >
+              {ocrBusy ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={addStyles.pdfBoxTitle}>PDF okunuyor — alanlar dolduruluyor…</Text>
+                </View>
+              ) : pdfAsset ? (
+                <Text style={addStyles.pdfBoxTitle} numberOfLines={1}>🧠 {pdfAsset.fileName} — alanlar dolduruldu ✓</Text>
+              ) : (
+                <>
+                  <Text style={addStyles.pdfBoxTitle}>📄 PDF&apos;ten Doldur</Text>
+                  <Text style={addStyles.pdfBoxSub}>
+                    Poliçe PDF&apos;ini seç — poliçe no, şirket, prim ve tarihler otomatik okunsun.
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
             {/* Customer search */}
             <Text style={addStyles.label}>Müşteri *</Text>
             {selectedCustomer ? (
@@ -712,6 +837,27 @@ function AddModal({
               placeholderTextColor={Colors.secondary}
             />
 
+            {/* Durum — Süresi Doldu seçilmez, bitiş tarihinden türetilir */}
+            <Text style={addStyles.label}>Durum</Text>
+            <View style={addStyles.statusRow}>
+              {POLICY_STATUSES.map((s) => {
+                const on = status === s.key;
+                return (
+                  <TouchableOpacity
+                    key={s.key}
+                    style={[addStyles.statusChip, on && { backgroundColor: s.color, borderColor: s.color }]}
+                    onPress={() => { tapHaptic(); setStatus(s.key); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[addStyles.statusChipText, on && { color: '#fff' }]}>{s.emoji} {s.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={addStyles.statusHint}>
+              {POLICY_STATUSES.find((s) => s.key === status)?.desc} · Yenileme takibi yalnız Aktif&apos;te çalışır.
+            </Text>
+
             <TouchableOpacity
               style={[addStyles.saveBtn, saving && { opacity: 0.6 }]}
               onPress={handleSave}
@@ -779,8 +925,9 @@ export default function PoliciesScreen() {
     switch (filter) {
       case 'Aktif': return p.status === 'Aktif' && p.end_date >= todayStr;
       case 'Yaklaşan': return p.status === 'Aktif' && p.end_date >= todayStr && p.end_date <= in30Str;
-      case 'Geçmiş': return p.end_date < todayStr;
-      case 'Pasif': return p.status === 'Pasif';
+      case 'Hazırlıkta': return PRE_ACTIVE.includes(p.status);
+      case 'Süresi Doldu': return p.status === 'Aktif' && p.end_date < todayStr;
+      case 'Kapalı': return CLOSED.includes(p.status);
       default: return true;
     }
   }
@@ -803,8 +950,9 @@ export default function PoliciesScreen() {
       case 'Tümü': return policies.length;
       case 'Aktif': return policies.filter((p) => p.status === 'Aktif' && p.end_date >= todayStr).length;
       case 'Yaklaşan': return policies.filter((p) => p.status === 'Aktif' && p.end_date >= todayStr && p.end_date <= in30Str).length;
-      case 'Geçmiş': return policies.filter((p) => p.end_date < todayStr).length;
-      case 'Pasif': return policies.filter((p) => p.status === 'Pasif').length;
+      case 'Hazırlıkta': return policies.filter((p) => PRE_ACTIVE.includes(p.status)).length;
+      case 'Süresi Doldu': return policies.filter((p) => p.status === 'Aktif' && p.end_date < todayStr).length;
+      case 'Kapalı': return policies.filter((p) => CLOSED.includes(p.status)).length;
       default: return 0;
     }
   }
@@ -1325,6 +1473,22 @@ const detailStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  // Durum değiştirme kartı
+  statusCard: {
+    backgroundColor: Colors.card,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  statusChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  statusChip: {
+    paddingHorizontal: 11, paddingVertical: 8, borderRadius: Radius.full,
+    backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border,
+  },
+  statusChipText: { fontSize: 12, fontWeight: '600', color: Colors.text },
+  statusHint: { fontSize: 11, color: Colors.secondary, marginTop: 10, lineHeight: 16 },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
@@ -1412,6 +1576,7 @@ const addStyles = StyleSheet.create({
     backgroundColor: Colors.card,
   },
   title: { fontSize: 20, fontWeight: '800', color: Colors.heading },
+  subtitle: { fontSize: 12, color: Colors.secondary, marginTop: 2 },
   closeBtn: {
     width: 36,
     height: 36,
@@ -1422,6 +1587,23 @@ const addStyles = StyleSheet.create({
   },
   closeBtnText: { fontSize: 16, color: Colors.secondary, fontWeight: '700' },
   content: { padding: Spacing.md, paddingBottom: 60 },
+  // PDF'ten Doldur kutusu
+  pdfBox: {
+    borderWidth: 1.5, borderStyle: 'dashed', borderColor: Colors.border,
+    backgroundColor: Colors.card, borderRadius: Radius.lg,
+    paddingHorizontal: 14, paddingVertical: 13,
+  },
+  pdfBoxDone: { borderStyle: 'solid', borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+  pdfBoxTitle: { fontSize: 14, fontWeight: '800', color: Colors.heading },
+  pdfBoxSub: { fontSize: 12, color: Colors.secondary, marginTop: 3, lineHeight: 17 },
+  // Durum chip'leri
+  statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  statusChip: {
+    paddingHorizontal: 11, paddingVertical: 8, borderRadius: Radius.full,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border,
+  },
+  statusChipText: { fontSize: 12, fontWeight: '600', color: Colors.text },
+  statusHint: { fontSize: 11, color: Colors.secondary, marginTop: 8, lineHeight: 16 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.heading, marginBottom: 6, marginTop: 14 },
   input: {
     backgroundColor: Colors.card,

@@ -38,7 +38,11 @@ export type RequestStatus =
   | 'Kazanıldı'
   | 'Kaybedildi';
 
-export type PolicyStatus = 'Aktif' | 'Pasif';
+// Poliçe Yönetimi: kayıtlı durumlar + legacy (Pasif/Yenilendi).
+// "Süresi Doldu" DB'de yok — lib/policyStatus.effectivePolicyStatus türetir.
+export type PolicyStatus =
+  | 'Taslak' | 'Teklif Hazırlanıyor' | 'Şirkette Kesildi' | 'Aktif' | 'İptal'
+  | 'Pasif' | 'Yenilendi';
 
 export type Request = {
   id: string;
@@ -107,6 +111,8 @@ export type Policy = {
   policy_no?: string | null;
   commission?: number | null;
   note?: string | null;
+  source?: string | null;                    // manual | ocr | api (oluşturulma kaynağı)
+  renewal_status?: string | null;            // pending | quoted | completed
   details?: Record<string, unknown> | null;  // ürün-özel alanlar (ör. Hayat: LifeDetails)
   customers?: { name: string; phone: string } | null;
 };

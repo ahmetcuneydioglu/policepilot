@@ -17,7 +17,11 @@ export type RequestStatus =
   | "Kazanıldı"
   | "Kaybedildi";
 
-export type PolicyStatus = "Aktif" | "Pasif" | "Yenilendi";
+// Poliçe Yönetimi: kayıtlı durumlar + legacy (Pasif/Yenilendi).
+// "Süresi Doldu" DB'de yok — lib/policyStatus.effectivePolicyStatus türetir.
+export type PolicyStatus =
+  | "Taslak" | "Teklif Hazırlanıyor" | "Şirkette Kesildi" | "Aktif" | "İptal"
+  | "Pasif" | "Yenilendi";
 
 export type Request = {
   id: string;

@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
       birth_date: optionalText(form, "birth_date"),
       gender: optionalText(form, "gender"),
       destination_country: optionalText(form, "destination_country"),
-      source: "ocr_upload",
+      source: "ocr",
     };
     const rawResponseText = text(form, "ocr_raw_response");
     let rawResponse: unknown = {};
@@ -353,7 +353,7 @@ export async function POST(request: NextRequest) {
         policy_no: optionalText(form, "policy_no"),
         insurance_company: optionalText(form, "insurance_company"),
         premium: premiumNumber,
-        source: "ocr_upload",
+        source: "ocr",
         created_by: caller.userId,
       })
       .select("id")

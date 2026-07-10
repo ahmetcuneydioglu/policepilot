@@ -1,5 +1,6 @@
 "use client";
 
+import { FEATURES } from "@/lib/features";
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -255,6 +256,13 @@ function ErrorDetailModal({ result, onClose }: { result: QuoteResult; onClose: (
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function QuoteRunDetailPage() {
+  // Teklif Merkezi kapalıyken derin linkle erişim engellenir (Poliçe Yönetimi ilkesi:
+  // sistem poliçe KESMEZ, kaydeder). Flag açılırsa akış aynen geri gelir.
+  if (!FEATURES.quoteCenter) {
+    if (typeof window !== "undefined") window.location.replace("/policies");
+    return null;
+  }
+
   const { id } = useParams<{ id: string }>();
   useRouter();
   const { agencyId, can } = useAuth();
