@@ -8,8 +8,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Sunrise, RefreshCw, CalendarClock, Zap, ChevronRight, CheckCircle2, Circle, Plus, X, ListTodo } from "lucide-react";
+import { Sunrise, RefreshCw, CalendarClock, Zap, ChevronRight, CheckCircle2, Circle, Plus, X, ListTodo, HeartHandshake } from "lucide-react";
 import { stageOf } from "@/lib/opportunities";
+import { nextActionMeta } from "@/lib/interactionTypes";
+import { supabase } from "@/lib/supabase";
 
 type Cust = { name: string } | null;
 type Today = {
@@ -18,6 +20,7 @@ type Today = {
   renewals: { id: string; policy_type: string; end_date: string; customers: Cust }[];
   followups: { id: string; request_type: string; status: string; customers: Cust }[];
   leads: { id: string; request_type: string; created_at: string; customers: Cust }[];
+  actions?: { id: string; next_action: string; next_action_date: string; customer_id: string; customers: Cust }[];
   tasks?: { id: string; title: string; due_date: string | null; customers: Cust }[];
 };
 
@@ -122,8 +125,19 @@ export default function TodayStrip() {
     if (res.ok) setData((d) => d ? { ...d, tasks: (d.tasks ?? []).filter((t) => t.id !== id) } : d);
   };
 
+  // Görüşme aksiyonu tamamlama (IRM next_action_done — RLS scope'lu client update)
+  const completeAction = async (id: string) => {
+    setDoneBusy(id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("customer_interactions") as any)
+      .update({ next_action_done: true }).eq("id", id);
+    setDoneBusy(null);
+    if (!error) setData((d) => d ? { ...d, actions: (d.actions ?? []).filter((a) => a.id !== id) } : d);
+  };
+
   if (!data || !data.briefing) return null;
   const tasks = data.tasks ?? [];
+  const actions = data.actions ?? [];
 
   const buckets = [
     {
@@ -186,6 +200,40 @@ export default function TodayStrip() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Görüşme aksiyonları (IRM — tamamla ✓) */}
+      {actions.length > 0 && (
+        <div className="px-4 pt-3 pb-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-6 h-6 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center"><HeartHandshake className="w-3.5 h-3.5" /></span>
+            <span className="text-xs font-bold text-slate-700">Görüşme Aksiyonları</span>
+            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded-full px-1.5 py-0.5 tabular-nums">{actions.length}</span>
+          </div>
+          <div className="space-y-1">
+            {actions.slice(0, 4).map((a) => {
+              const na = nextActionMeta(a.next_action);
+              const late = dayDiff(a.next_action_date, data.today) < 0;
+              return (
+                <div key={a.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors group">
+                  <button onClick={() => completeAction(a.id)} disabled={doneBusy === a.id}
+                    className="flex-shrink-0 text-slate-300 hover:text-emerald-500 transition-colors" title="Tamamla">
+                    {doneBusy === a.id ? <CheckCircle2 className="w-[18px] h-[18px] text-emerald-500" /> : <Circle className="w-[18px] h-[18px] group-hover:hidden" />}
+                    {doneBusy !== a.id && <CheckCircle2 className="w-[18px] h-[18px] hidden group-hover:block" />}
+                  </button>
+                  <Link href={`/customers/${a.customer_id}`} className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-slate-800 truncate">
+                      {na?.emoji} {na?.label ?? "Takip"}<span className="text-slate-400 font-normal"> · {a.customers?.name ?? "Müşteri"}</span>
+                    </p>
+                  </Link>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${late ? "bg-rose-50 text-rose-600" : "bg-violet-50 text-violet-700"}`}>
+                    {late ? `${Math.abs(dayDiff(a.next_action_date, data.today))}g gecikti` : "bugün"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

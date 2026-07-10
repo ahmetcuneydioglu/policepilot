@@ -20,6 +20,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { generateDailySummaries, trToday } from "@/services/whatsapp/dailySummaryService";
 import { processQueue } from "@/services/whatsapp/queueService";
+import { runFollowupDigest } from "@/services/followupDigest";
 import { inspectMetaToken } from "@/services/whatsapp/metaToken";
 import { getPlatformWhatsAppConfig } from "@/services/whatsapp/platformConfig";
 
@@ -54,7 +55,19 @@ export async function GET(request: NextRequest) {
     const stats = await generateDailySummaries();
     // Hobby planı: ayrı 5dk'lık gönderim cron'u yok → kuyruğu hemen işle
     const sendResult = await processQueue(100);
-    return NextResponse.json({ ok: true, date: trToday(), meta_token: metaToken, ...stats, send: sendResult });
+
+    // ── Takip Motoru: günün takipleri → zil + kişiye özel push ────────────
+    // Best-effort: takip özeti hata verirse WhatsApp özeti etkilenmez.
+    // (Hobby cron limitinden dolayı ayrı cron yerine buraya zincirli.)
+    let followups: unknown = null;
+    try {
+      followups = await runFollowupDigest();
+    } catch (e) {
+      console.error("[cron/daily-summary] followup digest:", e);
+      followups = { error: String(e) };
+    }
+
+    return NextResponse.json({ ok: true, date: trToday(), meta_token: metaToken, ...stats, send: sendResult, followups });
   } catch (err) {
     console.error("[cron/daily-summary]", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });

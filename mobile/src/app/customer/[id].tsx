@@ -542,6 +542,7 @@ export default function CustomerDetailScreen() {
         <AddInteractionSheet
           initialChannel={sheetChannel}
           customerId={c.id}
+          customerName={c.name}
           agencyId={c.agency_id ?? myAgencyId ?? ''}
           staffId={userId}
           staffName={profile?.full_name ?? null}

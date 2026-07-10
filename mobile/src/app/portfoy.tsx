@@ -438,6 +438,7 @@ function DealDetailSheet({
         {interactionOpen && deal.customer_id && (
           <AddInteractionSheet
             customerId={deal.customer_id}
+            customerName={deal.customers?.name ?? deal.title}
             agencyId={deal.agency_id}
             staffId={userId}
             staffName={staffName}

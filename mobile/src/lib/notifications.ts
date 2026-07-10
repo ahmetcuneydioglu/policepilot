@@ -217,6 +217,38 @@ export async function sendLocalNotification(options: {
   }
 }
 
+// ─── İleri tarihli yerel hatırlatma ──────────────────────────────────────────
+/**
+ * Takip hatırlatması — verilen tarihte cihazda çalar (sunucu gerekmez).
+ * Görüşme kaydedilirken "Sonraki Aksiyon" tarihine kurulur; sabah sunucu
+ * push'unun kişisel tamamlayıcısıdır. Geçmiş tarihe kurulmaz (null döner).
+ */
+export async function scheduleLocalReminder(options: {
+  title: string;
+  body: string;
+  date: Date;
+  data?: Record<string, unknown>;
+}): Promise<string | null> {
+  if (!AVAILABLE) { warn('hatırlatma planlanamadı'); return null; }
+  if (options.date.getTime() <= Date.now()) return null;
+  try {
+    const Notifications = require('expo-notifications');
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: options.title,
+        body: options.body,
+        data: options.data ?? {},
+        sound: 'default',
+      },
+      trigger: { type: 'date', date: options.date }, // SchedulableTriggerInputTypes.DATE
+    });
+    return id;
+  } catch (err) {
+    console.warn('[Notifications] Hatırlatma planlanamadı:', err);
+    return null;
+  }
+}
+
 // ─── Badge temizle ───────────────────────────────────────────────────────────
 export async function clearBadge(): Promise<void> {
   if (!AVAILABLE) return;

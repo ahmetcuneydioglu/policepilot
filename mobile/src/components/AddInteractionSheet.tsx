@@ -14,8 +14,9 @@ import { Colors, Spacing, Radius, Type } from '@/lib/theme';
 import { successHaptic, errorHaptic, tapHaptic } from '@/lib/haptics';
 import {
   CHANNELS, LOCATIONS, INTERACTION_PRODUCTS, OUTCOMES, NEXT_ACTIONS,
-  addInteraction,
+  addInteraction, nextActionMeta,
 } from '@/lib/relationship';
+import { scheduleLocalReminder } from '@/lib/notifications';
 
 function toLocalISO(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -43,9 +44,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function AddInteractionSheet({
-  customerId, agencyId, staffId, staffName, onClose, onSaved, initialChannel, dealId, initialProduct,
+  customerId, customerName, agencyId, staffId, staffName, onClose, onSaved, initialChannel, dealId, initialProduct,
 }: {
   customerId: string;
+  /** Yerel hatırlatma metni için (yoksa "Müşteri" yazılır) */
+  customerName?: string;
   agencyId: string;
   staffId: string | null;
   staffName: string | null;
@@ -95,6 +98,21 @@ export default function AddInteractionSheet({
       return;
     }
     successHaptic();
+
+    // Yerel hatırlatma: takip günü sabah 09:30'da cihazda çalar (kaydeden kişiye,
+    // sunucusuz). Geçmiş/bugünkü tarihe kurulmaz — onları Görevler + sabah push'u taşır.
+    if (nextAction && nextDate) {
+      const remindAt = new Date(nextDate);
+      remindAt.setHours(9, 30, 0, 0);
+      const na = nextActionMeta(nextAction);
+      scheduleLocalReminder({
+        title: `${na?.emoji ?? '📞'} Takip zamanı`,
+        body: `${customerName ?? 'Müşteri'} — ${na?.label ?? 'Takip'}${note.trim() ? ` · ${note.trim().slice(0, 60)}` : ''}`,
+        date: remindAt,
+        data: { screen: 'gorevler' },
+      });
+    }
+
     onSaved();
   }
 
